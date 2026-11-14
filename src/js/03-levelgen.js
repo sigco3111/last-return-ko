@@ -1042,10 +1042,16 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
     if (door.roomB.key === 'calibrationStore') level.stillZones.push(door.roomA.zone);
   }
 
-  // An apparition at the far end of the main corridor, looking back toward the lift.
+  // An apparition at the end of the main corridor furthest from the lift, looking back toward the lift.
   const spine = plan.spine;
-  if (spine.runsAlongX) pushPhantom(spine.endX - 1.5, (spine.startZ + spine.endZ) / 2, -Math.PI / 2, spine.zone, false);
-  else pushPhantom((spine.startX + spine.endX) / 2, spine.endZ - 1.5, 0, spine.zone, false);
+  const spineMiddleX = (spine.startX + spine.endX) / 2, spineMiddleZ = (spine.startZ + spine.endZ) / 2;
+  if (spine.runsAlongX) {
+    const isLiftAtWestEnd = Math.abs(plan.centerX - spine.startX) < Math.abs(plan.centerX - spine.endX);
+    pushPhantom(isLiftAtWestEnd ? spine.endX - 1.5 : spine.startX + 1.5, spineMiddleZ, isLiftAtWestEnd ? -Math.PI / 2 : Math.PI / 2, spine.zone, false);
+  } else {
+    const isLiftAtNorthEnd = Math.abs(plan.centerZ - spine.startZ) < Math.abs(plan.centerZ - spine.endZ);
+    pushPhantom(spineMiddleX, isLiftAtNorthEnd ? spine.endZ - 1.5 : spine.startZ + 1.5, isLiftAtNorthEnd ? 0 : Math.PI, spine.zone, false);
+  }
 
   placement.isGenerating = false;
   computeNavigationGrid();
