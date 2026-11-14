@@ -110,7 +110,7 @@ const TUNING = {
   audibleRadiusWalking: 4.2,
   audibleRadiusStanding: 2.6,
   audibleRadiusCrouchWalking: 2.0,
-  audibleRadiusCrouchedStill: 1.15, // the "hold your breath" distance. Below hollowKillDistance would make hiding perfect.
+  audibleRadiusCrouchedStill: 0.8, // the "hold your breath" distance. Below hollowKillDistance would make hiding perfect.
   waterAudibleFactor: 1.3,          // moving through water makes all of the above this much larger
 
   // ---- The Hollow ----------------------------------------------------------
