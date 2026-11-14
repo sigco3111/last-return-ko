@@ -488,11 +488,18 @@ function poseHollow(creature, isHunting, isListening, dt) {
   pose.lean = (isListening ? 0.0 : 0.06) + creature.armRaise * 0.25;
   // Listening, it draws itself up to its full height (as far as the ceiling allows) and spreads its fingers.
   // Hunting, it reaches. Otherwise it goes hunched, hands hanging by its knees.
-  const ceilingHere = isInsideGrid(Math.floor(figure.x), Math.floor(figure.z))
-    ? tileCeilingHeight[tileIndexAt(Math.floor(figure.x), Math.floor(figure.z))] : 2.3;
-  const tallestStretch = clampNumber((ceilingHere - figure.y - 2.25) / 0.32, 0, 1);
+  // It fits itself to the lowest ceiling over it and just ahead of it, so it starts to duck before a doorway
+  // and not halfway through it. If it is too tall for the room even hunched, it stoops.
+  const headroom = Math.min(getHeadroomAt(figure.x, figure.z),
+    getHeadroomAt(figure.x + Math.sin(figure.yaw) * 0.9, figure.z - Math.cos(figure.yaw) * 0.9));
   const wantedStretch = isListening ? 1 : (isHunting ? 0.3 : 0);
-  pose.stretch = approachValue(pose.stretch, Math.min(wantedStretch, tallestStretch), dt * 0.7);
+  // Drawn up to listen, it stops only just short of the ceiling. Otherwise it keeps its usual gap.
+  const fit = fitHollowUnderCeiling(figure, headroom, wantedStretch, isListening ? Math.min(0.05, TUNING.hollowCeilingGap) : TUNING.hollowCeilingGap);
+  // TWEAK: it ducks quickly (3 and 4) and unfolds slowly (0.7 and 1.2). Units are "whole range per second".
+  pose.stretch = approachValue(pose.stretch, fit.stretch, dt * (fit.stretch < pose.stretch ? 3 : 0.7));
+  // On top of what the ceiling demands it is always a little bent, except while it is drawing itself up.
+  const wantedStoop = Math.max(fit.stoop, TUNING.hollowBaseStoop * (1 - fit.stretch));
+  pose.stoop = approachValue(pose.stoop, wantedStoop, dt * (wantedStoop > pose.stoop ? 4 : 1.2));
   pose.fingerSplay = approachValue(pose.fingerSplay, (isHunting || creature.heldAmount > 0.3) ? 1 : (isListening ? 0.75 : 0.2), dt * 2.5);
   pose.headTilt = 0.28 + Math.sin(game.time * (isListening ? 0.35 : 0.8)) * (isListening ? 0.45 : 0.2) +
     (creature.heldAmount > 0.3 ? (Math.random() - 0.5) * 0.9 : 0);
@@ -682,7 +689,10 @@ function createPhantoms() {
   for (const definition of phantomDefinitions) {
     const figure = createFigure(FIGURE_PROPORTIONS_HOLLOW, SURFACE_PROP, 'phantomImprintSeconds');
     figure.x = definition.x; figure.z = definition.z; figure.yaw = definition.yaw;
-    figure.pose.lean = 0.05; figure.pose.headTilt = 0.4; figure.pose.armRaise = 0.03; figure.pose.stretch = 0.35; figure.pose.fingerSplay = 0.5;
+    figure.pose.lean = 0.05; figure.pose.headTilt = 0.4; figure.pose.armRaise = 0.03; figure.pose.fingerSplay = 0.5;
+    // Half drawn up, or as near to that as the ceiling where it stands allows.
+    const fit = fitHollowUnderCeiling(figure, getHeadroomAt(figure.x, figure.z), 0.35, 0.05);
+    figure.pose.stretch = fit.stretch; figure.pose.stoop = fit.stoop;
     updateFigureCapsules(figure);
     phantoms.push({ figure: figure, definition: definition, state: 0, firstHitTime: -1 });
   }

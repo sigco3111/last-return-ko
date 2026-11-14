@@ -183,6 +183,16 @@ function getFloorHeightAt(x, z) {
   return tileFloorHeight[index];
 }
 
+// How much room there is between floor and ceiling at a point, in metres. Solid rock and the pit count as "plenty",
+// so that something asking about the tile ahead of it is not made to duck for a wall.
+function getHeadroomAt(x, z) {
+  const tileX = Math.floor(x), tileZ = Math.floor(z);
+  if (!isInsideGrid(tileX, tileZ)) return 99;
+  const index = tileZ * GRID_WIDTH + tileX;
+  if (!tileIsOpen[index] || (tileFlags[index] & TILE_FLAG_PIT)) return 99;
+  return tileCeilingHeight[index] - tileFloorHeight[index];
+}
+
 function getZoneAtPosition(x, z) {
   const tileX = Math.floor(x), tileZ = Math.floor(z);
   if (!isInsideGrid(tileX, tileZ)) return 0;
@@ -531,8 +541,9 @@ function addTank(x, z, radius, height) {
     addCylinderProp(AXIS_Y, x, bandIndex * height / 4, z, radius + 0.04, 0.05, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   }
   // inspection ladder
-  for (let rungIndex = 0; rungIndex < 10; rungIndex++) {
-    addBoxProp(x, 0.4 + rungIndex * 0.45, z + radius + 0.09, 0.2, 0.015, 0.015, CLUTTER);
+  // a rung every 45 cm, as far up as the tank goes (not further: a short tank used to get rungs hanging in the air)
+  for (let rungHeight = 0.4; rungHeight < height - 0.1; rungHeight += 0.45) {
+    addBoxProp(x, rungHeight, z + radius + 0.09, 0.2, 0.015, 0.015, CLUTTER);
   }
   addBoxProp(x - 0.2, height / 2 - 0.2, z + radius + 0.09, 0.015, height / 2 - 0.2, 0.015, CLUTTER);
   addBoxProp(x + 0.2, height / 2 - 0.2, z + radius + 0.09, 0.015, height / 2 - 0.2, 0.015, CLUTTER);
