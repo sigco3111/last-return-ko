@@ -71,12 +71,6 @@ function initializeInterface() {
     else if (game.mode === 'intro' && input.isPointerLocked) finishIntro();
   });
 
-  // The point-budget choices show the numbers from QUALITY_PRESETS.
-  for (const option of document.querySelectorAll('#title-quality option')) {
-    const preset = QUALITY_PRESETS[option.value];
-    if (preset) option.textContent = formatWithThousandsSeparators(preset.maximumPoints) + ' points';
-  }
-
   // Settings controls appear on more than one screen; keep every copy in step.
   const settingControls = document.querySelectorAll('[data-setting]');
   const refreshSettingControls = function () {
@@ -257,9 +251,11 @@ function drawMinimap() {
     if (markerX < 0 || markerY < 0 || markerX > canvas.width || markerY > canvas.height) continue;
     context.fillRect(markerX - 3, markerY - 3, 6, 6);
   }
-  drawDebugMapMarkers(context,
-    function (worldX) { return (worldX - player.x) * scale + canvas.width / 2; },
-    function (worldZ) { return (worldZ - player.z) * scale + canvas.height / 2; }, 5);
+  if (debugHooks.drawMapMarkers) {
+    debugHooks.drawMapMarkers(context,
+      function (worldX) { return (worldX - player.x) * scale + canvas.width / 2; },
+      function (worldZ) { return (worldZ - player.z) * scale + canvas.height / 2; }, 5);
+  }
   drawPlayerMarker(context, canvas.width / 2, canvas.height / 2, player.yaw, 7);
 }
 
@@ -305,7 +301,7 @@ function drawFullMap() {
     context.fillRect(toCanvasX(interactable.x) - 4, toCanvasY(interactable.z) - 4, 8, 8);
     if (interactable.mapLabel) context.fillText(interactable.mapLabel, toCanvasX(interactable.x) + 8, toCanvasY(interactable.z) + 4);
   }
-  drawDebugMapMarkers(context, toCanvasX, toCanvasY, 7);
+  if (debugHooks.drawMapMarkers) debugHooks.drawMapMarkers(context, toCanvasX, toCanvasY, 7);
   drawPlayerMarker(context, toCanvasX(player.x), toCanvasY(player.z), player.yaw, 9);
 }
 

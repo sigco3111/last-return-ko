@@ -84,7 +84,6 @@ On a phone the game is played sideways, with the controls on screen. Held uprigh
 | Map | `Tab` or `M` | MAP |
 | Point colours | `V` | Pause menu |
 | Pause | `Esc` | PAUSE |
-| Debug mode | `` ` `` or `F2` | Pause menu |
 
 If the browser will not capture the mouse, hold the mouse button and drag to look.
 
@@ -131,7 +130,13 @@ Three threat levels are offered on the title screen. "Survey only" removes every
 
 ![Debug mode in the calibration store](docs/screenshots/debug-mode.jpg)
 
-Press `` ` `` (the key left of `1`) or `F2` while playing, or choose "Debug mode" in the pause menu. A panel opens and the game keeps running. Press the key again to free the mouse for the panel; click the view to take control back.
+Debug mode is a tool for building the game, so like [the workshop](#the-workshop) it is not part of `index.html`. It is in the dev build:
+
+```
+npm run dev
+```
+
+Open the address it prints (http://localhost:4471/) and start a descent. Press `` ` `` (the key left of `1`) or `F2` while playing, or choose "Debug mode" in the pause menu. A panel opens and the game keeps running. Press the key again to free the mouse for the panel; click the view to take control back.
 
 **See**
 
@@ -226,10 +231,10 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/09-player.js` | Keyboard, mouse and touch input, movement, the scanner |
 | `src/js/10-interface.js` | HUD, map, messages and overlay screens |
 | `src/js/11-game.js` | Objectives, checkpoints, death, ending and the main loop |
-| `src/js/12-debug.js` | Debug mode: the panel, its switches and what they draw |
+| `src/js/12-debug.js` | The little the game itself knows about debug mode: switches that are all off, and hooks that stay empty |
 | `src/js/13-start.js` | One line that starts the game once everything above is loaded |
 | `src/rooms/*.json` | Rooms made in the workshop, one file each (the folder appears with the first one you save) |
-| `src/dev/` | The workshop itself. Only in the `npm run dev` build, never in `index.html` |
+| `src/dev/` | Debug mode (`10-debug.js`: the panel, its switches and what they draw) and the workshop. Only in the `npm run dev` build, never in `index.html` |
 | `tools/dev-server.js` | `npm run dev`: builds, serves, reloads the page when the source changes, and writes what the workshop saves |
 
 A few details worth knowing if you change things:
@@ -266,7 +271,7 @@ npx playwright install chromium
 npm test
 ```
 
-plays the whole objective chain in a headless browser and checks each step: leaving the lift, the generator, the Hollow's path finding, the beam holding it, the director's fairness rules (never steered closer than its floor, never called off mid-chase, a real breather afterwards, noise still brings it), both ways to die, checkpoints, powered and keycard doors, the Stills, the lift call, the ending, every debug mode switch, and the turn-your-phone-sideways screen.
+plays the whole objective chain in a headless browser and checks each step: leaving the lift, the generator, the Hollow's path finding, the beam holding it, the director's fairness rules (never steered closer than its floor, never called off mid-chase, a real breather afterwards, noise still brings it), both ways to die, checkpoints, powered and keycard doors, the Stills, the lift call, the ending, that the game itself has no debug mode in it, every debug mode switch in the dev build, and the turn-your-phone-sideways screen.
 
 It then builds 120 generated stations (40 of each size, across the three layouts, half with one level and half with two) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, the keycard with power only, and the shaft only with the card. It checks that a seed always gives the same station, walks down a flight of stairs on foot, and plays one two-level station from lift to lift, which includes the Hollow climbing the stairs from the shaft. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
 
@@ -276,7 +281,7 @@ It ends with the workshop: on a copy of `src/` in a temporary folder it builds a
 npm run dev
 ```
 
-starts [the workshop](#the-workshop). `npm run dev -- --port 5000` uses another port.
+starts the dev build, with [debug mode](#debug-mode) and [the workshop](#the-workshop). `npm run dev -- --port 5000` uses another port.
 
 ```bash
 npm run audio-check

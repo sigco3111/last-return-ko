@@ -5,7 +5,7 @@
 const { openGame, startGame } = require('./browser-harness.js');
 
 (async () => {
-  const { browser, page, problems } = await openGame();
+  const { browser, page, problems } = await openGame({ dev: true }); // debug mode holds the creatures still
   await startGame(page, false);
   await page.evaluate(() => {
     const debug = window.noReturnDebug;

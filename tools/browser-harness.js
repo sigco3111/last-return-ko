@@ -1,12 +1,14 @@
 // Shared helper for the scripts in this folder: opens the built game in headless Chromium.
+// `openGame({ dev: true })` opens the dev build instead (build/workshop.html), which has debug mode in it.
 // Needs Playwright (npm install, then npx playwright install chromium).
 const path = require('path');
 const { chromium } = require('playwright');
 
 const gamePagePath = path.join(__dirname, '..', 'index.html');
+const devPagePath = path.join(__dirname, '..', 'build', 'workshop.html');
 
 async function openGame(options) {
-  const settings = Object.assign({ width: 1280, height: 720, deviceScaleFactor: 1, isPhone: false }, options || {});
+  const settings = Object.assign({ width: 1280, height: 720, deviceScaleFactor: 1, isPhone: false, dev: false }, options || {});
   const browser = await chromium.launch({
     args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-webgl']
   });
@@ -22,8 +24,8 @@ async function openGame(options) {
     if (message.type() === 'error') problems.push('console error: ' + message.text());
   });
   page.on('pageerror', (error) => problems.push('page error: ' + error.message));
-  await page.goto('file://' + gamePagePath);
-  await page.waitForFunction(() => Boolean(window.noReturnDebug));
+  await page.goto('file://' + (settings.dev ? devPagePath : gamePagePath));
+  await page.waitForFunction((needsDebugMode) => Boolean(window.noReturnDebug && (!needsDebugMode || window.noReturnDebug.setDebugOption)), settings.dev);
   return { browser, page, problems };
 }
 

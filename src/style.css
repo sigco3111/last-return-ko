@@ -111,39 +111,6 @@ body {
 }
 #hud-caption.is-visible { opacity: 1; }
 
-/* ---------- debug mode ---------- */
-#hud-debug-badge {
-  position: absolute; left: 50%; top: 10px; transform: translateX(-50%);
-  padding: 2px 10px; background: var(--alarm); color: var(--void); font-size: 10px; letter-spacing: 0.2em;
-}
-#debug-panel {
-  position: absolute; left: var(--gutter-left); top: 116px; width: 310px; max-height: calc(100% - 116px - 216px);
-  overflow-y: auto; overscroll-behavior: contain; pointer-events: auto;
-  padding: 10px 12px; background: var(--panel); border: 1px solid var(--alarm);
-  display: flex; flex-direction: column; gap: 6px;
-  font-family: var(--font-data); font-size: 12px; color: var(--text); -webkit-user-select: none; user-select: none;
-}
-#debug-panel > * { flex: none; }
-.debug-header { display: flex; justify-content: space-between; align-items: center; color: var(--alarm); letter-spacing: 0.16em; }
-.debug-header .button-quiet { padding: 3px 9px; }
-.debug-note { margin: 0; font-family: var(--font-body); font-size: 12px; line-height: 1.35; color: var(--text-dim); }
-.debug-readout { margin: 0; padding: 6px 8px; background: rgba(4, 6, 10, 0.7); color: var(--instrument); font-family: var(--font-data); font-size: 11px; line-height: 1.5; white-space: pre; overflow-x: auto; font-variant-numeric: tabular-nums; }
-.debug-heading { margin: 6px 0 0; font-size: 10px; font-weight: 400; letter-spacing: 0.16em; text-transform: uppercase; color: var(--instrument-dim); }
-.debug-option { display: flex; align-items: center; gap: 8px; padding: 2px 0; cursor: pointer; }
-.debug-option input { accent-color: var(--alarm); width: 15px; height: 15px; margin: 0; flex: none; }
-.debug-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
-.debug-actions .button-quiet, .debug-row .button-quiet, .debug-tuning .button-quiet { padding: 5px 6px; font-size: 11px; letter-spacing: 0.02em; text-align: left; }
-.debug-row { display: flex; gap: 6px; }
-.debug-row select { flex: 1; min-width: 0; background: var(--void); color: var(--text); border: 1px solid var(--panel-edge); padding: 4px 6px; font-family: var(--font-data); font-size: 11px; }
-.debug-tuning { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
-.debug-tuning summary { cursor: pointer; font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--instrument-dim); }
-.debug-tuning[open] summary { margin-bottom: 6px; }
-.debug-tuning-grid { display: grid; grid-template-columns: minmax(0, 1fr) 74px; gap: 3px 8px; align-items: center; margin-top: 6px; }
-.debug-tuning-grid label { font-size: 10.5px; color: var(--text-dim); overflow-wrap: anywhere; }
-.debug-tuning-grid input { width: 100%; background: var(--void); color: var(--instrument); border: 1px solid var(--panel-edge); padding: 2px 4px; font-family: var(--font-data); font-size: 11px; }
-body.is-touch #debug-panel, #debug-panel.is-tall { top: 8px; max-height: calc(100% - 16px); z-index: 5; }
-@media (max-height: 640px) { #debug-panel { top: 8px; max-height: calc(100% - 16px); z-index: 5; } }
-
 /* ---------- touch controls ---------- */
 #touch-controls { position: absolute; inset: 0; font-family: var(--font-data); }
 #touch-move-zone { position: absolute; left: 0; top: 25%; width: 45%; bottom: 0; }

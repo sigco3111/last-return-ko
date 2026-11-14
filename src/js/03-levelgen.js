@@ -19,7 +19,8 @@ const ZONE_GENERATED_ROOM = 250; // stand-in zone for rooms that only exist in g
 const GENERATED_SIZE_PRESETS = {
   small: { label: 'Small', fillers: [2, 1, 0], loops: 2, spineLength: [10, 14] },
   medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, spineLength: [16, 22] }
+  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, spineLength: [16, 22] },
+  massive: { label: 'Massive', fillers: [3, 5, 6], loops: 7, spineLength: [18, 26] },
 };
 
 // TWEAK: how spread out a station is.

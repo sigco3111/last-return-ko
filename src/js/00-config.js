@@ -3,7 +3,7 @@
 //
 // This is the file to open when you want the game to FEEL different.
 // Change a number, run `npm run build`, reload index.html.
-// Most numbers in TUNING can also be changed while the game is running:
+// Most numbers in TUNING can also be changed while the game is running: start `npm run dev`,
 // press the ` key (top left of the keyboard) to open debug mode, then "Live tuning".
 //
 // Units used everywhere: distances in metres, speeds in metres per second,
@@ -49,16 +49,17 @@ const DIFFICULTY_PRESETS = {
   }
 };
 
-// The "Point budget" choice on the title screen. These only affect looks and performance.
+// The "Quality" choice on the title screen. These only affect looks and performance.
 const QUALITY_PRESETS = {
   // maximumPoints: how many points are remembered. When full, the oldest are overwritten,
   //                so a low number means rooms you scanned long ago fade from view sooner.
   // raysPerSecond: pulses fired per second while painting. Higher fills surfaces in faster.
   // sweepRays:     pulses fired by one full sweep.
   // renderScale:   1.0 draws at full screen resolution, 0.75 draws smaller and stretches (faster, softer).
-  low: { key: 'low', maximumPoints: 250000, raysPerSecond: 5000, sweepRays: 14000, renderScale: 0.75 },
-  medium: { key: 'medium', maximumPoints: 500000, raysPerSecond: 8000, sweepRays: 26000, renderScale: 1.0 },
-  high: { key: 'high', maximumPoints: 1000000, raysPerSecond: 11000, sweepRays: 40000, renderScale: 1.0 }
+  low: { key: 'low', maximumPoints: 250000, raysPerSecond: 5000, sweepRays: 15000, renderScale: 0.75 },
+  medium: { key: 'medium', maximumPoints: 500000, raysPerSecond: 5000, sweepRays: 15000, renderScale: 0.8 },
+  high: { key: 'high', maximumPoints: 1000000, raysPerSecond: 5000, sweepRays: 15000, renderScale: 1.0 },
+  ultra: { key: 'ultra', maximumPoints: 2000000, raysPerSecond: 5000, sweepRays: 15000, renderScale: 1.0 },
 };
 
 const TUNING = {
@@ -198,7 +199,7 @@ const TUNING = {
                                     // Long imprints mean old outlines linger and the room looks more crowded than it is.
 
   // ---- Apparitions ---------------------------------------------------------
-  phantomImprintSeconds: 7.5,       // how long the points of a figure that "was never there" stay visible
+  phantomImprintSeconds: 5.5,       // how long the points of a figure that "was never there" stay visible
 
   // ---- The lift ------------------------------------------------------------
   liftArrivalSeconds: 40,           // how long you must survive after uploading the spools

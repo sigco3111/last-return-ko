@@ -80,8 +80,9 @@ function checkSourcePatching() {
   try {
     await page.goto(server.address);
     await workshopIsReady();
-    check('the plain game page has no workshop in it',
-      !fs.readFileSync(path.join(root, 'index.html'), 'utf8').includes('initializeWorkshop') && fs.readFileSync(path.join(root, 'build', 'workshop.html'), 'utf8').includes('initializeWorkshop'));
+    const plainPage = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), devPage = fs.readFileSync(path.join(root, 'build', 'workshop.html'), 'utf8');
+    check('the plain game page has no workshop in it', !plainPage.includes('initializeWorkshop') && devPage.includes('initializeWorkshop'));
+    check('the plain game page has no debug mode in it', !plainPage.includes('initializeDebugMode') && devPage.includes('initializeDebugMode'));
 
     // --- the room tool, on a room written as code ---
     await page.click('#button-workshop');

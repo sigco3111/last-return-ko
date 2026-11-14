@@ -3,7 +3,8 @@
 //   build/no-return.artifact.html   the same game without the outer page shell, for hosts that add their own
 //
 // `node build.js --dev` (or `npm run dev`, which also serves it and rebuilds on every change) builds a third:
-//   build/workshop.html             the game plus the workshop from src/dev/: the room and creature editors
+//   build/workshop.html             the game plus everything in src/dev/: debug mode, and the workshop
+//                                   with its room and creature editors
 const fs = require('fs');
 const path = require('path');
 
@@ -23,7 +24,8 @@ function readDesignedRooms(roomDirectory) {
   return rooms;
 }
 
-// `options.root` is the project folder (this one unless a test says otherwise); `options.dev` adds the workshop.
+// `options.root` is the project folder (this one unless a test says otherwise); `options.dev` adds debug mode
+// and the workshop.
 // Returns the lines to print and the finished script, so the dev server can check it before serving it.
 function build(options) {
   const settings = Object.assign({ root: __dirname, dev: false }, options || {});
@@ -114,7 +116,7 @@ function build(options) {
   if (roomCount > 0) messages.push('Packed ' + roomCount + ' room(s) from src/rooms.');
   messages.push('Built index.html (' + (standalonePage.length / 1024).toFixed(0) + ' KB) from ' + gameScripts.length + ' scripts.');
 
-  // The workshop build: the same game with the scripts and styles from src/dev/ added after it.
+  // The dev build: the same game with the scripts and styles from src/dev/ (debug mode, the workshop) added after it.
   // Nothing from src/dev/ ever reaches index.html.
   let workshopScript = null;
   if (settings.dev) {
@@ -126,7 +128,7 @@ function build(options) {
     workshopScript = wrapScript(gameScripts.concat(devScripts));
     fs.writeFileSync(path.join(buildDirectory, 'workshop.html'), makeStandalonePage(styleSheet + '\n' + devStyles, workshopScript));
     fs.writeFileSync(path.join(buildDirectory, 'workshop-bundle.js'), workshopScript);
-    messages.push('Built build/workshop.html with ' + devScripts.length + ' workshop script(s).');
+    messages.push('Built build/workshop.html with ' + devScripts.length + ' dev script(s).');
   }
 
   return { messages: messages, script: wrappedScript, workshopScript: workshopScript, buildDirectory: buildDirectory };

@@ -540,8 +540,7 @@ function openWorkshop() {
   workshop.isLit = workshop.stored.isLit;
   game.mode = 'workshop';
   game.flags.powerOn = true; game.flags.hasKeycard = true; // every door answers
-  debugState.isPanelOpen = false;
-  debugState.panelElement.hidden = true;
+  hideDebugPanel();
   showOnlyScreen(null);
   setHudVisible(false);
   closeMapOverlay();

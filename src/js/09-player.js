@@ -131,11 +131,13 @@ function initializeInput() {
   const canvas = renderer.canvas;
 
   window.addEventListener('keydown', function (event) {
-    if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') && event.code !== 'Backquote' && event.code !== 'F2') return;
     const code = event.code;
+    // Debug mode's key, in a build that has debug mode (`npm run dev`). It works while typing in the panel too.
+    const isDebugKey = debugHooks.togglePanel !== null && (code === 'Backquote' || code === 'F2');
+    if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') && !isDebugKey) return;
     if (code === 'Tab' || code === 'Space' || code.indexOf('Arrow') === 0) event.preventDefault();
     if (event.repeat) return;
-    if (code === 'Backquote' || code === 'F2') { event.preventDefault(); toggleDebugPanel(); return; }
+    if (isDebugKey) { event.preventDefault(); debugHooks.togglePanel(); return; }
     input.keysDown.add(code);
     if (game.mode === 'playing') {
       if (code === 'KeyE') input.wantsInteract = true;
@@ -350,7 +352,7 @@ function updatePlayerMovement(dt) {
   if (inputLength > 1) { forwardInput /= inputLength; strafeInput /= inputLength; }
   const hasMoveInput = inputLength > 0.08;
 
-  if (debugState.options.flyMode) { updateDebugFlight(dt, forwardInput, strafeInput); return; }
+  if (debugState.options.flyMode) { debugHooks.updateFlight(dt, forwardInput, strafeInput); return; }
 
   player.isCrouching = keys.has('KeyC') || input.touchCrouch;
   const wantsSprint = (keys.has('ShiftLeft') || keys.has('ShiftRight') || input.touchSprint) && !player.isCrouching;

@@ -68,7 +68,7 @@ function getHollowHearingBoost() {
 
 function emitNoise(x, z, radius) {
   const effectiveRadius = radius * game.difficulty.hearingFactor * getHollowHearingBoost();
-  recordDebugNoise(x, z, effectiveRadius);
+  if (debugHooks.recordNoise) debugHooks.recordNoise(x, z, effectiveRadius);
   if (!hollow.isActive || hollow.graceTimer > 0 || debugState.options.creaturesIgnorePlayer) return;
   const distance = distanceBetweenPoints(x, z, hollow.figure.x, hollow.figure.z);
   // Too faint to act on, but close enough to make it turn its head that way.

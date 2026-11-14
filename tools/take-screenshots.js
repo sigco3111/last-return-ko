@@ -130,37 +130,33 @@ const desktopShots = {
     await paintFor(page, 0.7, 8);
     await capture(page, 'hollow');
     await page.evaluate(() => { window.noReturnDebug.setScanHeld(false); window.noReturnDebug.hollow.isActive = false; });
-  },
-  'debug-mode': async (page) => {
-    // The calibration store again, this time with the lights on and the creatures drawn.
-    await scanFrom(page, [{ x: 32.5, z: 22.3, yaws: [north], pitch: 0.05 }]);
-    await stand(page, 32.5, 22.4, north + 0.12, 0.03);
-    await page.keyboard.press('Backquote');
-    await drawFrames(page, 2);
-    for (const key of ['showCreatures', 'seeThroughWalls', 'lightStation', 'showSenses', 'creaturesOnMap']) {
-      await page.evaluate((optionKey) => document.getElementById('debug-option-' + optionKey).click(), key);
-    }
-    await page.mouse.click(900, 300); // take the mouse back; the panel stays up
-    // Capturing the mouse turns the view; let that settle, then face the room again.
-    await page.waitForTimeout(500);
-    await drawFrames(page, 2);
-    await page.evaluate(([facing]) => {
-      const debug = window.noReturnDebug;
-      debug.setScanHeld(false);
-      debug.simulate(0.05);
-      debug.teleport(32.5, 22.4, facing);
-      debug.player.pitch = 0.03;
-      debug.simulate(0.3);
-    }, [north + 0.12]);
-    await capture(page, 'debug-mode');
-    await page.evaluate(() => {
-      const debug = window.noReturnDebug;
-      for (const key of Object.keys(debug.debugState.options)) debug.setDebugOption(key, false);
-    });
-    await page.keyboard.press('Backquote');
-    await page.keyboard.press('Backquote');
   }
 };
+
+// Debug mode is only in the dev build (build/workshop.html), so this picture gets a session of its own.
+async function takeDebugModeShot(page) {
+  // The calibration store again, this time with the lights on and the creatures drawn.
+  await scanFrom(page, [{ x: 32.5, z: 22.3, yaws: [north], pitch: 0.05 }]);
+  await stand(page, 32.5, 22.4, north + 0.12, 0.03);
+  await page.keyboard.press('Backquote');
+  await drawFrames(page, 2);
+  for (const key of ['showCreatures', 'seeThroughWalls', 'lightStation', 'showSenses', 'creaturesOnMap']) {
+    await page.evaluate((optionKey) => document.getElementById('debug-option-' + optionKey).click(), key);
+  }
+  await page.mouse.click(900, 300); // take the mouse back; the panel stays up
+  // Capturing the mouse turns the view; let that settle, then face the room again.
+  await page.waitForTimeout(500);
+  await drawFrames(page, 2);
+  await page.evaluate(([facing]) => {
+    const debug = window.noReturnDebug;
+    debug.setScanHeld(false);
+    debug.simulate(0.05);
+    debug.teleport(32.5, 22.4, facing);
+    debug.player.pitch = 0.03;
+    debug.simulate(0.3);
+  }, [north + 0.12]);
+  await capture(page, 'debug-mode');
+}
 
 (async () => {
   const requested = process.argv.slice(2);
@@ -186,9 +182,24 @@ const desktopShots = {
   await browser.close();
   if (problems.length > 0) console.log('Problems reported by the page:', problems);
 
+  // ---- debug mode, in the dev build ----
+  if (wants('debug-mode')) {
+    const dev = await openGame({ deviceScaleFactor: 1.5, dev: true });
+    await startGame(dev.page, false);
+    await dev.page.evaluate(() => {
+      const debug = window.noReturnDebug;
+      debug.game.difficulty = Object.assign({}, debug.game.difficulty, { stillsEnabled: false });
+      debug.grantPower();
+      debug.grantKeycard();
+    });
+    await takeDebugModeShot(dev.page);
+    await dev.browser.close();
+    if (dev.problems.length > 0) console.log('Problems reported by the page:', dev.problems);
+  }
+
   // ---- a generated station, drawn in full with debug mode's "Reveal the whole map" ----
   if (wants('uncharted-map')) {
-    const uncharted = await openGame({ deviceScaleFactor: 1.5 });
+    const uncharted = await openGame({ deviceScaleFactor: 1.5, dev: true }); // the dev build: debug mode is not in the game itself
     await uncharted.page.evaluate(() => document.getElementById('station-generated').click());
     await uncharted.page.selectOption('#title-station-size', 'medium');
     await uncharted.page.selectOption('#title-station-layout', 'mixed');
