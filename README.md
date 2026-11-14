@@ -109,6 +109,10 @@ If the browser will not capture the mouse, hold the mouse button and drag to loo
 - Once you have touched it with the beam, an AGITATION bar on the scanner shows its anger.
 - Wandering near you, it sometimes stops dead and listens. It makes no footsteps then, and it hears better.
 - When it loses you it searches ahead in the direction you were heading, and it sometimes pretends to leave.
+- Something paces it. Left alone, its wandering closes in on you room by room over a minute or so. Once it has pressed you hard, by chasing you or by prowling close for a long time, it goes off to the far side of the station and stays there for at least 25 seconds.
+- That pacing is fair by rule. It is never told where you are, only which room to walk to, and never a room closer than four metres' walk. Finding you still takes its ears or your beam. It is never called off in the middle of a chase, and when it has earned you a breather it does not pretend to leave and come back.
+- Noise you make during a breather still brings it.
+- The further you get, the harder it presses: each spool you carry makes it close in sooner and cuts the breathers shorter, though never below twelve seconds.
 - It is taller than most of the station's ceilings. It bends to fit under whatever is over it, ducks through doorways, and draws itself up to the ceiling when it stops to listen.
 - It will not enter the calibration store.
 
@@ -181,6 +185,8 @@ Without the dev server (`node build.js --dev`, then open `build/workshop.html`) 
 ## Tweaking the game
 
 Start with `src/js/00-config.js`. Every value there has a comment saying what it does, its unit, and what raising or lowering it changes. For example, `heatFactor` multiplies how fast the scanner heats up on a threat level: at 1.3 you get about 7.7 seconds of continuous painting instead of 10.
+
+How the Hollow is paced is the block headed "The director" there: how fast menace builds, how long a breather lasts, how near its wandering may be steered. Debug mode's readout shows the director's phase, the menace level and the band of rooms it is currently choosing from.
 
 How bent the Hollow is has two values there: `hollowBaseStoop` (how bent it always is) and `hollowCeilingGap` (how much room it keeps over its head, so how deeply it ducks under low ceilings and doors). Its size is in `FIGURE_PROPORTIONS_HOLLOW`, best changed in the workshop; whatever size you give it, it fits itself to the ceilings.
 
@@ -260,7 +266,7 @@ npx playwright install chromium
 npm test
 ```
 
-plays the whole objective chain in a headless browser and checks each step: leaving the lift, the generator, the Hollow's path finding, the beam holding it, both ways to die, checkpoints, powered and keycard doors, the Stills, the lift call, the ending, every debug mode switch, and the turn-your-phone-sideways screen.
+plays the whole objective chain in a headless browser and checks each step: leaving the lift, the generator, the Hollow's path finding, the beam holding it, the director's fairness rules (never steered closer than its floor, never called off mid-chase, a real breather afterwards, noise still brings it), both ways to die, checkpoints, powered and keycard doors, the Stills, the lift call, the ending, every debug mode switch, and the turn-your-phone-sideways screen.
 
 It then builds 120 generated stations (40 of each size, across the three layouts, half with one level and half with two) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, the keycard with power only, and the shaft only with the card. It checks that a seed always gives the same station, walks down a flight of stairs on foot, and plays one two-level station from lift to lift, which includes the Hollow climbing the stairs from the shaft. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
 
@@ -293,5 +299,7 @@ regenerates the pictures in `docs/screenshots/`. It renders in software and take
 ## Status
 
 The rules are covered by the scripted test above. The test teleports between objectives, so it shows that the game can be finished, not that the chases are fair or the pacing is right. Balance values in `src/js/00-config.js` were chosen by reasoning and have had little real play. Expect to tune them.
+
+The director's rules are checked, and its rhythm was measured with scripted players who cannot hear or scan, which is not the same as playing against it. Whether a breather feels like relief or like the game going slack is for a real playthrough to decide.
 
 Generated stations are proven finishable, not proven good. Nobody has yet walked one from end to end with the Hollow hunting. They have more doors than Kessel-9, and every door you open makes noise, so they may play harder. The stairs are checked for being walkable, by you and by what hunts you, but how a chase up or down them feels is untested. Kessel-9 itself is still one level.

@@ -423,6 +423,9 @@ function buildDebugReadout() {
     lines.push('  in beam   ' + (hollow.wasInBeam ? 'yes' : 'no') + '   anger ' + hollow.anger.toFixed(2) + ' (notices at ' + TUNING.hollowAngerNoticeLevel + ')');
     if (hollow.doubleBackTimer > 0) lines.push('  feint     doubling back in ' + hollow.doubleBackTimer.toFixed(1) + ' s');
     lines.push('  sensed    ' + (hollow.timeSinceSensed < 90 ? hollow.timeSinceSensed.toFixed(1) + ' s ago' : 'never'));
+    lines.push('DIRECTOR    ' + (isDirectorOverruled() ? 'OVERRULED (the ending)' : DIRECTOR_PHASE_NAMES[director.phase]) + '   menace ' + director.menace.toFixed(2) + (director.hasPeaked ? ' (breather owed)' : '') + '   pace x' + getDirectorPaceFactor().toFixed(2));
+    lines.push('  steering  to rooms ' + director.ringMinimumSteps + ' to ' + (director.ringMaximumSteps > 9000 ? 'any' : director.ringMaximumSteps) + ' steps from you; it is ' +
+      (director.stepsToPlayer >= NAVIGATION_UNREACHABLE ? 'unreachable' : director.stepsToPlayer + ' steps') + ' away');
   } else {
     lines.push('HOLLOW      not in the station');
   }

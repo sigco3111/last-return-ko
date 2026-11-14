@@ -745,6 +745,13 @@ function startApplication() {
     getFloorHeightAt: getFloorHeightAt,
     chooseSeedFromText: chooseSeedFromText,
     getLiftDoor: function () { return liftDoor; },
+    director: director, chooseHollowRoamTarget: chooseHollowRoamTarget,
+    // Walking distance from the player to a point, in tiles (what the director calls steps).
+    stepsFromPlayerTo: function (x, z) {
+      refreshPlayerDistanceField();
+      const index = findNearestWalkableTileIndex(x, z);
+      return index < 0 ? NAVIGATION_UNREACHABLE : playerDistanceField[index];
+    },
     findSigns: function (textPart) {
       // Every tile that carries wall lettering containing the given text.
       const found = [];

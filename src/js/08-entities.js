@@ -167,6 +167,7 @@ function activateHollow(x, z, graceSeconds) {
   hollow.listenTimer = 0; hollow.nextListenIn = 12; hollow.doubleBackTimer = 0; hollow.hasHeardNoise = false;
   hollow.graceTimer = graceSeconds;
   hollow.fieldTargetIndex = -1;
+  resetDirector(false);
   updateFigureCapsules(hollow.figure);
   setFigureRaycastable(hollow.figure, true);
 }
@@ -181,20 +182,147 @@ function refreshPlayerDistanceField() {
   playerDistanceFieldAge = 0;
 }
 
+// ---------------------------------------------------------------------------
+// The director: the part that decides which room the Hollow wanders to next.
+//
+// The Hollow itself (everything else in this file) is blind and honest: it only ever finds you by hearing you
+// or by feeling the beam. Left to wander at random in a big station it would rarely come near you; told where
+// you are it would be unbeatable. The director sits between the two. It knows where you are, but all it may do
+// with that is choose a room for the Hollow to walk to, and that room is never closer than
+// TUNING.directorNearRingMinimumSteps. The numbers and the phases are explained in 00-config.js.
+// ---------------------------------------------------------------------------
+
+const DIRECTOR_PHASE_CLOSING_IN = 0;
+const DIRECTOR_PHASE_BREATHER = 1;
+const DIRECTOR_PHASE_NAMES = ['CLOSING IN', 'BREATHER'];
+
+const director = {
+  menace: 0,                 // 0 calm .. 1 full
+  phase: DIRECTOR_PHASE_CLOSING_IN,
+  phaseTime: 0,              // seconds spent in this phase
+  hasPeaked: false,          // menace has been full since the last breather: a breather is owed
+  stepsToPlayer: NAVIGATION_UNREACHABLE, // walking distance between the Hollow and you
+  refreshTimer: 0,
+  avoidTimer: 0,
+  ringMinimumSteps: 0, ringMaximumSteps: 0 // the band of distances it last chose a room from (shown in debug mode)
+};
+
+function resetDirector(startsWithBreather) {
+  director.phase = startsWithBreather ? DIRECTOR_PHASE_BREATHER : DIRECTOR_PHASE_CLOSING_IN;
+  director.menace = startsWithBreather ? 0.6 : 0;
+  director.phaseTime = 0;
+  director.hasPeaked = false;
+  director.refreshTimer = 0;
+  director.avoidTimer = 0;
+}
+
+// The lift is on its way, or it has been told exactly where you are: the ending is not paced, it is survived.
+function isDirectorOverruled() {
+  return hollow.knowsPlayerPositionAlways || game.flags.uploadStarted;
+}
+
+// How much faster than normal the whole cycle runs: the threat level sets a base, and every spool you carry adds to it.
+function getDirectorPaceFactor() {
+  return game.difficulty.pressureFactor * (1 + TUNING.directorPressurePerSpool * game.flags.spoolsCollected);
+}
+
+// How far its wandering has closed in on you since the last breather: 0 not at all, 1 fully.
+function getDirectorPressure() {
+  if (isDirectorOverruled()) return 1;
+  if (director.phase !== DIRECTOR_PHASE_CLOSING_IN) return 0;
+  const buildSeconds = TUNING.directorBuildSeconds / getDirectorPaceFactor() * (1 - 0.5 * hollow.anger);
+  return clampNumber(director.phaseTime / Math.max(1, buildSeconds), 0, 1);
+}
+
+// The band of walking distances from you that the next room is picked from.
+function updateDirectorRoamRing() {
+  if (director.phase === DIRECTOR_PHASE_BREATHER && !isDirectorOverruled()) {
+    director.ringMinimumSteps = TUNING.directorReliefSteps;
+    director.ringMaximumSteps = NAVIGATION_UNREACHABLE - 1;
+    return;
+  }
+  const pressure = getDirectorPressure();
+  director.ringMinimumSteps = Math.round(interpolateLinear(TUNING.directorFarRingMinimumSteps, TUNING.directorNearRingMinimumSteps, pressure));
+  director.ringMaximumSteps = Math.round(interpolateLinear(TUNING.directorFarRingMaximumSteps, TUNING.directorNearRingMaximumSteps, pressure));
+}
+
+function beginDirectorBreather() {
+  director.phase = DIRECTOR_PHASE_BREATHER;
+  director.phaseTime = 0;
+  director.hasPeaked = false;
+  director.avoidTimer = 4;
+  hollow.doubleBackTimer = 0; // a breather is a real one: no pretending to leave and coming straight back
+  chooseHollowRoamTarget();
+  if (distanceBetweenPoints(hollow.figure.x, hollow.figure.z, player.x, player.z) < 22) showCaption('[it is moving off]');
+}
+
+function updateDirector(dt) {
+  director.phaseTime += dt;
+  director.refreshTimer -= dt;
+  if (director.refreshTimer <= 0) {
+    director.refreshTimer = 0.5;
+    refreshPlayerDistanceField();
+    const index = findNearestWalkableTileIndex(hollow.figure.x, hollow.figure.z);
+    director.stepsToPlayer = index < 0 ? NAVIGATION_UNREACHABLE : playerDistanceField[index];
+  }
+
+  // ---- menace: up while it is near you or after you, down while it is away ----
+  const closeness = clampNumber(1 - director.stepsToPlayer / TUNING.directorMenaceRangeSteps, 0, 1);
+  let risePerSecond = 0;
+  if (hollow.state === HOLLOW_STATE_HUNT) risePerSecond = 1 / TUNING.directorPeakAfterHuntSeconds;
+  else if (hollow.state === HOLLOW_STATE_ROAM) risePerSecond = closeness * closeness / TUNING.directorPeakAfterLoomSeconds;
+  else risePerSecond = closeness / TUNING.directorPeakAfterSearchSeconds;
+  if (risePerSecond > 0) director.menace = Math.min(1, director.menace + risePerSecond * dt);
+  else director.menace = Math.max(0, director.menace - dt * getDirectorPaceFactor() / TUNING.directorCalmSeconds);
+  if (director.menace >= 1) director.hasPeaked = true;
+  if (isDirectorOverruled()) return;
+
+  if (director.phase === DIRECTOR_PHASE_CLOSING_IN) {
+    // A breather is owed once menace has been full, but it only starts when the Hollow has, by its own lights,
+    // finished: it is never called off in the middle of a chase or a search.
+    if (director.hasPeaked && hollow.state === HOLLOW_STATE_ROAM) beginDirectorBreather();
+  } else {
+    const minimumSeconds = Math.max(TUNING.directorReliefShortestSeconds, TUNING.directorReliefMinimumSeconds / getDirectorPaceFactor());
+    if (director.phaseTime >= minimumSeconds && director.menace <= TUNING.directorReliefEndsBelowMenace) {
+      director.phase = DIRECTOR_PHASE_CLOSING_IN;
+      director.phaseTime = 0;
+      director.hasPeaked = false;
+      if (hollow.state === HOLLOW_STATE_ROAM) chooseHollowRoamTarget();
+    } else if (hollow.state === HOLLOW_STATE_ROAM) {
+      // If you follow it during a breather, it keeps its distance.
+      director.avoidTimer -= dt;
+      if (director.avoidTimer <= 0 && director.stepsToPlayer < TUNING.directorReliefSteps * 0.6) {
+        director.avoidTimer = 4;
+        chooseHollowRoamTarget();
+      }
+    }
+  }
+}
+
+// Picks the next room to wander to: one whose walking distance from you is inside the director's band.
 function chooseHollowRoamTarget() {
   refreshPlayerDistanceField();
-  // An angry Hollow leaves you alone for less long.
-  const wantsPressure = hollow.timeSinceLastHunt > TUNING.hollowPressureAfterSeconds * (1 - 0.5 * hollow.anger);
-  const minimumSteps = wantsPressure ? 4 : 9, maximumSteps = wantsPressure ? 14 : 34;
+  updateDirectorRoamRing();
+  const floorSteps = TUNING.directorNearRingMinimumSteps;
   const candidates = [];
+  let nearestMiss = null, nearestMissGap = Infinity, farthest = null, farthestSteps = -1;
   for (const waypoint of roamingWaypoints) {
     const index = findNearestWalkableTileIndex(waypoint[0], waypoint[1]);
     if (index < 0) continue;
     const steps = playerDistanceField[index];
-    if (steps >= minimumSteps && steps <= maximumSteps) candidates.push(waypoint);
+    if (steps >= NAVIGATION_UNREACHABLE) continue;
+    if (steps > farthestSteps) { farthestSteps = steps; farthest = waypoint; }
+    if (steps >= director.ringMinimumSteps && steps <= director.ringMaximumSteps) {
+      // Not the room it is already standing in, or it would just stand there.
+      if (distanceBetweenPoints(waypoint[0], waypoint[1], hollow.figure.x, hollow.figure.z) > 2.5) candidates.push(waypoint);
+    } else if (steps >= floorSteps) {
+      const gap = steps < director.ringMinimumSteps ? director.ringMinimumSteps - steps : steps - director.ringMaximumSteps;
+      if (gap < nearestMissGap) { nearestMissGap = gap; nearestMiss = waypoint; }
+    }
   }
-  const pool = candidates.length > 0 ? candidates : roamingWaypoints;
-  const choice = pool[Math.floor(Math.random() * pool.length)];
+  // Nothing inside the band (a small station, or you are in a far corner): the room that misses it by least,
+  // and failing that the one furthest from you. Never simply "any room", which could be the one you are in.
+  const choice = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : (nearestMiss || farthest || roamingWaypoints[0]);
   hollow.targetX = choice[0]; hollow.targetZ = choice[1];
 }
 
@@ -216,6 +344,7 @@ function relocateHollowAwayFromPlayer(graceSeconds) {
   hollow.anger *= 0.5; hollow.wasInBeam = false; hollow.enragedTimer = 0; hollow.heldAmount = 0;
   hollow.listenTimer = 0; hollow.doubleBackTimer = 0;
   hollow.graceTimer = graceSeconds;
+  resetDirector(true); // being sent away always comes with a breather
   chooseHollowRoamTarget();
   updateFigureCapsules(hollow.figure);
 }
@@ -320,6 +449,7 @@ function updateHollow(dt) {
   hollow.stingerCooldown -= dt;
   hollow.turnCaptionCooldown -= dt;
   hollow.timeSinceLastHunt += dt;
+  updateDirector(dt);
   const distanceToPlayer = distanceBetweenPoints(figure.x, figure.z, player.x, player.z);
   const beamHits = figure.hitsThisFrame;
   figure.hitsThisFrame = 0;
@@ -410,7 +540,7 @@ function updateHollow(dt) {
       hollow.state = HOLLOW_STATE_ROAM;
       chooseHollowRoamTarget();
       // Sometimes it only pretends to give up: it walks off, then comes straight back to the same spot.
-      if (Math.random() < TUNING.hollowDoubleBackChance) {
+      if (!director.hasPeaked && Math.random() < TUNING.hollowDoubleBackChance) {
         hollow.doubleBackTimer = randomBetween(6, 11);
         hollow.doubleBackX = hollow.searchCenterX; hollow.doubleBackZ = hollow.searchCenterZ;
       }
