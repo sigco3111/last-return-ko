@@ -1,0 +1,671 @@
+// ---------------------------------------------------------------------------
+// Renderer (WebGL 2). The world itself is drawn pure black and only exists to
+// hide what is behind it. Everything you actually see is the point cloud.
+// ---------------------------------------------------------------------------
+
+const POINT_STRIDE_BYTES = 20; // x, y, z, birthTime as floats, then 4 data bytes
+const POINT_STRIDE_FLOATS = 5;
+const MAXIMUM_BEAM_LINES = 72;
+const DEAD_POINT_BIRTH_TIME = -1e9;
+
+const renderer = {
+  canvas: null,
+  gl: null,
+  isReady: false,
+  pixelRatio: 1,
+  width: 1, height: 1,
+  pointProgram: null, solidProgram: null, beamProgram: null, postProgram: null,
+  pointUniforms: null, solidUniforms: null, beamUniforms: null, postUniforms: null,
+  pointVertexArray: null, pointBuffer: null,
+  worldVertexArray: null, worldVertexCount: 0,
+  unitCubeVertexArray: null,
+  viewmodelVertexArray: null, viewmodelRanges: null,
+  beamVertexArray: null, beamBuffer: null,
+  postVertexArray: null,
+  sceneFramebuffer: null, sceneTexture: null, sceneDepthBuffer: null,
+  projectionMatrix: new Float32Array(16),
+  viewMatrix: new Float32Array(16),
+  viewProjectionMatrix: new Float32Array(16),
+  modelMatrix: new Float32Array(16),
+  scratchMatrix: new Float32Array(16),
+  viewmodelProjectionMatrix: new Float32Array(16)
+};
+
+const pointCloud = {
+  capacity: 0,
+  rawBuffer: null,
+  floatView: null,
+  byteView: null,
+  writeIndex: 0,
+  storedCount: 0,
+  pendingUploadStart: 0,
+  pendingUploadCount: 0,
+  needsFullUpload: false,
+  totalReturns: 0
+};
+
+const beamLines = {
+  vertices: new Float32Array(MAXIMUM_BEAM_LINES * 2 * 4),
+  count: 0,
+  originX: 0, originY: 0, originZ: 0
+};
+
+// ---------------------------------------------------------------------------
+// Shaders
+// ---------------------------------------------------------------------------
+
+const POINT_VERTEX_SHADER = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPosition;
+layout(location = 1) in float aBirthTime;
+layout(location = 2) in vec4 aData;
+uniform mat4 uViewProjection;
+uniform vec3 uCameraPosition;
+uniform float uTime;
+uniform float uPointScale;
+uniform vec2 uPointSizeLimits;
+uniform float uInterference;
+uniform float uPowerOn;
+uniform float uHasKeycard;
+uniform int uPalette;
+out vec3 vColor;
+out float vFade;
+
+float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
+
+void main() {
+  float age = uTime - aBirthTime;
+  float intensity = aData.x;
+  int surfaceClass = int(aData.y * 255.0 + 0.5);
+  float lifeSeconds = aData.z * 255.0 * 0.25;
+  float fade = 1.0;
+  if (lifeSeconds > 0.0) fade = 1.0 - smoothstep(lifeSeconds * 0.5, lifeSeconds, age);
+  if (aBirthTime < -1.0e8 || fade <= 0.002) {
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+    gl_PointSize = 1.0;
+    vColor = vec3(0.0);
+    vFade = 0.0;
+    return;
+  }
+  vec3 position = aPosition;
+  if (uInterference > 0.01) {
+    float wobbleTime = floor(uTime * 30.0);
+    vec3 noise = vec3(hash(position + wobbleTime), hash(position.yzx + wobbleTime), hash(position.zxy + wobbleTime)) - 0.5;
+    position += noise * uInterference * 0.09;
+  }
+  if (surfaceClass == 9) position.y += sin(uTime * 1.7 + position.x * 3.1 + position.z * 2.3) * 0.014;
+  vec3 toCamera = uCameraPosition - position;
+  float distanceToCamera = length(toCamera);
+  position += toCamera / max(distanceToCamera, 0.001) * (0.012 + distanceToCamera * 0.004);
+  gl_Position = uViewProjection * vec4(position, 1.0);
+  gl_PointSize = clamp(uPointScale / max(distanceToCamera, 0.05), uPointSizeLimits.x, uPointSizeLimits.y);
+
+  float range = clamp(distanceToCamera / 26.0, 0.0, 1.0);
+  vec3 rangeColor;
+  if (uPalette == 1) {
+    rangeColor = mix(vec3(1.0, 0.8, 0.45), vec3(0.75, 0.3, 0.05), range);
+  } else if (uPalette == 2) {
+    float heightBand = clamp(position.y / 4.0, 0.0, 1.0);
+    rangeColor = mix(vec3(0.2, 0.35, 1.0), vec3(0.2, 1.0, 0.55), smoothstep(0.0, 0.45, heightBand));
+    rangeColor = mix(rangeColor, vec3(1.0, 0.9, 0.3), smoothstep(0.45, 1.0, heightBand));
+  } else {
+    rangeColor = mix(vec3(0.78, 0.9, 1.0), vec3(0.14, 0.58, 0.9), smoothstep(0.0, 0.4, range));
+    rangeColor = mix(rangeColor, vec3(0.24, 0.17, 0.66), smoothstep(0.4, 1.0, range));
+  }
+  vec3 color = rangeColor;
+  vec3 lockedColor = vec3(1.0, 0.22, 0.1);
+  vec3 openColor = vec3(0.25, 1.0, 0.55);
+  if (surfaceClass == 0) color *= 0.72;
+  else if (surfaceClass == 2) color *= vec3(0.55, 0.5, 0.78);
+  else if (surfaceClass == 3 || surfaceClass == 11) color = mix(color, vec3(0.96, 0.88, 0.72), 0.5);
+  else if (surfaceClass == 13) color = mix(color, vec3(0.55, 0.9, 0.82), 0.45);
+  else if (surfaceClass == 4) color = openColor;
+  else if (surfaceClass == 5) color = mix(lockedColor, openColor, uPowerOn);
+  else if (surfaceClass == 6) color = mix(lockedColor, openColor, uPowerOn * uHasKeycard);
+  else if (surfaceClass == 7) color = vec3(1.0, 0.68, 0.12) * (0.8 + 0.35 * sin(uTime * 5.0 + position.y * 9.0));
+  else if (surfaceClass == 8) color = vec3(1.15, 1.1, 0.9);
+  else if (surfaceClass == 9) color = vec3(0.08, 0.3, 0.95);
+  else if (surfaceClass == 10) color = vec3(1.0, 0.03, 0.02);
+  else if (surfaceClass == 12) color = vec3(0.85, 0.66, 0.1);
+  float brightness = (0.22 + 0.78 * intensity) / (1.0 + distanceToCamera * 0.03) * (0.72 + 0.28 * smoothstep(0.4, 4.0, distanceToCamera));
+  float flash = exp(-age * 2.6);
+  vec3 flashColor = surfaceClass == 10 ? vec3(0.9, 0.05, 0.03) : vec3(0.85, 1.0, 1.0);
+  if (surfaceClass == 10) brightness = max(brightness, 0.55);
+  vColor = color * brightness + flashColor * flash * 0.45;
+  vFade = fade;
+}`;
+
+const POINT_FRAGMENT_SHADER = `#version 300 es
+precision mediump float;
+in vec3 vColor;
+in float vFade;
+out vec4 outColor;
+float hash(vec2 p) { return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+void main() {
+  vec2 fromCenter = gl_PointCoord * 2.0 - 1.0;
+  float radiusSquared = dot(fromCenter, fromCenter);
+  if (radiusSquared > 1.0) discard;
+  if (vFade < 0.999 && hash(gl_FragCoord.xy) > vFade) discard;
+  outColor = vec4(vColor * (0.62 + 0.38 * (1.0 - radiusSquared)), 1.0);
+}`;
+
+const SOLID_VERTEX_SHADER = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPosition;
+layout(location = 1) in vec3 aColor;
+uniform mat4 uMatrix;
+out vec3 vColor;
+void main() {
+  vColor = aColor;
+  gl_Position = uMatrix * vec4(aPosition, 1.0);
+}`;
+
+const SOLID_FRAGMENT_SHADER = `#version 300 es
+precision mediump float;
+in vec3 vColor;
+uniform vec3 uTint;
+out vec4 outColor;
+void main() { outColor = vec4(vColor * uTint, 1.0); }`;
+
+const BEAM_VERTEX_SHADER = `#version 300 es
+precision highp float;
+layout(location = 0) in vec4 aPositionAndAlpha;
+uniform mat4 uViewProjection;
+out float vAlpha;
+void main() {
+  vAlpha = aPositionAndAlpha.w;
+  gl_Position = uViewProjection * vec4(aPositionAndAlpha.xyz, 1.0);
+}`;
+
+const BEAM_FRAGMENT_SHADER = `#version 300 es
+precision mediump float;
+in float vAlpha;
+uniform vec3 uColor;
+out vec4 outColor;
+void main() { outColor = vec4(uColor * vAlpha, 1.0); }`;
+
+const POST_VERTEX_SHADER = `#version 300 es
+precision highp float;
+out vec2 vTextureCoordinate;
+void main() {
+  vec2 corner = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
+  vTextureCoordinate = corner;
+  gl_Position = vec4(corner * 2.0 - 1.0, 0.0, 1.0);
+}`;
+
+const POST_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+in vec2 vTextureCoordinate;
+uniform sampler2D uScene;
+uniform vec2 uResolution;
+uniform float uTime;
+uniform float uInterference;
+uniform float uDanger;
+uniform float uFade;
+out vec4 outColor;
+
+float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+
+void main() {
+  vec2 coordinate = vTextureCoordinate;
+  float tick = floor(uTime * 24.0);
+  float row = floor(coordinate.y * 110.0);
+  float rowNoise = hash(vec2(row, tick));
+  float tear = step(1.0 - uInterference * 0.45, hash(vec2(row * 0.37, tick * 1.7)));
+  coordinate.x += (rowNoise - 0.5) * 0.08 * uInterference * tear;
+  float split = 0.0012 + uInterference * 0.0045;
+  vec3 color;
+  color.r = texture(uScene, coordinate + vec2(split, 0.0)).r;
+  color.g = texture(uScene, coordinate).g;
+  color.b = texture(uScene, coordinate - vec2(split, 0.0)).b;
+  vec3 glow = textureLod(uScene, coordinate, 2.5).rgb * 0.45 + textureLod(uScene, coordinate, 4.5).rgb * 0.55;
+  color += glow * 0.42;
+  float grain = hash(coordinate * uResolution + vec2(tick * 3.1, tick * 7.7)) - 0.5;
+  color += grain * (0.035 + uInterference * 0.12);
+  color *= 0.95 + 0.05 * sin(gl_FragCoord.y * 1.9);
+  vec2 fromCenter = coordinate - 0.5;
+  float vignette = smoothstep(0.92, 0.25, length(fromCenter * vec2(1.0, 1.15)));
+  color *= mix(0.5, 1.0, vignette);
+  color.r += uDanger * (1.0 - vignette) * 0.55;
+  color.gb *= 1.0 - uDanger * 0.35;
+  color = max(color, vec3(0.0)) * uFade;
+  outColor = vec4(color, 1.0);
+}`;
+
+function compileShaderProgram(gl, vertexSource, fragmentSource, label) {
+  const compile = function (type, source) {
+    const shader = gl.createShader(type);
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      throw new Error(label + ' shader failed to compile: ' + gl.getShaderInfoLog(shader));
+    }
+    return shader;
+  };
+  const program = gl.createProgram();
+  gl.attachShader(program, compile(gl.VERTEX_SHADER, vertexSource));
+  gl.attachShader(program, compile(gl.FRAGMENT_SHADER, fragmentSource));
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    throw new Error(label + ' program failed to link: ' + gl.getProgramInfoLog(program));
+  }
+  return program;
+}
+
+function collectUniformLocations(gl, program, names) {
+  const locations = {};
+  for (const name of names) locations[name] = gl.getUniformLocation(program, name);
+  return locations;
+}
+
+function createPositionOnlyVertexArray(gl, vertices) {
+  const vertexArray = gl.createVertexArray();
+  gl.bindVertexArray(vertexArray);
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.disableVertexAttribArray(1);
+  gl.bindVertexArray(null);
+  return vertexArray;
+}
+
+function buildUnitCubeVertices() {
+  const vertices = [];
+  pushBoxTriangles(vertices, { centerX: 0, centerY: 0, centerZ: 0, halfX: 1, halfY: 1, halfZ: 1, cosineYaw: 1, sineYaw: 0 });
+  return new Float32Array(vertices);
+}
+
+// The handheld scanner in the corner of the view. Unlit, so it reads as a dark shape
+// with a glowing screen and emitter.
+function buildViewmodelGeometry() {
+  const vertices = [];
+  const ranges = {};
+  const faceShades = [0.5, 0.85, 0.35, 1.0, 0.7, 0.7]; // -Z, +Z, -Y, +Y, -X, +X
+  const pushColoredBox = function (centerX, centerY, centerZ, halfX, halfY, halfZ, red, green, blue) {
+    const corners = [];
+    for (let cornerIndex = 0; cornerIndex < 8; cornerIndex++) {
+      corners.push([
+        centerX + (cornerIndex & 1 ? halfX : -halfX),
+        centerY + (cornerIndex & 2 ? halfY : -halfY),
+        centerZ + (cornerIndex & 4 ? halfZ : -halfZ)]);
+    }
+    const faces = [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]];
+    for (let faceIndex = 0; faceIndex < 6; faceIndex++) {
+      const face = faces[faceIndex], shade = faceShades[faceIndex];
+      const order = [face[0], face[1], face[2], face[0], face[2], face[3]];
+      for (const cornerIndex of order) {
+        const corner = corners[cornerIndex];
+        vertices.push(corner[0] * 0.85, corner[1] * 0.85, corner[2] * 0.85, red * shade, green * shade, blue * shade);
+      }
+    }
+  };
+  const beginRange = function () { return vertices.length / 6; };
+  let start = beginRange();
+  pushColoredBox(0, 0, 0, 0.05, 0.042, 0.13, 0.085, 0.09, 0.11);
+  pushColoredBox(0, 0.05, -0.02, 0.018, 0.008, 0.1, 0.05, 0.05, 0.065);
+  pushColoredBox(0, 0.0, -0.155, 0.058, 0.05, 0.03, 0.06, 0.06, 0.075);
+  pushColoredBox(0, -0.1, 0.06, 0.026, 0.065, 0.032, 0.065, 0.065, 0.075);
+  pushColoredBox(0, -0.055, -0.01, 0.012, 0.012, 0.04, 0.045, 0.045, 0.055);
+  pushColoredBox(0, 0.048, 0.085, 0.042, 0.006, 0.04, 0.04, 0.04, 0.05);
+  pushColoredBox(-0.062, -0.005, 0.03, 0.012, 0.03, 0.07, 0.07, 0.075, 0.09);
+  for (let finIndex = 0; finIndex < 4; finIndex++) {
+    pushColoredBox(0.055, 0.0, -0.08 + finIndex * 0.035, 0.008, 0.03, 0.008, 0.075, 0.075, 0.09);
+  }
+  ranges.body = [start, beginRange() - start];
+  start = beginRange();
+  pushColoredBox(0, 0.005, -0.187, 0.03, 0.026, 0.003, 1, 1, 1);
+  ranges.lens = [start, beginRange() - start];
+  start = beginRange();
+  pushColoredBox(0, 0.056, 0.085, 0.036, 0.001, 0.034, 1, 1, 1);
+  ranges.screen = [start, beginRange() - start];
+  return { vertices: new Float32Array(vertices), ranges: ranges };
+}
+
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
+
+function initializeRenderer(canvas) {
+  const gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, powerPreference: 'high-performance' });
+  if (!gl) return false;
+  renderer.canvas = canvas;
+  renderer.gl = gl;
+
+  renderer.pointProgram = compileShaderProgram(gl, POINT_VERTEX_SHADER, POINT_FRAGMENT_SHADER, 'point');
+  renderer.pointUniforms = collectUniformLocations(gl, renderer.pointProgram,
+    ['uViewProjection', 'uCameraPosition', 'uTime', 'uPointScale', 'uPointSizeLimits', 'uInterference', 'uPowerOn', 'uHasKeycard', 'uPalette']);
+  renderer.solidProgram = compileShaderProgram(gl, SOLID_VERTEX_SHADER, SOLID_FRAGMENT_SHADER, 'solid');
+  renderer.solidUniforms = collectUniformLocations(gl, renderer.solidProgram, ['uMatrix', 'uTint']);
+  renderer.beamProgram = compileShaderProgram(gl, BEAM_VERTEX_SHADER, BEAM_FRAGMENT_SHADER, 'beam');
+  renderer.beamUniforms = collectUniformLocations(gl, renderer.beamProgram, ['uViewProjection', 'uColor']);
+  renderer.postProgram = compileShaderProgram(gl, POST_VERTEX_SHADER, POST_FRAGMENT_SHADER, 'post');
+  renderer.postUniforms = collectUniformLocations(gl, renderer.postProgram,
+    ['uScene', 'uResolution', 'uTime', 'uInterference', 'uDanger', 'uFade']);
+
+  // point cloud
+  renderer.pointVertexArray = gl.createVertexArray();
+  renderer.pointBuffer = gl.createBuffer();
+
+  // unit cube for moving occluders (doors and things that can be picked up)
+  renderer.unitCubeVertexArray = createPositionOnlyVertexArray(gl, buildUnitCubeVertices());
+  // viewmodel
+  const viewmodel = buildViewmodelGeometry();
+  renderer.viewmodelRanges = viewmodel.ranges;
+  renderer.viewmodelVertexArray = gl.createVertexArray();
+  gl.bindVertexArray(renderer.viewmodelVertexArray);
+  const viewmodelBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, viewmodelBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, viewmodel.vertices, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+
+  // beams
+  renderer.beamVertexArray = gl.createVertexArray();
+  gl.bindVertexArray(renderer.beamVertexArray);
+  renderer.beamBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, renderer.beamBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, beamLines.vertices.byteLength, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 4, gl.FLOAT, false, 0, 0);
+
+  renderer.postVertexArray = gl.createVertexArray();
+  gl.bindVertexArray(null);
+
+  renderer.isReady = true;
+  return true;
+}
+
+function allocatePointCloud(capacity) {
+  const gl = renderer.gl;
+  pointCloud.capacity = capacity;
+  pointCloud.rawBuffer = new ArrayBuffer(capacity * POINT_STRIDE_BYTES);
+  pointCloud.floatView = new Float32Array(pointCloud.rawBuffer);
+  pointCloud.byteView = new Uint8Array(pointCloud.rawBuffer);
+  pointCloud.writeIndex = 0;
+  pointCloud.storedCount = 0;
+  pointCloud.pendingUploadStart = 0;
+  pointCloud.pendingUploadCount = 0;
+  pointCloud.needsFullUpload = false;
+  gl.bindVertexArray(renderer.pointVertexArray);
+  gl.bindBuffer(gl.ARRAY_BUFFER, renderer.pointBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, pointCloud.rawBuffer.byteLength, gl.DYNAMIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, POINT_STRIDE_BYTES, 0);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 1, gl.FLOAT, false, POINT_STRIDE_BYTES, 12);
+  gl.enableVertexAttribArray(2);
+  gl.vertexAttribPointer(2, 4, gl.UNSIGNED_BYTE, true, POINT_STRIDE_BYTES, 16);
+  gl.bindVertexArray(null);
+}
+
+function clearAllPoints() {
+  pointCloud.writeIndex = 0;
+  pointCloud.storedCount = 0;
+  pointCloud.pendingUploadStart = 0;
+  pointCloud.pendingUploadCount = 0;
+  pointCloud.needsFullUpload = false;
+  pointCloud.totalReturns = 0;
+}
+
+function uploadWorldOccluderMesh(vertices) {
+  renderer.worldVertexArray = createPositionOnlyVertexArray(renderer.gl, vertices);
+  renderer.worldVertexCount = vertices.length / 3;
+}
+
+// Stores one scanner return. `lifeCode` 0 keeps the point forever; otherwise it fades
+// after lifeCode * 0.25 seconds.
+function addScanPoint(x, y, z, intensity, surfaceClass, lifeCode) {
+  const index = pointCloud.writeIndex;
+  const floatOffset = index * POINT_STRIDE_FLOATS;
+  pointCloud.floatView[floatOffset] = x;
+  pointCloud.floatView[floatOffset + 1] = y;
+  pointCloud.floatView[floatOffset + 2] = z;
+  pointCloud.floatView[floatOffset + 3] = currentPointTime;
+  const byteOffset = index * POINT_STRIDE_BYTES + 16;
+  pointCloud.byteView[byteOffset] = intensity * 255;
+  pointCloud.byteView[byteOffset + 1] = surfaceClass;
+  pointCloud.byteView[byteOffset + 2] = lifeCode;
+  pointCloud.byteView[byteOffset + 3] = 0;
+  pointCloud.writeIndex = index + 1 === pointCloud.capacity ? 0 : index + 1;
+  if (pointCloud.storedCount < pointCloud.capacity) pointCloud.storedCount++;
+  pointCloud.pendingUploadCount++;
+  pointCloud.totalReturns++;
+  plotPointOnMap(x, z, surfaceClass);
+}
+
+let currentPointTime = 0;
+
+// Removes stored points inside a box (used when a door slides away or an item is taken).
+function removePointsInsideBox(minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ) {
+  const floats = pointCloud.floatView;
+  let removedAny = false;
+  for (let index = 0; index < pointCloud.storedCount; index++) {
+    const offset = index * POINT_STRIDE_FLOATS;
+    const x = floats[offset];
+    if (x < minimumX || x > maximumX) continue;
+    const z = floats[offset + 2];
+    if (z < minimumZ || z > maximumZ) continue;
+    const y = floats[offset + 1];
+    if (y < minimumY || y > maximumY) continue;
+    floats[offset + 3] = DEAD_POINT_BIRTH_TIME;
+    removedAny = true;
+  }
+  if (removedAny) pointCloud.needsFullUpload = true;
+}
+
+function flushPointUploads() {
+  const gl = renderer.gl;
+  if (pointCloud.pendingUploadCount === 0 && !pointCloud.needsFullUpload) return;
+  gl.bindBuffer(gl.ARRAY_BUFFER, renderer.pointBuffer);
+  if (pointCloud.needsFullUpload || pointCloud.pendingUploadCount >= pointCloud.capacity) {
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, pointCloud.byteView, 0, pointCloud.storedCount * POINT_STRIDE_BYTES);
+  } else {
+    const start = pointCloud.pendingUploadStart;
+    const firstRunCount = Math.min(pointCloud.pendingUploadCount, pointCloud.capacity - start);
+    gl.bufferSubData(gl.ARRAY_BUFFER, start * POINT_STRIDE_BYTES, pointCloud.byteView,
+      start * POINT_STRIDE_BYTES, firstRunCount * POINT_STRIDE_BYTES);
+    const wrappedCount = pointCloud.pendingUploadCount - firstRunCount;
+    if (wrappedCount > 0) gl.bufferSubData(gl.ARRAY_BUFFER, 0, pointCloud.byteView, 0, wrappedCount * POINT_STRIDE_BYTES);
+  }
+  pointCloud.pendingUploadStart = pointCloud.writeIndex;
+  pointCloud.pendingUploadCount = 0;
+  pointCloud.needsFullUpload = false;
+}
+
+function resetBeamLines(originX, originY, originZ) {
+  beamLines.count = 0;
+  beamLines.originX = originX; beamLines.originY = originY; beamLines.originZ = originZ;
+}
+
+function addBeamLine(targetX, targetY, targetZ, alpha) {
+  if (beamLines.count >= MAXIMUM_BEAM_LINES) return;
+  const offset = beamLines.count * 8;
+  const vertices = beamLines.vertices;
+  vertices[offset] = beamLines.originX; vertices[offset + 1] = beamLines.originY; vertices[offset + 2] = beamLines.originZ; vertices[offset + 3] = alpha;
+  vertices[offset + 4] = targetX; vertices[offset + 5] = targetY; vertices[offset + 6] = targetZ; vertices[offset + 7] = alpha * 0.25;
+  beamLines.count++;
+}
+
+function resizeRenderer(renderScale) {
+  const gl = renderer.gl;
+  const canvas = renderer.canvas;
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2) * renderScale;
+  const width = Math.max(2, Math.round(canvas.clientWidth * pixelRatio));
+  const height = Math.max(2, Math.round(canvas.clientHeight * pixelRatio));
+  if (width === renderer.width && height === renderer.height && renderer.sceneFramebuffer) return;
+  renderer.width = width; renderer.height = height; renderer.pixelRatio = pixelRatio;
+  canvas.width = width; canvas.height = height;
+
+  if (renderer.sceneTexture) gl.deleteTexture(renderer.sceneTexture);
+  if (renderer.sceneDepthBuffer) gl.deleteRenderbuffer(renderer.sceneDepthBuffer);
+  if (renderer.sceneFramebuffer) gl.deleteFramebuffer(renderer.sceneFramebuffer);
+  renderer.sceneTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, renderer.sceneTexture);
+  const mipLevels = Math.floor(Math.log2(Math.max(width, height))) + 1;
+  gl.texStorage2D(gl.TEXTURE_2D, mipLevels, gl.RGBA8, width, height);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  renderer.sceneDepthBuffer = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, renderer.sceneDepthBuffer);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height);
+  renderer.sceneFramebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, renderer.sceneFramebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, renderer.sceneTexture, 0);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, renderer.sceneDepthBuffer);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+function writeBoxPropMatrix(out, prop) {
+  out[0] = prop.cosineYaw * prop.halfX; out[1] = 0; out[2] = prop.sineYaw * prop.halfX; out[3] = 0;
+  out[4] = 0; out[5] = prop.halfY; out[6] = 0; out[7] = 0;
+  out[8] = -prop.sineYaw * prop.halfZ; out[9] = 0; out[10] = prop.cosineYaw * prop.halfZ; out[11] = 0;
+  out[12] = prop.centerX; out[13] = prop.centerY; out[14] = prop.centerZ; out[15] = 1;
+  return out;
+}
+
+function writeViewmodelMatrix(out, x, y, z, yaw, pitch) {
+  const cosineYaw = Math.cos(yaw), sineYaw = Math.sin(yaw), cosinePitch = Math.cos(pitch), sinePitch = Math.sin(pitch);
+  out[0] = cosineYaw; out[1] = 0; out[2] = -sineYaw; out[3] = 0;
+  out[4] = sineYaw * sinePitch; out[5] = cosinePitch; out[6] = cosineYaw * sinePitch; out[7] = 0;
+  out[8] = sineYaw * cosinePitch; out[9] = -sinePitch; out[10] = cosineYaw * cosinePitch; out[11] = 0;
+  out[12] = x; out[13] = y; out[14] = z; out[15] = 1;
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Frame
+// ---------------------------------------------------------------------------
+
+function renderFrame(camera, frameState) {
+  const gl = renderer.gl;
+  if (!renderer.isReady || !renderer.sceneFramebuffer) return;
+  const aspectRatio = renderer.width / renderer.height;
+  const fieldOfView = camera.fieldOfViewDegrees * DEGREES_TO_RADIANS;
+  writePerspectiveMatrix(renderer.projectionMatrix, fieldOfView, aspectRatio, 0.06, 160);
+  // A hair of offset keeps the eye from ever sitting exactly on a tile edge while looking exactly
+  // along an axis; some drivers mishandle depth offset for polygons with a vertex at zero depth.
+  writeViewMatrix(renderer.viewMatrix, camera.x + 0.00037, camera.y, camera.z + 0.00053, camera.yaw + 0.00011, camera.pitch);
+  multiplyMatrices(renderer.viewProjectionMatrix, renderer.projectionMatrix, renderer.viewMatrix);
+
+  flushPointUploads();
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, renderer.sceneFramebuffer);
+  gl.viewport(0, 0, renderer.width, renderer.height);
+  gl.disable(gl.BLEND);
+  gl.disable(gl.CULL_FACE);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthFunc(gl.LEQUAL);
+  gl.depthMask(true);
+  gl.colorMask(true, true, true, true);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clearDepth(1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+  // 1. Occluders: depth only.
+  gl.useProgram(renderer.solidProgram);
+  gl.uniform3f(renderer.solidUniforms.uTint, 0, 0, 0);
+  gl.colorMask(false, false, false, false);
+  gl.enable(gl.POLYGON_OFFSET_FILL);
+  gl.polygonOffset(2.5, 4.0);
+  gl.vertexAttrib3f(1, 0, 0, 0);
+  if (renderer.worldVertexArray) {
+    gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.viewProjectionMatrix);
+    gl.bindVertexArray(renderer.worldVertexArray);
+    gl.drawArrays(gl.TRIANGLES, 0, renderer.worldVertexCount);
+  }
+  gl.bindVertexArray(renderer.unitCubeVertexArray);
+  for (let propIndex = 0; propIndex < dynamicBoxProps.length; propIndex++) {
+    const prop = dynamicBoxProps[propIndex];
+    if (prop.isRemoved) continue;
+    writeBoxPropMatrix(renderer.modelMatrix, prop);
+    multiplyMatrices(renderer.scratchMatrix, renderer.viewProjectionMatrix, renderer.modelMatrix);
+    gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.scratchMatrix);
+    gl.drawArrays(gl.TRIANGLES, 0, 36);
+  }
+  gl.disable(gl.POLYGON_OFFSET_FILL);
+  gl.colorMask(true, true, true, true);
+
+  // 2. The point cloud: opaque discs, so a dense scan reads as a surface instead of glare.
+  gl.disable(gl.BLEND);
+  gl.depthMask(true);
+  if (pointCloud.storedCount > 0) {
+    gl.useProgram(renderer.pointProgram);
+    const uniforms = renderer.pointUniforms;
+    gl.uniformMatrix4fv(uniforms.uViewProjection, false, renderer.viewProjectionMatrix);
+    gl.uniform3f(uniforms.uCameraPosition, camera.x, camera.y, camera.z);
+    gl.uniform1f(uniforms.uTime, frameState.time);
+    const focalLengthPixels = renderer.height / (2 * Math.tan(fieldOfView / 2));
+    gl.uniform1f(uniforms.uPointScale, 0.03 * focalLengthPixels);
+    gl.uniform2f(uniforms.uPointSizeLimits, 1.7 * renderer.pixelRatio, 3.8 * renderer.pixelRatio);
+    gl.uniform1f(uniforms.uInterference, frameState.interference);
+    gl.uniform1f(uniforms.uPowerOn, frameState.powerOn ? 1 : 0);
+    gl.uniform1f(uniforms.uHasKeycard, frameState.hasKeycard ? 1 : 0);
+    gl.uniform1i(uniforms.uPalette, frameState.palette);
+    gl.bindVertexArray(renderer.pointVertexArray);
+    gl.drawArrays(gl.POINTS, 0, pointCloud.storedCount);
+  }
+
+  // 3. Laser lines from the emitter to this frame's returns.
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.ONE, gl.ONE);
+  gl.depthMask(false);
+  if (beamLines.count > 0) {
+    gl.useProgram(renderer.beamProgram);
+    gl.uniformMatrix4fv(renderer.beamUniforms.uViewProjection, false, renderer.viewProjectionMatrix);
+    gl.uniform3f(renderer.beamUniforms.uColor, 0.55, 0.85, 1.0);
+    gl.bindVertexArray(renderer.beamVertexArray);
+    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.beamBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, beamLines.vertices, 0, beamLines.count * 8);
+    gl.drawArrays(gl.LINES, 0, beamLines.count * 2);
+  }
+  gl.disable(gl.BLEND);
+  gl.depthMask(true);
+
+  // 4. The scanner in the player's hand.
+  if (frameState.showViewmodel) {
+    gl.clear(gl.DEPTH_BUFFER_BIT);
+    writePerspectiveMatrix(renderer.viewmodelProjectionMatrix, 55 * DEGREES_TO_RADIANS, aspectRatio, 0.03, 4);
+    const narrowScreenShift = aspectRatio < 1 ? (1 - aspectRatio) * 0.16 : 0;
+    writeViewmodelMatrix(renderer.modelMatrix,
+      0.27 - narrowScreenShift + frameState.viewmodelSwayX, -0.215 + frameState.viewmodelSwayY, -0.55 + frameState.viewmodelKick,
+      0.1, 0.06 + frameState.viewmodelSwayY * 0.6);
+    multiplyMatrices(renderer.scratchMatrix, renderer.viewmodelProjectionMatrix, renderer.modelMatrix);
+    gl.useProgram(renderer.solidProgram);
+    gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.scratchMatrix);
+    gl.bindVertexArray(renderer.viewmodelVertexArray);
+    const ranges = renderer.viewmodelRanges;
+    gl.uniform3f(renderer.solidUniforms.uTint, 1, 1, 1);
+    gl.drawArrays(gl.TRIANGLES, ranges.body[0], ranges.body[1]);
+    const lensGlow = 0.12 + frameState.scannerActivity * 0.88;
+    gl.uniform3f(renderer.solidUniforms.uTint, 0.5 * lensGlow, 0.9 * lensGlow, 1.0 * lensGlow);
+    gl.drawArrays(gl.TRIANGLES, ranges.lens[0], ranges.lens[1]);
+    const heat = frameState.scannerHeat;
+    const flicker = 0.85 + 0.15 * Math.sin(frameState.time * 23);
+    gl.uniform3f(renderer.solidUniforms.uTint, (0.95 + heat * 0.3) * flicker, (0.62 - heat * 0.45) * flicker, (0.14 - heat * 0.1) * flicker);
+    gl.drawArrays(gl.TRIANGLES, ranges.screen[0], ranges.screen[1]);
+  }
+
+  // 5. Post-processing onto the screen.
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, renderer.width, renderer.height);
+  gl.disable(gl.DEPTH_TEST);
+  gl.bindTexture(gl.TEXTURE_2D, renderer.sceneTexture);
+  gl.generateMipmap(gl.TEXTURE_2D);
+  gl.useProgram(renderer.postProgram);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.uniform1i(renderer.postUniforms.uScene, 0);
+  gl.uniform2f(renderer.postUniforms.uResolution, renderer.width, renderer.height);
+  gl.uniform1f(renderer.postUniforms.uTime, frameState.realTime);
+  gl.uniform1f(renderer.postUniforms.uInterference, frameState.interference);
+  gl.uniform1f(renderer.postUniforms.uDanger, frameState.danger);
+  gl.uniform1f(renderer.postUniforms.uFade, frameState.fade);
+  gl.bindVertexArray(renderer.postVertexArray);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+  gl.bindVertexArray(null);
+}

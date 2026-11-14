@@ -1,0 +1,210 @@
+<div id="game-root">
+  <canvas id="view-canvas" tabindex="0" aria-label="Scanner view of the station"></canvas>
+
+  <div id="hud" hidden>
+    <div class="hud-block hud-top-left">
+      <div class="hud-label">WORK ORDER 4471-B</div>
+      <div id="hud-objective" class="hud-objective"></div>
+      <div class="hud-chips">
+        <span id="chip-spools" class="chip">SPOOLS 0/3</span>
+        <span id="chip-power" class="chip">MAINS OFF</span>
+        <span id="chip-keycard" class="chip">NO KEYCARD</span>
+      </div>
+    </div>
+
+    <div class="hud-block hud-top-right">
+      <canvas id="minimap-canvas" width="168" height="168" aria-label="Map of scanned points"></canvas>
+      <div id="hud-location" class="hud-label hud-location"></div>
+    </div>
+
+    <div class="hud-block hud-bottom-left">
+      <dl class="readouts">
+        <div><dt>RANGE</dt><dd id="readout-range">--.-- m</dd></div>
+        <div><dt>TIME OF FLIGHT</dt><dd id="readout-flight">--- ns</dd></div>
+        <div><dt>RETURNS</dt><dd id="readout-returns">0</dd></div>
+        <div><dt>HEADING</dt><dd id="readout-heading">000&deg;</dd></div>
+      </dl>
+      <div class="meters">
+        <div class="meter"><span class="meter-name">EMITTER HEAT</span><span class="meter-track"><span id="bar-heat" class="meter-fill"></span></span></div>
+        <div class="meter"><span class="meter-name">STAMINA</span><span class="meter-track"><span id="bar-stamina" class="meter-fill meter-fill-calm"></span></span></div>
+        <div class="meter"><span class="meter-name">INTERFERENCE</span><span class="meter-track"><span id="bar-interference" class="meter-fill meter-fill-alarm"></span></span></div>
+      </div>
+      <div id="hud-stance" class="hud-label"></div>
+    </div>
+
+    <div id="reticle" aria-hidden="true"><div id="reticle-ring"></div><div id="reticle-dot"></div></div>
+    <div id="hud-prompt" hidden></div>
+    <div id="hud-countdown" hidden></div>
+    <div id="hud-messages" aria-live="polite"></div>
+    <div id="hud-caption" aria-live="polite"></div>
+  </div>
+
+  <div id="touch-controls" hidden>
+    <div id="touch-move-zone"></div>
+    <div id="touch-look-zone"></div>
+    <div id="touch-stick-base" hidden><div id="touch-stick-knob"></div></div>
+    <div class="touch-top-buttons">
+      <button type="button" id="touch-map" class="touch-button touch-small">MAP</button>
+      <button type="button" id="touch-pause" class="touch-button touch-small">PAUSE</button>
+    </div>
+    <div class="touch-right-buttons">
+      <button type="button" id="touch-crouch" class="touch-button">CROUCH</button>
+      <button type="button" id="touch-run" class="touch-button">RUN</button>
+      <button type="button" id="touch-spread" class="touch-button">BEAM</button>
+      <button type="button" id="touch-use" class="touch-button">USE</button>
+      <button type="button" id="touch-sweep" class="touch-button">SWEEP</button>
+      <button type="button" id="touch-scan" class="touch-button touch-scan">SCAN</button>
+    </div>
+  </div>
+
+  <div id="map-overlay" hidden>
+    <div class="map-frame">
+      <div class="map-header">
+        <span class="hud-label">POINT CLOUD · PLAN VIEW · NORTH UP</span>
+        <button type="button" id="map-close" class="button-quiet">Close map</button>
+      </div>
+      <canvas id="map-canvas" width="760" height="640" aria-label="Plan view of everything scanned so far"></canvas>
+      <div class="map-legend">
+        <span><i class="legend-swatch legend-you"></i>You</span>
+        <span><i class="legend-swatch legend-item"></i>Scanned objects of interest</span>
+        <span><i class="legend-swatch legend-door"></i>Doors</span>
+        <span>Only what the scanner has touched is drawn.</span>
+      </div>
+    </div>
+  </div>
+
+  <section id="screen-title" class="screen screen-title">
+    <div class="title-layout">
+      <header class="title-block">
+        <p class="eyebrow">MARROW RIDGE GEODETIC · WORK ORDER 4471-B</p>
+        <h1 class="game-title">NO RETURN</h1>
+        <p class="title-readout"><span>RANGE</span><b id="title-range">--.-- m</b><span>RETURNS</span><b id="title-returns">0</b></p>
+        <p class="lede">Kessel-9 pumping annex, 212 metres below grade, sealed in 1987. There is no lighting. A handheld LiDAR scanner is the only way to see, and the last survey crew did not come back up.</p>
+        <fieldset class="difficulty-group">
+          <legend>Threat level</legend>
+          <label class="pill"><input type="radio" name="difficulty" id="difficulty-survey" value="survey"><span>Survey only</span></label>
+          <label class="pill"><input type="radio" name="difficulty" id="difficulty-standard" value="standard" checked><span>Standard</span></label>
+          <label class="pill"><input type="radio" name="difficulty" id="difficulty-nightmare" value="nightmare"><span>Nightmare</span></label>
+        </fieldset>
+        <p id="difficulty-description" class="difficulty-description"></p>
+        <div class="begin-row">
+          <button type="button" id="button-begin" class="button-primary">Begin descent</button>
+          <span class="headphones-note">Headphones strongly recommended. Sound tells you where it is.</span>
+        </div>
+      </header>
+
+      <aside class="field-card">
+        <h2>Field card</h2>
+        <dl class="controls-list">
+          <div><dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd></div>
+          <div><dt>Look</dt><dd>Mouse, or arrow keys</dd></div>
+          <div><dt>Scan</dt><dd>Hold <kbd>Left mouse</kbd> or <kbd>Space</kbd></dd></div>
+          <div><dt>Full sweep</dt><dd><kbd>Right mouse</kbd> or <kbd>F</kbd> (loud)</dd></div>
+          <div><dt>Beam width</dt><dd><kbd>Wheel</kbd> or <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></dd></div>
+          <div><dt>Sprint</dt><dd><kbd>Shift</kbd> (loud)</dd></div>
+          <div><dt>Crouch</dt><dd>Hold <kbd>C</kbd> (quiet)</dd></div>
+          <div><dt>Use</dt><dd><kbd>E</kbd></dd></div>
+          <div><dt>Map</dt><dd><kbd>Tab</kbd> or <kbd>M</kbd></dd></div>
+          <div><dt>Colours</dt><dd><kbd>V</kbd></dd></div>
+          <div><dt>Pause</dt><dd><kbd>Esc</kbd></dd></div>
+        </dl>
+        <p class="card-note">On a touch screen the controls appear on screen: left thumb moves, right thumb looks, hold SCAN to paint.</p>
+        <div class="settings-grid">
+          <label for="title-quality">Point budget</label>
+          <select id="title-quality" data-setting="quality">
+            <option value="low">250,000 points</option>
+            <option value="medium">600,000 points</option>
+            <option value="high">1,200,000 points</option>
+          </select>
+          <label for="title-sensitivity">Look speed</label>
+          <input type="range" id="title-sensitivity" data-setting="sensitivity" min="0.2" max="3" step="0.1" value="1">
+          <label for="title-volume">Volume</label>
+          <input type="range" id="title-volume" data-setting="volume" min="0" max="1" step="0.05" value="0.8">
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <section id="screen-intro" class="screen screen-dark" hidden>
+    <div class="intro-block">
+      <div id="intro-lines" class="intro-lines"></div>
+      <button type="button" id="button-skip-intro" class="button-quiet">Skip (Space or click)</button>
+    </div>
+  </section>
+
+  <section id="screen-pause" class="screen screen-dim" hidden>
+    <div class="panel">
+      <p class="eyebrow">SCANNER STANDBY</p>
+      <h2 class="panel-title">Paused</h2>
+      <p id="pause-objective" class="panel-text"></p>
+      <div class="settings-grid">
+        <label for="pause-sensitivity">Look speed</label>
+        <input type="range" id="pause-sensitivity" data-setting="sensitivity" min="0.2" max="3" step="0.1" value="1">
+        <label for="pause-volume">Volume</label>
+        <input type="range" id="pause-volume" data-setting="volume" min="0" max="1" step="0.05" value="0.8">
+        <label for="pause-palette">Point colours</label>
+        <select id="pause-palette" data-setting="palette">
+          <option value="0">Range (ice)</option>
+          <option value="1">Amber</option>
+          <option value="2">Height</option>
+        </select>
+      </div>
+      <div class="button-row">
+        <button type="button" id="button-resume" class="button-primary">Resume</button>
+        <button type="button" id="button-pause-restart" class="button-quiet">Abandon survey</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-reader" class="screen screen-dim" hidden>
+    <article class="panel panel-reader">
+      <p id="reader-source" class="eyebrow"></p>
+      <h2 id="reader-heading" class="panel-title"></h2>
+      <div id="reader-body" class="reader-body"></div>
+      <div class="button-row">
+        <button type="button" id="button-close-reader" class="button-primary">Put it away</button>
+      </div>
+    </article>
+  </section>
+
+  <section id="screen-rotate" class="screen screen-dark" hidden>
+    <div class="panel panel-bare rotate-panel">
+      <div class="rotate-figure" aria-hidden="true"><span class="rotate-phone"></span></div>
+      <h2 class="panel-title">Turn your phone sideways</h2>
+      <p class="panel-text">The scanner view is wide. The game holds still until you do.</p>
+      <div class="button-row">
+        <button type="button" id="button-play-upright" class="button-quiet">Play upright anyway</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-death" class="screen screen-dark" hidden>
+    <div class="panel panel-bare">
+      <h2 id="death-title" class="death-title">SIGNAL LOST</h2>
+      <div id="death-lines" class="panel-text"></div>
+      <div class="button-row">
+        <button type="button" id="button-retry" class="button-primary">Resume from last checkpoint</button>
+        <button type="button" id="button-death-restart" class="button-quiet">Start over</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-ending" class="screen screen-dark" hidden>
+    <div class="panel panel-bare">
+      <p class="eyebrow">LIFT CAR 2 · 212 m TO SURFACE</p>
+      <h2 class="death-title ending-title">ASCENT</h2>
+      <dl id="ending-stats" class="ending-stats"></dl>
+      <p id="ending-manifest" class="panel-text ending-manifest"></p>
+      <div class="button-row">
+        <button type="button" id="button-ending-restart" class="button-primary">Go back down</button>
+      </div>
+    </div>
+  </section>
+
+  <div id="fatal-error" class="screen screen-dark" hidden>
+    <div class="panel panel-bare">
+      <h2 class="panel-title">The scanner cannot start</h2>
+      <p id="fatal-error-text" class="panel-text">This game needs WebGL 2. Open it in a current desktop or mobile browser with hardware acceleration switched on.</p>
+    </div>
+  </div>
+</div>
