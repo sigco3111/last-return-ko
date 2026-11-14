@@ -64,6 +64,12 @@ function initializeInterface() {
     else if (game.mode === 'intro' && input.isPointerLocked) finishIntro();
   });
 
+  // The point-budget choices show the numbers from QUALITY_PRESETS.
+  for (const option of document.querySelectorAll('#title-quality option')) {
+    const preset = QUALITY_PRESETS[option.value];
+    if (preset) option.textContent = formatWithThousandsSeparators(preset.maximumPoints) + ' points';
+  }
+
   // Settings controls appear on more than one screen; keep every copy in step.
   const settingControls = document.querySelectorAll('[data-setting]');
   const refreshSettingControls = function () {
@@ -148,6 +154,39 @@ function plotPointOnMap(x, z, surfaceClass) {
   interfaceState.mapIsDirty = true;
 }
 
+// Debug mode: draws every room on the map as if it had all been scanned.
+function revealWholeMap() {
+  const step = 1 / MAP_PIXELS_PER_METRE;
+  for (let tileZ = 0; tileZ < GRID_DEPTH; tileZ++) {
+    for (let tileX = 0; tileX < GRID_WIDTH; tileX++) {
+      const index = tileIndexAt(tileX, tileZ);
+      if (!tileIsOpen[index]) continue;
+      const floorClass = (tileFlags[index] & TILE_FLAG_WATER) ? SURFACE_WATER : SURFACE_FLOOR;
+      const isPit = (tileFlags[index] & TILE_FLAG_PIT) !== 0;
+      for (let offsetZ = step / 2; offsetZ < 1; offsetZ += step) {
+        for (let offsetX = step / 2; offsetX < 1; offsetX += step) {
+          if (!isPit) for (let pass = 0; pass < 5; pass++) plotPointOnMap(tileX + offsetX, tileZ + offsetZ, floorClass);
+        }
+      }
+      for (let along = step / 2; along < 1; along += step) {
+        for (let pass = 0; pass < 4; pass++) {
+          if (!isTileOpenAt(tileX, tileZ - 1)) plotPointOnMap(tileX + along, tileZ + 0.01, SURFACE_WALL);
+          if (!isTileOpenAt(tileX, tileZ + 1)) plotPointOnMap(tileX + along, tileZ + 0.99, SURFACE_WALL);
+          if (!isTileOpenAt(tileX - 1, tileZ)) plotPointOnMap(tileX + 0.01, tileZ + along, SURFACE_WALL);
+          if (!isTileOpenAt(tileX + 1, tileZ)) plotPointOnMap(tileX + 0.99, tileZ + along, SURFACE_WALL);
+        }
+      }
+      if (tileZone[index]) interfaceState.visitedZones.add(tileZone[index]);
+    }
+  }
+  for (const prop of worldProps) {
+    if (prop.isDynamic || prop.maximumY < 0.3 || prop.minimumY > 1.8 || !prop.blocksMovement) continue;
+    for (let pass = 0; pass < 4; pass++) plotPointOnMap(prop.centerX, prop.centerZ, SURFACE_PROP);
+  }
+  for (const door of doors) plotPointOnMap(door.centerX, door.centerZ, SURFACE_DOOR_AUTOMATIC);
+  for (const interactable of interactables) interactable.isDiscovered = true;
+}
+
 function flushMapPixels() {
   if (!interfaceState.mapIsDirty) return;
   interfaceState.mapSourceContext.putImageData(interfaceState.mapImageData, 0, 0);
@@ -190,6 +229,9 @@ function drawMinimap() {
     if (markerX < 0 || markerY < 0 || markerX > canvas.width || markerY > canvas.height) continue;
     context.fillRect(markerX - 3, markerY - 3, 6, 6);
   }
+  drawDebugMapMarkers(context,
+    function (worldX) { return (worldX - player.x) * scale + canvas.width / 2; },
+    function (worldZ) { return (worldZ - player.z) * scale + canvas.height / 2; }, 5);
   drawPlayerMarker(context, canvas.width / 2, canvas.height / 2, player.yaw, 7);
 }
 
@@ -224,6 +266,7 @@ function drawFullMap() {
     context.fillRect(interactable.x * scale - 4, interactable.z * scale - 4, 8, 8);
     if (interactable.mapLabel) context.fillText(interactable.mapLabel, interactable.x * scale + 8, interactable.z * scale + 4);
   }
+  drawDebugMapMarkers(context, function (worldX) { return worldX * scale; }, function (worldZ) { return worldZ * scale; }, 7);
   drawPlayerMarker(context, player.x * scale, player.z * scale, player.yaw, 9);
 }
 
@@ -457,6 +500,7 @@ function showEndingScreen() {
   addRow('Distance walked', Math.round(game.statistics.distanceWalked) + ' m');
   addRow('Signal losses', String(game.statistics.deaths));
   addRow('Threat level', game.difficulty.label);
+  if (debugState.hasBeenUsedThisRun) addRow('Debug mode', 'used, so this run sets no best time');
   if (game.statistics.bestTime !== null) addRow('Best time', formatClockTime(game.statistics.bestTime));
   const manifest = elements['ending-manifest'];
   manifest.textContent = '';

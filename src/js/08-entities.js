@@ -8,12 +8,9 @@ const HOLLOW_STATE_INVESTIGATE = 1;
 const HOLLOW_STATE_HUNT = 2;
 const HOLLOW_STATE_SEARCH = 3;
 
-const HOLLOW_POINT_LIFE_CODE = 22;  // 5.5 seconds
-const STILL_POINT_LIFE_CODE = 88;   // 22 seconds
-const PHANTOM_POINT_LIFE_CODE = 30; // 7.5 seconds
 
 const hollow = {
-  figure: createFigure(FIGURE_PROPORTIONS_HOLLOW, SURFACE_HOLLOW, HOLLOW_POINT_LIFE_CODE),
+  figure: createFigure(FIGURE_PROPORTIONS_HOLLOW, SURFACE_HOLLOW, 'hollowImprintSeconds'),
   isActive: false,
   state: HOLLOW_STATE_ROAM,
   targetX: 0, targetZ: 0,
@@ -54,8 +51,9 @@ const phantoms = [];
 // ---------------------------------------------------------------------------
 
 function emitNoise(x, z, radius) {
-  if (!hollow.isActive || hollow.graceTimer > 0) return;
   const effectiveRadius = radius * game.difficulty.hearingFactor;
+  recordDebugNoise(x, z, effectiveRadius);
+  if (!hollow.isActive || hollow.graceTimer > 0 || debugState.options.creaturesIgnorePlayer) return;
   const distance = distanceBetweenPoints(x, z, hollow.figure.x, hollow.figure.z);
   if (distance > effectiveRadius) return;
   if (hollow.state === HOLLOW_STATE_HUNT) {
@@ -91,6 +89,7 @@ function updateDoors(dt) {
     if (door.forcedState !== null) {
       wantsOpen = door.forcedState;
     } else {
+      // TWEAK: doors notice you from 1.9 m away.
       const isPlayerNear = distanceBetweenPoints(player.x, player.z, door.centerX, door.centerZ) < 1.9;
       door.deniedMessageCooldown -= dt;
       if (isPlayerNear) {
@@ -124,7 +123,7 @@ function updateDoors(dt) {
     }
     const target = wantsOpen || door.closeDelay > 0 ? 1 : 0;
     const previousFraction = door.openFraction;
-    door.openFraction = approachValue(door.openFraction, target, dt * 1.7);
+    door.openFraction = approachValue(door.openFraction, target, dt * 1.7); // TWEAK: 1.7 = a door takes about 0.6 s to open
     if (previousFraction === 1 && door.openFraction < 1) playDoorSound(door.centerX, door.centerZ, false);
     const slab = door.slab;
     slab.centerY = 1.15 + door.openFraction * DOOR_TRAVEL_HEIGHT;
@@ -164,7 +163,7 @@ function refreshPlayerDistanceField() {
 
 function chooseHollowRoamTarget() {
   refreshPlayerDistanceField();
-  const wantsPressure = hollow.timeSinceLastHunt > 55;
+  const wantsPressure = hollow.timeSinceLastHunt > TUNING.hollowPressureAfterSeconds;
   const minimumSteps = wantsPressure ? 4 : 9, maximumSteps = wantsPressure ? 14 : 34;
   const candidates = [];
   for (const waypoint of roamingWaypoints) {
@@ -285,8 +284,8 @@ function updateHollow(dt) {
 
   // ---- senses: it is blind. It hears, and it feels the beam. ----
   let isSensed = false;
-  if (hollow.graceTimer <= 0) {
-    if (beamHits >= 2) isSensed = true;
+  if (hollow.graceTimer <= 0 && !debugState.options.creaturesIgnorePlayer) {
+    if (beamHits >= TUNING.hollowBeamHitsToNotice) isSensed = true;
     const proximityRadius = player.audibleRadius * game.difficulty.hearingFactor;
     if (distanceToPlayer < proximityRadius &&
         (distanceToPlayer < 1.6 || hasClearWalkingLine(figure.x, figure.z, player.x, player.z))) isSensed = true;
@@ -296,9 +295,9 @@ function updateHollow(dt) {
   else hollow.timeSinceSensed += dt;
 
   // ---- the beam holds it, for a while ----
-  const isHeld = beamHits >= 2 && hollow.enragedTimer <= 0;
+  const isHeld = beamHits >= TUNING.hollowBeamHitsToNotice && hollow.enragedTimer <= 0;
   if (isHeld) hollow.rage += dt;
-  else hollow.rage = Math.max(0, hollow.rage - dt * 0.45);
+  else hollow.rage = Math.max(0, hollow.rage - dt * TUNING.hollowRageCoolingPerSecond);
   if (hollow.rage >= TUNING.hollowRageLimitSeconds && hollow.enragedTimer <= 0) {
     hollow.enragedTimer = TUNING.hollowEnragedDurationSeconds;
     hollow.rage = 0;
@@ -348,7 +347,7 @@ function updateHollow(dt) {
     if (distanceBetweenPoints(figure.x, figure.z, hollow.targetX, hollow.targetZ) < 1.5) chooseHollowRoamTarget();
   }
 
-  speed *= game.difficulty.hollowSpeedFactor * (game.flags.spoolsCollected >= 3 ? 1.1 : 1);
+  speed *= game.difficulty.hollowSpeedFactor * (game.flags.spoolsCollected >= 3 ? TUNING.hollowSpeedBonusWithAllSpools : 1);
   if (hollow.enragedTimer > 0) speed = TUNING.hollowEnragedSpeed * game.difficulty.hollowSpeedFactor;
   else speed *= interpolateLinear(1, TUNING.hollowHeldSpeedFactor, hollow.heldAmount);
 
@@ -400,7 +399,7 @@ function createStills() {
   stills.length = 0;
   const poseRandom = createSeededRandomGenerator(4471);
   const addStill = function (point, isLateArrival) {
-    const figure = createFigure(FIGURE_PROPORTIONS_DUMMY, SURFACE_STILL, STILL_POINT_LIFE_CODE);
+    const figure = createFigure(FIGURE_PROPORTIONS_DUMMY, SURFACE_STILL, 'stillImprintSeconds');
     figure.x = point[0]; figure.z = point[1];
     figure.yaw = poseRandom() * TWO_PI;
     figure.pose.armRaise = poseRandom() < 0.3 ? 0.5 + poseRandom() * 0.9 : 0.04;
@@ -449,6 +448,7 @@ function awakenStills() {
       setFigureRaycastable(still.figure, true);
       still.wakeDelay = 5;
     } else {
+      // TWEAK: each dummy waits between 2.5 and 8.5 seconds before it first moves, so they do not all start at once.
       still.wakeDelay = 2.5 + Math.random() * 6;
     }
   }
@@ -467,7 +467,7 @@ function updateStills(dt) {
   const playerZone = getZoneAtPosition(player.x, player.z);
   const isPlayerInStore = playerZone === ZONE_CALIBRATION_STORE;
   const isPlayerInReach = isPlayerInStore || playerZone === ZONE_ARCHIVE;
-  if (!isPlayerInReach) return;
+  if (!isPlayerInReach || debugState.options.creaturesIgnorePlayer) return;
   stillShiftCaptionCooldown -= dt;
   stillDistanceFieldAge += dt;
   if (stillsAreHunting && stillDistanceFieldAge > 0.3) {
@@ -484,7 +484,7 @@ function updateStills(dt) {
       // Not hostile yet. They just never stand quite where you left them.
       still.restlessCooldown -= dt;
       if (!isPlayerInStore || isObserved || still.restlessCooldown > 0 || game.time - figure.lastScannedTime < 3.5) continue;
-      still.restlessCooldown = randomBetween(4, 10);
+      still.restlessCooldown = randomBetween(4, 10); // TWEAK: seconds between a dormant dummy's small shifts
       figure.yaw = Math.atan2(player.x - figure.x, -(player.z - figure.z));
       if (Math.random() < 0.4 && distanceToPlayer > 4.2) {
         const shift = randomBetween(0.4, 0.9);
@@ -558,7 +558,7 @@ function getNearestHuntingStillDistance() {
 function createPhantoms() {
   phantoms.length = 0;
   for (const definition of phantomDefinitions) {
-    const figure = createFigure(FIGURE_PROPORTIONS_HOLLOW, SURFACE_PROP, PHANTOM_POINT_LIFE_CODE);
+    const figure = createFigure(FIGURE_PROPORTIONS_HOLLOW, SURFACE_PROP, 'phantomImprintSeconds');
     figure.x = definition.x; figure.z = definition.z; figure.yaw = definition.yaw;
     figure.pose.lean = 0.12; figure.pose.headTilt = 0.35; figure.pose.armRaise = 0.03;
     updateFigureCapsules(figure);
