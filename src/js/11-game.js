@@ -3,7 +3,7 @@
 // ---------------------------------------------------------------------------
 
 const game = {
-  mode: 'title', // title | intro | playing | rotate | paused | reading | dying | dead | ascending | ending
+  mode: 'title', // title | intro | playing | rotate | paused | reading | dying | dead | ascending | ending | workshop
   isUprightPlayAllowed: false,
   time: 0,
   realTime: 0,
@@ -29,6 +29,11 @@ const game = {
   hasShownHollowHint: false,
   attract: { yaw: -0.9, pitch: 0, timer: 0, sweepTimer: 4, sweepProgress: -1, rayBudget: 0, centerRange: -1 }
 };
+
+// The workshop (src/dev/, only present in a build made with `npm run dev`) runs as its own mode, 'workshop'.
+// It fills these in: `update` is called every frame instead of the game's own updates, and `buildFrameData`
+// returns what debug mode would otherwise hand the renderer (bodies, lines, and whether the station is lit).
+const workshopHooks = { update: null, buildFrameData: null };
 
 const ATTRACT_CAMERA = level.attractCamera; // set by whichever lift lobby is loaded
 const renderCamera = { x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, fieldOfViewDegrees: 72 };
@@ -671,6 +676,7 @@ function runFrame(timestamp) {
     if (game.mode === 'playing') updatePlaying(realDt);
     else if (game.mode === 'dying') updateDying(realDt);
     else if (game.mode === 'ascending') updateAscending(realDt);
+    else if (game.mode === 'workshop') workshopHooks.update(realDt);
     else resetBeamLines(0, 0, 0);
     const isScanning = player.isPainting || player.sweepTimeRemaining > 0;
     renderCamera.x = player.x;
@@ -695,7 +701,8 @@ function runFrame(timestamp) {
   frameState.palette = settings.palette;
   frameState.scannerActivity = player.scannerActivity;
   frameState.scannerHeat = player.heat;
-  frameState.debug = game.mode === 'title' ? null : buildDebugFrameData();
+  if (game.mode === 'workshop') frameState.debug = workshopHooks.buildFrameData();
+  else frameState.debug = game.mode === 'title' ? null : buildDebugFrameData();
   renderFrame(renderCamera, frameState);
   updateHud(realDt);
   updateDebugMode(realDt);

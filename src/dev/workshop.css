@@ -1,0 +1,61 @@
+/* ---------- the workshop (only in the `npm run dev` build) ---------- */
+#button-workshop { margin-left: 4px; }
+
+/* The view makes room for the panel instead of hiding under it, so what is in the middle of the view is in the middle of what you see. */
+#game-root.is-workshop #view-canvas { width: calc(100% - 380px); cursor: crosshair; }
+
+#workshop-panel {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 380px; z-index: 6;
+  display: flex; flex-direction: column;
+  background: var(--panel); border-left: 1px solid var(--panel-edge);
+  font-family: var(--font-data); font-size: 12px; color: var(--text);
+  -webkit-user-select: none; user-select: none;
+}
+.workshop-header { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-edge); color: var(--instrument); letter-spacing: 0.16em; }
+.workshop-header .button-quiet { padding: 4px 9px; font-size: 11px; }
+.workshop-tabs { display: flex; gap: 4px; margin-left: auto; }
+.workshop-tabs .is-current { background: var(--instrument); border-color: var(--instrument); color: var(--void); }
+.workshop-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 28px; display: flex; flex-direction: column; gap: 6px; }
+.workshop-body > * { flex: none; }
+.workshop-body .debug-heading { margin-top: 12px; padding-top: 8px; border-top: 1px solid rgba(242, 169, 59, 0.16); color: var(--instrument); }
+.workshop-body .debug-option { font-size: 11.5px; }
+.workshop-body .debug-option input { accent-color: var(--instrument); }
+
+.workshop-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: stretch; }
+.workshop-row .button-quiet { flex: 1 1 auto; padding: 5px 8px; font-size: 11px; letter-spacing: 0.02em; }
+.workshop-row .workshop-field { flex: 3 1 150px; }
+.workshop-main-button { color: var(--instrument); border-color: var(--instrument); }
+
+.workshop-field { display: grid; grid-template-columns: minmax(0, 1fr) 70px; gap: 1px 8px; align-items: center; }
+.workshop-field > span { grid-column: 1 / -1; font-size: 10.5px; color: var(--text-dim); overflow-wrap: anywhere; }
+.workshop-field input[type="range"] { width: 100%; margin: 0; accent-color: var(--instrument); }
+.workshop-field input[type="number"], .workshop-field input[type="text"], .workshop-field select {
+  width: 100%; min-width: 0; background: var(--void); color: var(--instrument); border: 1px solid var(--panel-edge);
+  padding: 3px 5px; font-family: var(--font-data); font-size: 11px;
+}
+.workshop-field input[type="text"], .workshop-field select { grid-column: 1 / -1; color: var(--text); -webkit-user-select: text; user-select: text; }
+.workshop-field input:focus-visible, .workshop-field select:focus-visible { outline: 1px solid var(--return); }
+
+.workshop-list { display: flex; flex-direction: column; gap: 2px; }
+.workshop-list-entry {
+  text-align: left; padding: 3px 7px; background: transparent; border: 1px solid transparent; cursor: pointer;
+  color: var(--text-dim); font-family: var(--font-data); font-size: 11px;
+}
+.workshop-list-entry:hover { color: var(--text); border-color: var(--panel-edge); }
+.workshop-list-entry.is-current { color: var(--void); background: var(--instrument); }
+
+.workshop-problems { margin: 0; padding: 0 0 0 16px; font-family: var(--font-body); font-size: 12px; line-height: 1.35; color: var(--alarm); }
+.workshop-problems .is-fine { color: var(--clear); }
+
+.workshop-status {
+  position: absolute; left: var(--gutter-left); bottom: 14px; z-index: 6; max-width: min(560px, calc(100% - 420px));
+  padding: 7px 11px; background: var(--panel); border-left: 2px solid var(--instrument);
+  font-family: var(--font-body); font-size: 13px; line-height: 1.35; color: var(--text);
+}
+.workshop-status.is-good { border-left-color: var(--clear); }
+.workshop-status.is-warning { border-left-color: var(--alarm); }
+#workshop-banner {
+  position: absolute; left: var(--gutter-left); top: 12px; z-index: 7; max-width: min(720px, calc(100% - 420px));
+  padding: 8px 12px; background: var(--alarm); color: var(--void);
+  font-family: var(--font-data); font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere;
+}

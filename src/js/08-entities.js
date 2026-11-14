@@ -452,25 +452,7 @@ function updateHollow(dt) {
   const isHunting = hollow.state === HOLLOW_STATE_HUNT;
   const isListening = hollow.state === HOLLOW_STATE_LISTEN;
   hollow.walkPhase += movedDistance * 2.3;
-  const stride = Math.min(1, hollow.currentSpeed / 1.4);
-  const pose = figure.pose;
-  pose.legSwing = Math.sin(hollow.walkPhase) * 0.55 * stride;
-  pose.armSwing = Math.sin(hollow.walkPhase) * 0.22 * stride;
-  pose.kneeBend = 0.16;
-  hollow.armRaise = approachValue(hollow.armRaise, isHunting ? 1.0 : 0.06, dt * 1.4);
-  pose.armRaise = hollow.armRaise;
-  pose.elbowBend = 0.15 + hollow.armRaise * 0.25;
-  pose.lean = (isListening ? 0.0 : 0.06) + hollow.armRaise * 0.25;
-  // Listening, it draws itself up to its full height (as far as the ceiling allows) and spreads its fingers.
-  // Hunting, it reaches. Otherwise it goes hunched, hands hanging by its knees.
-  const ceilingHere = isInsideGrid(Math.floor(figure.x), Math.floor(figure.z))
-    ? tileCeilingHeight[tileIndexAt(Math.floor(figure.x), Math.floor(figure.z))] : 2.3;
-  const tallestStretch = clampNumber((ceilingHere - figure.y - 2.25) / 0.32, 0, 1);
-  const wantedStretch = isListening ? 1 : (isHunting ? 0.3 : 0);
-  pose.stretch = approachValue(pose.stretch, Math.min(wantedStretch, tallestStretch), dt * 0.7);
-  pose.fingerSplay = approachValue(pose.fingerSplay, (isHunting || hollow.heldAmount > 0.3) ? 1 : (isListening ? 0.75 : 0.2), dt * 2.5);
-  pose.headTilt = 0.28 + Math.sin(game.time * (isListening ? 0.35 : 0.8)) * (isListening ? 0.45 : 0.2) +
-    (hollow.heldAmount > 0.3 ? (Math.random() - 0.5) * 0.9 : 0);
+  poseHollow(hollow, isHunting, isListening, dt);
   if (hollow.heldAmount > 0.3) {
     // Held in the beam it turns its whole body toward the emitter.
     const towardPlayer = Math.atan2(player.x - figure.x, -(player.z - figure.z));
@@ -489,6 +471,31 @@ function updateHollow(dt) {
   }
 
   if (distanceToPlayer < TUNING.hollowKillDistance && hollow.graceTimer <= 0) triggerPlayerDeath('hollow', figure);
+}
+
+// Sets the Hollow's pose from what it is doing. `creature` is the Hollow, or a stand-in with the same fields
+// (figure, walkPhase, currentSpeed, armRaise, heldAmount): that is how the workshop shows these same poses.
+function poseHollow(creature, isHunting, isListening, dt) {
+  const figure = creature.figure;
+  const stride = Math.min(1, creature.currentSpeed / 1.4);
+  const pose = figure.pose;
+  pose.legSwing = Math.sin(creature.walkPhase) * 0.55 * stride;
+  pose.armSwing = Math.sin(creature.walkPhase) * 0.22 * stride;
+  pose.kneeBend = 0.16;
+  creature.armRaise = approachValue(creature.armRaise, isHunting ? 1.0 : 0.06, dt * 1.4);
+  pose.armRaise = creature.armRaise;
+  pose.elbowBend = 0.15 + creature.armRaise * 0.25;
+  pose.lean = (isListening ? 0.0 : 0.06) + creature.armRaise * 0.25;
+  // Listening, it draws itself up to its full height (as far as the ceiling allows) and spreads its fingers.
+  // Hunting, it reaches. Otherwise it goes hunched, hands hanging by its knees.
+  const ceilingHere = isInsideGrid(Math.floor(figure.x), Math.floor(figure.z))
+    ? tileCeilingHeight[tileIndexAt(Math.floor(figure.x), Math.floor(figure.z))] : 2.3;
+  const tallestStretch = clampNumber((ceilingHere - figure.y - 2.25) / 0.32, 0, 1);
+  const wantedStretch = isListening ? 1 : (isHunting ? 0.3 : 0);
+  pose.stretch = approachValue(pose.stretch, Math.min(wantedStretch, tallestStretch), dt * 0.7);
+  pose.fingerSplay = approachValue(pose.fingerSplay, (isHunting || creature.heldAmount > 0.3) ? 1 : (isListening ? 0.75 : 0.2), dt * 2.5);
+  pose.headTilt = 0.28 + Math.sin(game.time * (isListening ? 0.35 : 0.8)) * (isListening ? 0.45 : 0.2) +
+    (creature.heldAmount > 0.3 ? (Math.random() - 0.5) * 0.9 : 0);
 }
 
 function getHollowAggression() {
@@ -637,8 +644,7 @@ function updateStills(dt) {
     if (isPositionCrowdedByOtherStill(still, newX, newZ)) continue;
     figure.x = newX; figure.z = newZ;
     figure.yaw = Math.atan2(player.x - figure.x, -(player.z - figure.z));
-    figure.pose.armRaise = Math.max(figure.pose.armRaise, clampNumber(1.5 - distanceToPlayer * 0.22, 0, 1.35));
-    figure.pose.legSwing = Math.sin((figure.x + figure.z) * 5) * 0.3;
+    poseAdvancingStill(figure, distanceToPlayer);
     updateFigureCapsules(figure);
     still.distanceMovedSinceSound += step;
     if (still.distanceMovedSinceSound > 0.7) {
@@ -648,6 +654,13 @@ function updateStills(dt) {
       if (stillShiftCaptionCooldown <= 0) { showCaption('[something shifts behind you]'); stillShiftCaptionCooldown = 9; }
     }
   }
+}
+
+// The pose of a dummy that is walking at you: its arms come up as it closes in, and its legs are wherever
+// its position puts them, so every glimpse catches it mid-step. The workshop shows the same pose.
+function poseAdvancingStill(figure, distanceToPlayer) {
+  figure.pose.armRaise = Math.max(figure.pose.armRaise, clampNumber(1.5 - distanceToPlayer * 0.22, 0, 1.35));
+  figure.pose.legSwing = Math.sin((figure.x + figure.z) * 5) * 0.3;
 }
 
 function getNearestHuntingStillDistance() {

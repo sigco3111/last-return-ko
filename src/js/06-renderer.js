@@ -764,7 +764,14 @@ function renderFrame(camera, frameState) {
       gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.viewProjectionMatrix);
     }
     gl.bindVertexArray(renderer.worldVertexArray);
-    gl.drawArrays(gl.TRIANGLES, 0, renderer.worldVertexCount);
+    if (isStationLit) {
+      // The rooms first, then what stands in them in a warmer colour, so furniture can be told from floor.
+      gl.drawArrays(gl.TRIANGLES, 0, worldOccluderPropStart);
+      gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.42, 0.33, 0.22); // TWEAK: colour of props in the lit station
+      gl.drawArrays(gl.TRIANGLES, worldOccluderPropStart, renderer.worldVertexCount - worldOccluderPropStart);
+    } else {
+      gl.drawArrays(gl.TRIANGLES, 0, renderer.worldVertexCount);
+    }
   }
   gl.bindVertexArray(renderer.unitCubeVertexArray);
   for (let propIndex = 0; propIndex < dynamicBoxProps.length; propIndex++) {

@@ -5,7 +5,8 @@
   "description": "No Return: a first-person horror game where a handheld LiDAR scanner is the only way to see.",
   "scripts": {
     "build": "node build.js && node --check build/bundle.js",
-    "test": "npm run build && node tools/playthrough-test.js && node tools/generated-station-test.js",
+    "dev": "node tools/dev-server.js",
+    "test": "npm run build && node tools/playthrough-test.js && node tools/generated-station-test.js && node tools/workshop-test.js",
     "screenshots": "npm run build && node tools/take-screenshots.js",
     "audio-check": "npm run build && node tools/audio-check.js",
     "voice-script": "node tools/write-voice-script.js"

@@ -898,6 +898,14 @@ function furnishGeneratedCorridor(corridor, random) {
   }
 }
 
+// Beams under the ceiling of a room that is big and tall enough to want them. `room` is its rectangle on the map
+// (startX, startZ, endX, endZ) and its ceiling height. The workshop uses this too, so a room looks the same there.
+function addBeamsToLargeRoom(room) {
+  const width = room.endX - room.startX, depth = room.endZ - room.startZ;
+  if (room.ceiling < 3 || Math.min(width, depth) < 6) return;
+  addCeilingBeams(room.startX, room.startZ, room.endX, room.endZ, room.ceiling, room.ceiling > 5 ? 5 : 3.5, width < depth, room.ceiling > 5 ? 0.4 : 0.22);
+}
+
 // Builds a station from a seed. Returns true, or false if no workable plan was found (the map is left empty).
 function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   if (!GENERATED_SIZE_PRESETS[sizeKey]) sizeKey = 'medium';
@@ -1010,11 +1018,8 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   // Beams in the larger rooms.
   for (const room of plan.rooms) {
     if (room.isCorridor || room.key === 'liftLobby') continue;
-    const width = room.endX - room.startX, depth = room.endZ - room.startZ;
     placement.offsetY = room.floorY;
-    if (room.ceiling >= 3 && Math.min(width, depth) >= 6) {
-      addCeilingBeams(room.startX, room.startZ, room.endX, room.endZ, room.ceiling, room.ceiling > 5 ? 5 : 3.5, width < depth, room.ceiling > 5 ? 0.4 : 0.22);
-    }
+    addBeamsToLargeRoom(room);
   }
 
   // Every door is labelled, on each side, with the name of what is behind it.

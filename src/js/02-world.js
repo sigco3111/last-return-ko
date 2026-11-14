@@ -1068,6 +1068,10 @@ function pushSphereTriangles(target, prop) {
   }
 }
 
+// Where in the occluder mesh the props begin (counted in vertices): everything before is floor, wall and ceiling.
+// The lit view of debug mode draws the two parts in different colours.
+let worldOccluderPropStart = 0;
+
 function buildWorldOccluderVertices() {
   const vertices = [];
   const neighbourOffsets = [[0, -1], [1, 0], [0, 1], [-1, 0]];
@@ -1099,6 +1103,7 @@ function buildWorldOccluderVertices() {
       }
     }
   }
+  worldOccluderPropStart = vertices.length / 3;
   for (const prop of worldProps) {
     if (prop.isDynamic) continue;
     if (prop.kind === PROP_KIND_BOX) pushBoxTriangles(vertices, prop);

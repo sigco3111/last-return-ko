@@ -12,20 +12,20 @@ const FIGURE_CAPSULE_STRIDE = 7; // startX, startY, startZ, endX, endY, endZ, ra
 // fingers on each hand. Standing hunched it is about 2.2 m tall; when it straightens up to listen, about 2.5 m.
 const FIGURE_PROPORTIONS_HOLLOW = {
   kind: 'hollow',
-  thigh: 0.56, shin: 0.6, footLength: 0.26, hipWidth: 0.2,
-  lowerSpine: 0.4, upperSpine: 0.4, shoulderWidth: 0.46,
-  neckLength: 0.2, headLength: 0.17, headRadius: 0.095, jawLength: 0.11,
-  upperArm: 0.56, foreArm: 0.68, handLength: 0.11,
-  fingerLengths: [0.24, 0.3, 0.26],   // outer, middle, inner finger
-  torsoRadius: 0.3, limbRadius: 0.038, legRadius: 0.052, fingerRadius: 0.013
+  thigh: 0.75, shin: 0.79, footLength: 0.295, hipWidth: 0.285,
+  lowerSpine: 0.4, upperSpine: 0.465, shoulderWidth: 0.265,
+  neckLength: 0.345, headLength: 0.11, headRadius: 0.11, jawLength: 0.075,
+  upperArm: 0.705, foreArm: 0.75, handLength: 0.125,
+  fingerLengths: [0.26, 0.32, 0.27],   // outer, middle, inner finger
+  torsoRadius: 0.095, limbRadius: 0.05, legRadius: 0.08, fingerRadius: 0.015
 };
 
 // The calibration dummy: an ordinary jointed shop mannequin, about 1.75 m tall.
 const FIGURE_PROPORTIONS_DUMMY = {
   kind: 'dummy',
-  torsoLength: 0.55, neckLength: 0.08, headRadius: 0.105, headLength: 0.05,
-  shoulderWidth: 0.4, hipWidth: 0.2, upperArm: 0.3, foreArm: 0.27, handLength: 0.08,
-  thigh: 0.45, shin: 0.44, footLength: 0.2, torsoRadius: 0.13, limbRadius: 0.044, legRadius: 0.062, jointRadius: 0.058
+  torsoLength: 0.585, neckLength: 0.11, headRadius: 0.11, headLength: 0.05,
+  shoulderWidth: 0.42, hipWidth: 0.205, upperArm: 0.31, foreArm: 0.285, handLength: 0.11,
+  thigh: 0.575, shin: 0.45, footLength: 0.2, torsoRadius: 0.145, limbRadius: 0.04, legRadius: 0.065, jointRadius: 0.06
 };
 
 const raycastableFigures = [];

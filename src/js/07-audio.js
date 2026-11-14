@@ -95,10 +95,10 @@ function createThroatBuffer(context) {
   let position = 0;
   while (position < length) {
     const phraseEnd = Math.min(length, position + Math.floor(sampleRate * (0.7 + Math.random() * 1.8)));
-    let clicksPerSecond = 20 + Math.random() * 24; // TWEAK: lower is a slower, heavier rattle
+    let clicksPerSecond = 20 + Math.random() * 20; // TWEAK: lower is a slower, heavier rattle
     while (position < phraseEnd) {
       const clickLength = Math.floor(sampleRate * (0.004 + Math.random() * 0.007));
-      const strength = 0.45 + Math.random() * 0.55;
+      const strength = 0.45 + Math.random() * 0.65;
       for (let sampleIndex = 0; sampleIndex < clickLength && position + sampleIndex < length; sampleIndex++) {
         const fade = 1 - sampleIndex / clickLength;
         data[position + sampleIndex] += (Math.random() * 2 - 1) * strength * fade * fade;
@@ -219,7 +219,7 @@ function initializeAudioEngine() {
   audio.hollowThroatSource.connect(throatSoftener);
   // TWEAK: each line is one resonance: [centre frequency in Hz, sharpness, loudness, how far it wanders, wander speed].
   // Lower frequencies make it sound larger. The first one carries most of the "growl".
-  const formants = [[230, 5, 1.0, 50, 0.11], [640, 7, 0.55, 150, 0.17], [1900, 9, 0.16, 300, 0.23]];
+  const formants = [[230, 5, 1.0, 50, 0.11], [640, 7, 0.65, 150, 0.17], [1900, 9, 0.36, 300, 0.23]];
   for (const formant of formants) {
     const filter = context.createBiquadFilter();
     filter.type = 'bandpass';
@@ -416,8 +416,8 @@ function updateAudioListener(x, y, z, yaw) {
     listener.forwardZ.setTargetAtTime(forwardZ, now, 0.03);
     listener.upX.value = 0; listener.upY.value = 1; listener.upZ.value = 0;
   } else {
-    listener.setPosition(x, y, z);
-    listener.setOrientation(forwardX, 0, forwardZ, 0, 1, 0);
+    listener.setPosition(x, y, z); // TODO replace when all browsers support new method
+    listener.setOrientation(forwardX, 0, forwardZ, 0, 1, 0); // TODO replace when all browsers support new method
   }
 }
 
@@ -528,8 +528,8 @@ function createTemporaryPanner(x, y, z) {
 //   dropoutsPerSecond how often the signal briefly cuts down (0 = never).
 //   level             overall loudness of the voice.
 const VOICE_TREATMENTS = {
-  radio: { lowCut: 420, highCut: 2900, drive: 5, staticLevel: 0.03, dropoutsPerSecond: 0.9, level: 0.85 },
-  recorder: { lowCut: 160, highCut: 4200, drive: 1.6, staticLevel: 0.012, dropoutsPerSecond: 0, level: 0.9 }
+  radio: { lowCut: 520, highCut: 2600, drive: 6, staticLevel: 0.07, dropoutsPerSecond: 1.7, level: 0.35 },
+  recorder: { lowCut: 160, highCut: 4200, drive: 1.6, staticLevel: 0.012, dropoutsPerSecond: 0, level: 0.4 }
 };
 
 const voiceState = {
