@@ -25,6 +25,27 @@ function check(description, condition, detail) {
   await inGame(() => window.noReturnDebug.simulate(4));
   check('lift door closes behind the player', (await inGame(() => window.noReturnDebug.doors[0].openFraction)) === 0);
 
+  // --- voice recordings: a line with a recording is played, one without stays text only ---
+  const voice = await inGame(async () => {
+    const debug = window.noReturnDebug;
+    const context = debug.audio.context;
+    const before = { hasRecording: debug.hasVoiceLine('firstSpool') };
+    if (!context) return { skipped: true };
+    // Stand in for a real recording with half a second of tone.
+    const buffer = context.createBuffer(1, Math.floor(context.sampleRate / 2), context.sampleRate);
+    const samples = buffer.getChannelData(0);
+    for (let index = 0; index < samples.length; index++) samples[index] = Math.sin(index * 0.06) * 0.3;
+    debug.voiceState.decodedBuffers.firstSpool = buffer;
+    let reportedSeconds = 0;
+    const started = debug.playVoiceLine('firstSpool', 'radio', 0, (seconds) => { reportedSeconds = seconds; });
+    await new Promise((resolve) => setTimeout(resolve, 150));
+    const withoutRecording = debug.playVoiceLine('allSpools', 'radio', 0, null);
+    delete debug.voiceState.decodedBuffers.firstSpool;
+    return { before: before, started: started, reportedSeconds: reportedSeconds, withoutRecording: withoutRecording };
+  });
+  check('a radio line with a recording plays it and reports its length; one without stays text only',
+    voice.skipped || (voice.before.hasRecording === false && voice.started === true && Math.abs(voice.reportedSeconds - 0.5) < 0.01 && voice.withoutRecording === false), voice);
+
   // --- nothing is ever drawn for a figure that has not been scanned ---
   const figureTrace = await inGame(() => {
     const debug = window.noReturnDebug;

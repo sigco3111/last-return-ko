@@ -12,7 +12,26 @@ const scriptNames = fs.readdirSync(scriptDirectory).filter((name) => name.endsWi
 const combinedScript = scriptNames
   .map((name) => '// ===== ' + name + ' =====\n' + fs.readFileSync(path.join(scriptDirectory, name), 'utf8'))
   .join('\n');
-const wrappedScript = '(function () {\n\'use strict\';\n' + combinedScript + '\n})();\n';
+// Voice recordings dropped into assets/voice/ are packed into the page, so it stays one self-contained file.
+// The file name (without its ending) is the line's key: leftLift.mp3 is played for RADIO_MESSAGES.leftLift.
+const voiceDirectory = path.join(__dirname, 'assets', 'voice');
+const voiceMimeTypes = { '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.ogg': 'audio/ogg', '.m4a': 'audio/mp4' };
+const voiceEntries = [];
+let voiceBytes = 0;
+if (fs.existsSync(voiceDirectory)) {
+  for (const fileName of fs.readdirSync(voiceDirectory).sort()) {
+    const mimeType = voiceMimeTypes[path.extname(fileName).toLowerCase()];
+    if (!mimeType) continue;
+    const bytes = fs.readFileSync(path.join(voiceDirectory, fileName));
+    voiceBytes += bytes.length;
+    voiceEntries.push('  ' + JSON.stringify(path.basename(fileName, path.extname(fileName))) +
+      ': { mimeType: ' + JSON.stringify(mimeType) + ', base64: "' + bytes.toString('base64') + '" }');
+  }
+}
+const voiceScript = '// ===== voice recordings from assets/voice (packed by build.js) =====\n' +
+  'const EMBEDDED_VOICE_LINES = {\n' + voiceEntries.join(',\n') + '\n};\n';
+
+const wrappedScript = '(function () {\n\'use strict\';\n' + voiceScript + combinedScript + '\n})();\n';
 
 const headMarkup = fs.readFileSync(path.join(sourceDirectory, 'head.html'), 'utf8').trim();
 const styleSheet = fs.readFileSync(path.join(sourceDirectory, 'style.css'), 'utf8');
@@ -50,4 +69,6 @@ fs.writeFileSync(path.join(__dirname, 'index.html'), standalonePage);
 fs.writeFileSync(path.join(buildDirectory, 'no-return.artifact.html'), fragment);
 fs.writeFileSync(path.join(buildDirectory, 'bundle.js'), wrappedScript);
 
+console.log(voiceEntries.length === 0 ? 'No voice recordings in assets/voice: radio lines will be text only.'
+  : 'Packed ' + voiceEntries.length + ' voice recording(s), ' + (voiceBytes / 1024).toFixed(0) + ' KB.');
 console.log('Built index.html (' + (standalonePage.length / 1024).toFixed(0) + ' KB) from ' + scriptNames.length + ' scripts.');

@@ -506,6 +506,145 @@ function createTemporaryPanner(x, y, z) {
 }
 
 // ---------------------------------------------------------------------------
+// Voice recordings
+//
+// Recordings are made clean and dry (see docs/voice-lines.md). The game roughs them up itself:
+// 'radio' squeezes the voice into a narrow band, overdrives it, lays static under it and lets it drop out;
+// 'recorder' is a gentler version for the survey spools, like a small dictation machine.
+// ---------------------------------------------------------------------------
+
+// TWEAK: the sound of each treatment.
+//   lowCut / highCut  the voice is only allowed between these two frequencies (Hz). Closer together = thinner, more "phone".
+//   drive             overdrive. 1 is clean, 8 is a blown speaker.
+//   staticLevel       loudness of the hiss underneath (0 = none).
+//   dropoutsPerSecond how often the signal briefly cuts down (0 = never).
+//   level             overall loudness of the voice.
+const VOICE_TREATMENTS = {
+  radio: { lowCut: 420, highCut: 2900, drive: 5, staticLevel: 0.03, dropoutsPerSecond: 0.9, level: 0.85 },
+  recorder: { lowCut: 160, highCut: 4200, drive: 1.6, staticLevel: 0.012, dropoutsPerSecond: 0, level: 0.9 }
+};
+
+const voiceState = {
+  decodedBuffers: {},
+  pendingDecodes: {},
+  stopCurrentLine: null
+};
+
+function hasVoiceLine(key) {
+  return Boolean(voiceState.decodedBuffers[key]) || Boolean(EMBEDDED_VOICE_LINES[key]);
+}
+
+// Turns a packed recording back into sound the audio engine can play. Each one is decoded once and kept.
+function loadVoiceLine(key) {
+  if (voiceState.decodedBuffers[key]) return Promise.resolve(voiceState.decodedBuffers[key]);
+  if (voiceState.pendingDecodes[key]) return voiceState.pendingDecodes[key];
+  const packed = EMBEDDED_VOICE_LINES[key];
+  if (!packed || !audio.context) return Promise.resolve(null);
+  const binary = window.atob(packed.base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+  voiceState.pendingDecodes[key] = new Promise(function (resolve) {
+    const finish = function (buffer) { voiceState.decodedBuffers[key] = buffer; resolve(buffer); };
+    const fail = function () { resolve(null); };
+    try {
+      const result = audio.context.decodeAudioData(bytes.buffer, finish, fail);
+      if (result && typeof result.catch === 'function') result.catch(fail);
+    } catch (error) { fail(); }
+  });
+  return voiceState.pendingDecodes[key];
+}
+
+function createOverdriveCurve(drive) {
+  const curve = new Float32Array(1024);
+  for (let index = 0; index < curve.length; index++) {
+    const input = index / (curve.length - 1) * 2 - 1;
+    curve[index] = Math.tanh(input * drive) / Math.tanh(drive);
+  }
+  return curve;
+}
+
+function stopVoiceLine() {
+  if (voiceState.stopCurrentLine) voiceState.stopCurrentLine();
+  voiceState.stopCurrentLine = null;
+}
+
+// Plays one recording. `whenLengthKnown` is told how many seconds it lasts, so its text can stay up that long.
+// Returns false straight away if there is no recording for this key (the game then shows text only).
+function playVoiceLine(key, treatmentName, startDelay, whenLengthKnown) {
+  if (!isAudioReady() || !hasVoiceLine(key)) return false;
+  const treatment = VOICE_TREATMENTS[treatmentName] || VOICE_TREATMENTS.radio;
+  loadVoiceLine(key).then(function (buffer) {
+    if (!buffer || !isAudioReady()) return;
+    stopVoiceLine();
+    const context = audio.context;
+    const startTime = context.currentTime + (startDelay || 0);
+    const endTime = startTime + buffer.duration;
+    if (whenLengthKnown) whenLengthKnown(buffer.duration + (startDelay || 0));
+
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    const lowCut = context.createBiquadFilter();
+    lowCut.type = 'highpass';
+    lowCut.frequency.value = treatment.lowCut;
+    const highCut = context.createBiquadFilter();
+    highCut.type = 'lowpass';
+    highCut.frequency.value = treatment.highCut;
+    const presence = context.createBiquadFilter();
+    presence.type = 'peaking';
+    presence.frequency.value = Math.sqrt(treatment.lowCut * treatment.highCut) * 1.5;
+    presence.Q.value = 1.1;
+    presence.gain.value = 6;
+    const overdrive = context.createWaveShaper();
+    overdrive.curve = createOverdriveCurve(treatment.drive);
+    const level = context.createGain();
+    level.gain.setValueAtTime(treatment.level, startTime);
+    // Dropouts: the signal ducks for a few hundredths of a second, as if the carrier fades.
+    if (treatment.dropoutsPerSecond > 0) {
+      let dropoutTime = startTime + Math.random() / treatment.dropoutsPerSecond;
+      while (dropoutTime < endTime - 0.15) {
+        const dropoutLength = 0.04 + Math.random() * 0.07;
+        level.gain.setValueAtTime(treatment.level * (0.15 + Math.random() * 0.3), dropoutTime);
+        level.gain.setValueAtTime(treatment.level, dropoutTime + dropoutLength);
+        dropoutTime += (0.4 + Math.random() * 1.6) / treatment.dropoutsPerSecond;
+      }
+    }
+    source.connect(lowCut); lowCut.connect(presence); presence.connect(overdrive); overdrive.connect(highCut);
+    highCut.connect(level); level.connect(audio.masterGain);
+
+    // Hiss for as long as the channel is open.
+    const hiss = context.createBufferSource();
+    hiss.buffer = audio.whiteNoiseBuffer;
+    hiss.loop = true;
+    const hissFilter = context.createBiquadFilter();
+    hissFilter.type = 'bandpass';
+    hissFilter.frequency.value = 2200;
+    hissFilter.Q.value = 0.6;
+    const hissLevel = context.createGain();
+    hissLevel.gain.setValueAtTime(0.0001, startTime);
+    hissLevel.gain.linearRampToValueAtTime(treatment.staticLevel, startTime + 0.05);
+    hissLevel.gain.setValueAtTime(treatment.staticLevel, endTime);
+    hissLevel.gain.linearRampToValueAtTime(0.0001, endTime + 0.12);
+    hiss.connect(hissFilter); hissFilter.connect(hissLevel); hissLevel.connect(audio.masterGain);
+
+    source.start(startTime);
+    hiss.start(startTime);
+    hiss.stop(endTime + 0.15);
+    // The click of the channel closing.
+    if (treatmentName === 'radio') playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 1900, gain: 0.12, resonance: 2.5, delay: (startDelay || 0) + buffer.duration + 0.02 });
+
+    let hasStopped = false;
+    voiceState.stopCurrentLine = function () {
+      if (hasStopped) return;
+      hasStopped = true;
+      try { source.stop(); hiss.stop(); } catch (error) { /* already finished */ }
+      try { level.disconnect(); hissLevel.disconnect(); } catch (error) { /* already released */ }
+    };
+    source.onended = function () { if (voiceState.stopCurrentLine && !hasStopped) { hasStopped = true; voiceState.stopCurrentLine = null; } };
+  });
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Sound events
 // ---------------------------------------------------------------------------
 
