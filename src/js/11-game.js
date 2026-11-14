@@ -407,6 +407,7 @@ function updateDying(dt) {
   figure.z += (player.z - figure.z) / distance * approach;
   figure.yaw = Math.atan2(player.x - figure.x, -(player.z - figure.z));
   figure.pose.armRaise = approachValue(figure.pose.armRaise, 1.45, dt * 3);
+  figure.pose.fingerSplay = 1;
   figure.pose.headTilt = (Math.random() - 0.5) * 1.1;
   updateFigureCapsules(figure);
   emitFigureRevealPoints(figure, Math.floor(26000 * dt), sequence.kind === 'hollow' ? SURFACE_HOLLOW : SURFACE_STILL, 3);
@@ -710,6 +711,7 @@ function startApplication() {
     emitNoise: emitNoise,
     setScanHeld: function (isHeld) { input.isScanHeld = isHeld; },
     setScannerSpread: setScannerSpread,
+    updateFigureCapsules: updateFigureCapsules,
     voiceState: voiceState, hasVoiceLine: hasVoiceLine, playRadioLine: playRadioLine, playVoiceLine: playVoiceLine,
     debugState: debugState,
     setDebugOption: setDebugOption,

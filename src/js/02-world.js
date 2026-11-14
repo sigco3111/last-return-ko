@@ -288,6 +288,11 @@ function addRoundTable(x, z, radius) {
 function addLocker(x, z, yaw, isDoorOpen) {
   const frame = createLocalFrame(x, z, yaw);
   addBoxInFrame(frame, 0, 0.95, 0, 0.24, 0.95, 0.22, { surfaceClass: SURFACE_METAL });
+  for (let ventIndex = 0; ventIndex < 3; ventIndex++) {
+    addBoxInFrame(frame, 0, 1.58 + ventIndex * 0.07, -0.226, 0.14, 0.012, 0.008, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+  }
+  addBoxInFrame(frame, 0.17, 1.05, -0.232, 0.012, 0.06, 0.014, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+  addBoxInFrame(frame, 0, 0.04, -0.2, 0.24, 0.04, 0.04, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   if (isDoorOpen) {
     const doorFrame = createLocalFrame(
       x + 0.24 * frame.cosine - 0.22 * frame.sine - 0.2 * Math.sin(yaw + 1.2),
@@ -298,7 +303,45 @@ function addLocker(x, z, yaw, isDoorOpen) {
 
 function addCrate(x, z, halfSize, yaw, baseHeight) {
   const bottom = baseHeight || 0;
-  return addBoxProp(x, bottom + halfSize, z, halfSize, halfSize, halfSize, { yaw: yaw || 0 });
+  const frame = createLocalFrame(x, z, yaw || 0);
+  // lid rim, a band round the middle, and two skids so it does not sit flat on the floor
+  addBoxInFrame(frame, 0, bottom + halfSize * 2 - 0.02, 0, halfSize + 0.02, 0.025, halfSize + 0.02, CLUTTER);
+  addBoxInFrame(frame, 0, bottom + halfSize, 0, halfSize + 0.012, 0.03, halfSize + 0.012, CLUTTER);
+  if (bottom === 0) {
+    addBoxInFrame(frame, -halfSize * 0.6, 0.03, 0, 0.04, 0.03, halfSize, CLUTTER);
+    addBoxInFrame(frame, halfSize * 0.6, 0.03, 0, 0.04, 0.03, halfSize, CLUTTER);
+  }
+  return addBoxProp(x, bottom + halfSize + (bottom === 0 ? 0.03 : 0), z, halfSize, halfSize - (bottom === 0 ? 0.03 : 0), halfSize, { yaw: yaw || 0 });
+}
+
+// Structure that makes a corridor read as built: a rib across the ceiling and a pilaster down each wall,
+// repeated every few metres. `runsAlongX` says which way the corridor runs; the rectangle is its floor area.
+// A pilaster is left out wherever the wall has an opening behind it.
+function addPortalFrames(startX, startZ, endX, endZ, ceilingHeight, spacing, runsAlongX) {
+  const length = runsAlongX ? endX - startX : endZ - startZ;
+  for (let along = spacing / 2; along < length - 0.3; along += spacing) {
+    if (runsAlongX) {
+      const x = startX + along;
+      addBoxBetween(x - 0.1, ceilingHeight - 0.16, startZ, x + 0.1, ceilingHeight, endZ, CLUTTER);
+      if (!isTileOpenAt(Math.floor(x), startZ - 1)) addBoxBetween(x - 0.13, 0, startZ, x + 0.13, ceilingHeight, startZ + 0.09, CLUTTER);
+      if (!isTileOpenAt(Math.floor(x), endZ)) addBoxBetween(x - 0.13, 0, endZ - 0.09, x + 0.13, ceilingHeight, endZ, CLUTTER);
+    } else {
+      const z = startZ + along;
+      addBoxBetween(startX, ceilingHeight - 0.16, z - 0.1, endX, ceilingHeight, z + 0.1, CLUTTER);
+      if (!isTileOpenAt(startX - 1, Math.floor(z))) addBoxBetween(startX, 0, z - 0.13, startX + 0.09, ceilingHeight, z + 0.13, CLUTTER);
+      if (!isTileOpenAt(endX, Math.floor(z))) addBoxBetween(endX - 0.09, 0, z - 0.13, endX, ceilingHeight, z + 0.13, CLUTTER);
+    }
+  }
+}
+
+// Beams under the ceiling of a room, spanning it one way and repeated the other.
+function addCeilingBeams(startX, startZ, endX, endZ, ceilingHeight, spacing, beamsRunAlongX, depth) {
+  const beamDepth = depth || 0.22;
+  const span = beamsRunAlongX ? endZ - startZ : endX - startX;
+  for (let across = spacing / 2; across < span - 0.2; across += spacing) {
+    if (beamsRunAlongX) addBoxBetween(startX, ceilingHeight - beamDepth, startZ + across - 0.11, endX, ceilingHeight, startZ + across + 0.11, CLUTTER);
+    else addBoxBetween(startX + across - 0.11, ceilingHeight - beamDepth, startZ, startX + across + 0.11, ceilingHeight, endZ, CLUTTER);
+  }
 }
 
 function addCrateStack(x, z, random) {
@@ -539,6 +582,23 @@ function addDoor(tileX, tileZ, kind) {
   const slab = addBoxProp(tileX + 0.5, 1.15, tileZ + 0.5,
     passageRunsAlongX ? 0.07 : 0.5, 1.15, passageRunsAlongX ? 0.5 : 0.07,
     { surfaceClass: surfaceClass, isDynamic: true });
+  // The frame: a strip up each side of the opening and one across the top, standing 5 cm proud of the wall
+  // on both faces. It is only there to be scanned; it never blocks anything.
+  const frameOptions = { surfaceClass: SURFACE_METAL, blocksMovement: false };
+  for (let face = -1; face <= 1; face += 2) {
+    if (passageRunsAlongX) {
+      const nearX = face < 0 ? tileX - 0.05 : tileX + 1, farX = nearX + 0.05;
+      addBoxBetween(nearX, 0, tileZ - 0.09, farX, DOOR_OPENING_HEIGHT + 0.09, tileZ, frameOptions);
+      addBoxBetween(nearX, 0, tileZ + 1, farX, DOOR_OPENING_HEIGHT + 0.09, tileZ + 1.09, frameOptions);
+      addBoxBetween(nearX, DOOR_OPENING_HEIGHT, tileZ, farX, DOOR_OPENING_HEIGHT + 0.09, tileZ + 1, frameOptions);
+    } else {
+      const nearZ = face < 0 ? tileZ - 0.05 : tileZ + 1, farZ = nearZ + 0.05;
+      addBoxBetween(tileX - 0.09, 0, nearZ, tileX, DOOR_OPENING_HEIGHT + 0.09, farZ, frameOptions);
+      addBoxBetween(tileX + 1, 0, nearZ, tileX + 1.09, DOOR_OPENING_HEIGHT + 0.09, farZ, frameOptions);
+      addBoxBetween(tileX, DOOR_OPENING_HEIGHT, nearZ, tileX + 1, DOOR_OPENING_HEIGHT + 0.09, farZ, frameOptions);
+    }
+  }
+
   const door = {
     tileX: tileX, tileZ: tileZ,
     centerX: tileX + 0.5, centerZ: tileZ + 0.5,

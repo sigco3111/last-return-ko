@@ -168,6 +168,7 @@ A few details worth knowing if you change things:
 
 - The station is a 76 × 64 grid of one-metre tiles carved into rooms, plus boxes, cylinders and spheres for everything standing in them. The same data drives the ray caster, collision, path finding and the black geometry that hides points behind walls.
 - Walls, floors and props are drawn into the depth buffer only, never in colour. Creatures are not drawn at all.
+- Creatures are built from capsules (rods with rounded ends): 25 for the Hollow, down to three long fingers on each hand, and 24 for a dummy. The Hollow's pose follows its mood: hunched when wandering, reaching when it hunts, drawn up to its full height when it stops to listen.
 - Sound is synthesised live, mostly from noise shaped by filters. The Hollow's growl is a recorded-in-code rattle of clicks pushed through three resonances, the way a throat and chest shape a voice.
 - Points live in a ring buffer on the graphics card (250,000 to 1,000,000 depending on the quality setting). The oldest points are overwritten first.
 - Points left on a creature carry a lifetime and fade; points on the station are permanent.

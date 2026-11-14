@@ -432,6 +432,19 @@ function buildFacilityLayout() {
   addWallSign('SHAFT 9 · DEPTH UNSURVEYED', 59, 2, WALL_NORTH, { width: 7.2, height: 0.58, centerY: 2.9, alongOffset: 0 });
   addWallSign('NO RETURN BELOW 40 m', 59, 2, WALL_NORTH, { width: 5.2, height: 0.42, centerY: 2.15, alongOffset: 0 });
 
+  // ---- Structure: ribs, pilasters and beams, so walls and ceilings are not blank ----
+  addPortalFrames(18, 52, 40, 54, 2.8, 4, true);      // main corridor
+  addPortalFrames(31, 38, 33, 52, 2.8, 4, false);     // archive access
+  addPortalFrames(12, 36, 14, 42, 2.6, 3, false);     // west service passage
+  addPortalFrames(43, 29, 58, 31, 2.5, 3, true);      // deep corridor
+  addPortalFrames(58, 15, 60, 29, 2.5, 3, false);     // deep corridor, north leg
+  addCeilingBeams(9, 49, 18, 58, 3.4, 3, true);       // lift lobby
+  addCeilingBeams(47, 38, 66, 58, 7.0, 5, true, 0.4); // pump hall trusses
+  addCeilingBeams(20, 24, 42, 37, 3.2, 5.5, false);   // archive
+  addCeilingBeams(24, 10, 40, 23, 4.0, 4, true, 0.3); // calibration store
+  addCeilingBeams(9, 26, 19, 35, 3.0, 3, false);      // laboratory
+  addCeilingBeams(49, 2, 69, 15, 9.0, 5, false, 0.5); // shaft chamber
+
   // ---- Places the roaming thing likes to check ----------------------------
   roamingWaypoints.push(
     [14, 51], [28, 52.5], [25, 48], [25, 58], [31.5, 44], [43, 52], [49, 50], [58, 46], [54, 40],

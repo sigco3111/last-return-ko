@@ -1,25 +1,31 @@
 // ---------------------------------------------------------------------------
-// Figures: upright bodies built from twelve capsules. They are never drawn.
-// The only trace of one is the points a scan leaves on it, frozen where it stood
-// at that moment. Stop scanning and there is nothing to see.
+// Figures: bodies built from capsules (a capsule is a rod with rounded ends).
+// They are never drawn. The only trace of one is the points a scan leaves on it,
+// frozen where it stood at that moment. Stop scanning and there is nothing to see.
 // ---------------------------------------------------------------------------
 
-const FIGURE_CAPSULE_COUNT = 12;
+const FIGURE_MAXIMUM_CAPSULES = 26;
 const FIGURE_CAPSULE_STRIDE = 7; // startX, startY, startZ, endX, endY, endZ, radius
 
 // TWEAK: body shapes, in metres. Lengths are bone lengths, radii are how thick each part is.
-// The Hollow is tall with arms that reach its knees; the dummy has ordinary proportions.
-// Height comes out as roughly thigh + shin + torsoLength + neckLength + head.
+// The Hollow: a hunched thing with a long neck, a hanging jaw, arms that reach its knees and three long
+// fingers on each hand. Standing hunched it is about 2.2 m tall; when it straightens up to listen, about 2.5 m.
 const FIGURE_PROPORTIONS_HOLLOW = {
-  torsoLength: 0.76, neckLength: 0.15, headRadius: 0.112, headLength: 0.11,
-  shoulderWidth: 0.44, hipWidth: 0.2, upperArm: 0.58, foreArm: 0.7,
-  thigh: 0.6, shin: 0.64, torsoRadius: 0.11, limbRadius: 0.042, legRadius: 0.058
+  kind: 'hollow',
+  thigh: 0.56, shin: 0.6, footLength: 0.26, hipWidth: 0.2,
+  lowerSpine: 0.4, upperSpine: 0.4, shoulderWidth: 0.46,
+  neckLength: 0.2, headLength: 0.17, headRadius: 0.095, jawLength: 0.11,
+  upperArm: 0.56, foreArm: 0.68, handLength: 0.11,
+  fingerLengths: [0.24, 0.3, 0.26],   // outer, middle, inner finger
+  torsoRadius: 0.1, limbRadius: 0.038, legRadius: 0.052, fingerRadius: 0.013
 };
 
+// The calibration dummy: an ordinary jointed shop mannequin, about 1.75 m tall.
 const FIGURE_PROPORTIONS_DUMMY = {
+  kind: 'dummy',
   torsoLength: 0.55, neckLength: 0.08, headRadius: 0.105, headLength: 0.05,
-  shoulderWidth: 0.4, hipWidth: 0.2, upperArm: 0.3, foreArm: 0.29,
-  thigh: 0.45, shin: 0.46, torsoRadius: 0.14, limbRadius: 0.046, legRadius: 0.066
+  shoulderWidth: 0.4, hipWidth: 0.2, upperArm: 0.3, foreArm: 0.27, handLength: 0.08,
+  thigh: 0.45, shin: 0.44, footLength: 0.2, torsoRadius: 0.13, limbRadius: 0.044, legRadius: 0.062, jointRadius: 0.058
 };
 
 const raycastableFigures = [];
@@ -34,8 +40,16 @@ function createFigure(proportions, surfaceClass, imprintTuningKey) {
   return {
     x: 0, z: 0, yaw: 0,
     proportions: proportions,
-    pose: { legSwing: 0, kneeBend: 0, armSwing: 0, armRaise: 0, elbowBend: 0.1, lean: 0, headTilt: 0 },
-    capsules: new Float32Array(FIGURE_CAPSULE_COUNT * FIGURE_CAPSULE_STRIDE),
+    // Pose, all angles in radians:
+    //   legSwing / armSwing  walking motion          armRaise     arms lifted forward (0 hanging, 1.4 reaching)
+    //   kneeBend / elbowBend extra bend              lean         whole body tipped forward
+    //   headTilt             head cocked sideways
+    //   stretch              Hollow only: 0 hunched, 1 drawn up to full height
+    //   fingerSplay          Hollow only: 0 fingers together and curled, 1 spread wide
+    pose: { legSwing: 0, kneeBend: 0, armSwing: 0, armRaise: 0, elbowBend: 0.1, lean: 0, headTilt: 0, stretch: 0, fingerSplay: 0.25 },
+    capsules: new Float32Array(FIGURE_MAXIMUM_CAPSULES * FIGURE_CAPSULE_STRIDE),
+    capsuleCount: 0,
+    headHeight: 1.6,
     boundsCenterY: 1,
     boundsRadius: 1.5,
     surfaceClass: surfaceClass,
@@ -67,60 +81,166 @@ function writeFigureCapsule(figure, capsuleIndex, startLocal, endLocal, radius) 
   capsules[offset + 6] = radius;
 }
 
-function updateFigureCapsules(figure) {
-  const body = figure.proportions, pose = figure.pose;
+function addLocalPoints(point, direction, length) {
+  return [point[0] + direction[0] * length, point[1] + direction[1] * length, point[2] + direction[2] * length];
+}
 
-  // Legs first, relative to the pelvis, so the lower foot can be planted on the floor.
+function normalizeLocalVector(vector) {
+  const length = Math.sqrt(vector[0] * vector[0] + vector[1] * vector[1] + vector[2] * vector[2]) || 1;
+  return [vector[0] / length, vector[1] / length, vector[2] / length];
+}
+
+// The Hollow. Local frame: X = its right, Y = up, Z = the way it faces.
+function buildHollowCapsules(figure) {
+  const body = figure.proportions, pose = figure.pose;
+  const stretch = clampNumber(pose.stretch, 0, 1), hunch = 1 - stretch;
+  const splay = clampNumber(pose.fingerSplay, 0, 1);
+  let next = 0;
+  const add = function (start, end, radius) { writeFigureCapsule(figure, next++, start, end, radius); };
+
+  // Legs: knees pushed forward, shins sloping back, like something that was not built to stand upright.
   const legs = [];
-  let lowestFootHeight = 0;
+  let lowestAnkle = 0;
+  for (let side = -1; side <= 1; side += 2) {
+    const swing = pose.legSwing * (side < 0 ? 1 : -1);
+    const thighAngle = swing + 0.38 * hunch + pose.kneeBend * 0.5;
+    const shinAngle = thighAngle - (0.8 * hunch + pose.kneeBend + Math.max(0, -swing) * 0.6);
+    const hip = [side * body.hipWidth / 2, 0, 0];
+    const knee = [hip[0], -Math.cos(thighAngle) * body.thigh, Math.sin(thighAngle) * body.thigh];
+    const ankle = [knee[0], knee[1] - Math.cos(shinAngle) * body.shin, knee[2] + Math.sin(shinAngle) * body.shin];
+    lowestAnkle = Math.min(lowestAnkle, ankle[1]);
+    legs.push({ hip: hip, knee: knee, ankle: ankle, side: side });
+  }
+  const pelvisHeight = -lowestAnkle + 0.07;
+  for (const leg of legs) { leg.hip[1] += pelvisHeight; leg.knee[1] += pelvisHeight; leg.ankle[1] += pelvisHeight; }
+
+  // Spine in two pieces, so the back curves instead of tipping like a plank.
+  const pelvis = [0, pelvisHeight, 0];
+  const lowerLean = pose.lean * 0.7 + 0.25 * hunch, upperLean = pose.lean * 1.5 + 0.6 * hunch;
+  const midSpine = addLocalPoints(pelvis, [0, Math.cos(lowerLean), Math.sin(lowerLean)], body.lowerSpine);
+  const chest = addLocalPoints(midSpine, [0, Math.cos(upperLean), Math.sin(upperLean)], body.upperSpine);
+  add(pelvis, midSpine, body.torsoRadius);
+  add(midSpine, chest, body.torsoRadius * 1.08);
+
+  // Neck jutting forward, head cocked hard to one side, jaw hanging.
+  const neckLean = upperLean * 0.6 + 0.55 * hunch;
+  const neckDirection = normalizeLocalVector([Math.sin(pose.headTilt) * 0.45, Math.cos(neckLean), Math.sin(neckLean)]);
+  const headBase = addLocalPoints(chest, neckDirection, body.neckLength);
+  const headDirection = normalizeLocalVector([Math.sin(pose.headTilt), Math.cos(pose.headTilt) * Math.cos(neckLean * 0.6), Math.sin(neckLean * 0.6)]);
+  const headTop = addLocalPoints(headBase, headDirection, body.headLength);
+  add(chest, headBase, body.limbRadius * 1.15);
+  add(headBase, headTop, body.headRadius);
+  const jawStart = [headBase[0], headBase[1] - 0.02, headBase[2] + 0.07];
+  add(jawStart, [jawStart[0] - Math.sin(pose.headTilt) * 0.03, jawStart[1] - body.jawLength - 0.06 * splay, jawStart[2] + 0.05], 0.028);
+  figure.headHeight = (headBase[1] + headTop[1]) / 2;
+
+  // Shoulders, one hanging lower than the other.
+  const droop = 0.07 * hunch;
+  const shoulderLeft = [-body.shoulderWidth / 2, chest[1] - 0.02 - droop, chest[2] + 0.02];
+  const shoulderRight = [body.shoulderWidth / 2, chest[1] - 0.02 + droop * 0.3, chest[2] + 0.02];
+  add(shoulderLeft, shoulderRight, body.limbRadius * 1.3);
+  add(legs[0].hip, legs[1].hip, body.legRadius * 1.1);
+
+  // Arms that reach its knees, ending in three long fingers.
+  for (let side = -1; side <= 1; side += 2) {
+    const shoulder = side < 0 ? shoulderLeft : shoulderRight;
+    const armAngle = pose.armRaise + upperLean * 0.5 + pose.armSwing * (side < 0 ? -1 : 1);
+    const elbow = [shoulder[0] + side * 0.08 * (1 + stretch), shoulder[1] - Math.cos(armAngle) * body.upperArm, shoulder[2] + Math.sin(armAngle) * body.upperArm];
+    const foreArmAngle = armAngle + pose.elbowBend + (side < 0 ? 0.14 * hunch : 0);
+    const wrist = [elbow[0] + side * 0.03, elbow[1] - Math.cos(foreArmAngle) * body.foreArm, elbow[2] + Math.sin(foreArmAngle) * body.foreArm];
+    const foreArmDirection = normalizeLocalVector([wrist[0] - elbow[0], wrist[1] - elbow[1], wrist[2] - elbow[2]]);
+    const knuckles = addLocalPoints(wrist, foreArmDirection, body.handLength);
+    add(shoulder, elbow, body.limbRadius);
+    add(elbow, wrist, body.limbRadius * 0.9);
+    add(wrist, knuckles, body.limbRadius * 0.8);
+    for (let finger = -1; finger <= 1; finger++) {
+      const fingerDirection = normalizeLocalVector([
+        foreArmDirection[0] + finger * 0.42 * (0.3 + 0.7 * splay),
+        foreArmDirection[1],
+        foreArmDirection[2] + 0.2 * (1 - splay)]);
+      add(knuckles, addLocalPoints(knuckles, fingerDirection, body.fingerLengths[finger + 1]), body.fingerRadius);
+    }
+  }
+
+  for (const leg of legs) {
+    add(leg.hip, leg.knee, body.legRadius);
+    add(leg.knee, leg.ankle, body.legRadius * 0.85);
+    add(leg.ankle, [leg.ankle[0] + leg.side * 0.03, 0.035, leg.ankle[2] + body.footLength], 0.035);
+  }
+  figure.capsuleCount = next;
+  return headTop[1] + body.headRadius;
+}
+
+// The calibration dummy: stiff, symmetrical, with a ball at every joint.
+function buildDummyCapsules(figure) {
+  const body = figure.proportions, pose = figure.pose;
+  let next = 0;
+  const add = function (start, end, radius) { writeFigureCapsule(figure, next++, start, end, radius); };
+
+  const legs = [];
+  let lowestFoot = 0;
   for (let side = -1; side <= 1; side += 2) {
     const swing = pose.legSwing * (side < 0 ? 1 : -1);
     const bend = pose.kneeBend + Math.max(0, -swing) * 0.7;
     const hip = [side * body.hipWidth / 2, 0, 0];
     const knee = [hip[0], -Math.cos(swing) * body.thigh, Math.sin(swing) * body.thigh];
     const shinAngle = swing - bend;
-    const foot = [knee[0], knee[1] - Math.cos(shinAngle) * body.shin, knee[2] + Math.sin(shinAngle) * body.shin];
-    lowestFootHeight = Math.min(lowestFootHeight, foot[1]);
-    legs.push({ hip: hip, knee: knee, foot: foot });
+    const ankle = [knee[0], knee[1] - Math.cos(shinAngle) * body.shin, knee[2] + Math.sin(shinAngle) * body.shin];
+    lowestFoot = Math.min(lowestFoot, ankle[1]);
+    legs.push({ hip: hip, knee: knee, ankle: ankle });
   }
-  const pelvisHeight = -lowestFootHeight + body.legRadius;
-  for (const leg of legs) { leg.hip[1] += pelvisHeight; leg.knee[1] += pelvisHeight; leg.foot[1] += pelvisHeight; }
+  const pelvisHeight = -lowestFoot + 0.07;
+  for (const leg of legs) { leg.hip[1] += pelvisHeight; leg.knee[1] += pelvisHeight; leg.ankle[1] += pelvisHeight; }
 
   const pelvis = [0, pelvisHeight, 0];
+  const waist = [0, pelvisHeight + Math.cos(pose.lean) * body.torsoLength * 0.45, Math.sin(pose.lean) * body.torsoLength * 0.45];
   const chest = [0, pelvisHeight + Math.cos(pose.lean) * body.torsoLength, Math.sin(pose.lean) * body.torsoLength];
   const neckLean = pose.lean * 1.5;
   const neckDirection = [Math.sin(pose.headTilt), Math.cos(neckLean) * Math.cos(pose.headTilt), Math.sin(neckLean)];
-  const neckReach = body.neckLength + body.headRadius;
-  const headBase = [chest[0] + neckDirection[0] * neckReach, chest[1] + neckDirection[1] * neckReach, chest[2] + neckDirection[2] * neckReach];
-  const headTop = [headBase[0] + neckDirection[0] * body.headLength, headBase[1] + neckDirection[1] * body.headLength, headBase[2] + neckDirection[2] * body.headLength];
+  const headBase = addLocalPoints(chest, neckDirection, body.neckLength + body.headRadius);
+  const headTop = addLocalPoints(headBase, neckDirection, body.headLength);
+  add(pelvis, waist, body.torsoRadius * 0.9);
+  add(waist, chest, body.torsoRadius * 1.1);
+  add(chest, headBase, body.limbRadius);
+  add(headBase, headTop, body.headRadius);
+  figure.headHeight = (headBase[1] + headTop[1]) / 2;
 
-  writeFigureCapsule(figure, 0, pelvis, chest, body.torsoRadius);
-  writeFigureCapsule(figure, 1, headBase, headTop, body.headRadius);
   const shoulderLeft = [-body.shoulderWidth / 2, chest[1] - 0.03, chest[2]];
   const shoulderRight = [body.shoulderWidth / 2, chest[1] - 0.03, chest[2]];
-  writeFigureCapsule(figure, 2, shoulderLeft, shoulderRight, body.limbRadius * 1.3);
-  writeFigureCapsule(figure, 3, legs[0].hip, legs[1].hip, body.legRadius);
+  add(shoulderLeft, shoulderRight, body.limbRadius * 1.3);
+  add(legs[0].hip, legs[1].hip, body.legRadius);
 
   for (let side = -1; side <= 1; side += 2) {
     const shoulder = side < 0 ? shoulderLeft : shoulderRight;
     const armAngle = pose.armRaise + pose.lean * 0.4 + pose.armSwing * (side < 0 ? -1 : 1);
     const elbow = [shoulder[0], shoulder[1] - Math.cos(armAngle) * body.upperArm, shoulder[2] + Math.sin(armAngle) * body.upperArm];
     const foreArmAngle = armAngle + pose.elbowBend;
-    const hand = [elbow[0], elbow[1] - Math.cos(foreArmAngle) * body.foreArm, elbow[2] + Math.sin(foreArmAngle) * body.foreArm];
-    const armIndex = side < 0 ? 0 : 1;
-    writeFigureCapsule(figure, 4 + armIndex, shoulder, elbow, body.limbRadius);
-    writeFigureCapsule(figure, 6 + armIndex, elbow, hand, body.limbRadius * 0.9);
-    const leg = legs[armIndex];
-    writeFigureCapsule(figure, 8 + armIndex, leg.hip, leg.knee, body.legRadius);
-    writeFigureCapsule(figure, 10 + armIndex, leg.knee, leg.foot, body.legRadius * 0.85);
+    const wrist = [elbow[0], elbow[1] - Math.cos(foreArmAngle) * body.foreArm, elbow[2] + Math.sin(foreArmAngle) * body.foreArm];
+    const hand = [wrist[0], wrist[1] - Math.cos(foreArmAngle) * body.handLength, wrist[2] + Math.sin(foreArmAngle) * body.handLength];
+    add(shoulder, elbow, body.limbRadius);
+    add(elbow, wrist, body.limbRadius * 0.9);
+    add(wrist, hand, body.limbRadius * 1.15);
+    add(shoulder, shoulder, body.jointRadius);
+    add(elbow, elbow, body.jointRadius * 0.85);
   }
+  for (const leg of legs) {
+    add(leg.hip, leg.knee, body.legRadius);
+    add(leg.knee, leg.ankle, body.legRadius * 0.85);
+    add(leg.ankle, [leg.ankle[0], 0.04, leg.ankle[2] + body.footLength], 0.04);
+    add(leg.knee, leg.knee, body.jointRadius);
+  }
+  figure.capsuleCount = next;
+  return headTop[1] + body.headRadius;
+}
+
+function updateFigureCapsules(figure) {
+  const topHeight = figure.proportions.kind === 'hollow' ? buildHollowCapsules(figure) : buildDummyCapsules(figure);
 
   // Bounding sphere for quick rejection in the ray caster.
-  const topHeight = headTop[1] + body.headRadius;
   figure.boundsCenterY = topHeight / 2;
   let largestDistanceSquared = 0;
   const capsules = figure.capsules;
-  for (let capsuleIndex = 0; capsuleIndex < FIGURE_CAPSULE_COUNT; capsuleIndex++) {
+  for (let capsuleIndex = 0; capsuleIndex < figure.capsuleCount; capsuleIndex++) {
     const offset = capsuleIndex * FIGURE_CAPSULE_STRIDE;
     for (let endIndex = 0; endIndex < 2; endIndex++) {
       const deltaX = capsules[offset + endIndex * 3] - figure.x;
@@ -133,14 +253,14 @@ function updateFigureCapsules(figure) {
 }
 
 function getFigureHeadHeight(figure) {
-  return figure.capsules[1 * FIGURE_CAPSULE_STRIDE + 4];
+  return figure.headHeight;
 }
 
 // Sprays points straight onto a figure's surface. Used for the moment it reaches you.
 function emitFigureRevealPoints(figure, pointCount, surfaceClass, lifeCode) {
   const capsules = figure.capsules;
   for (let pointIndex = 0; pointIndex < pointCount; pointIndex++) {
-    const offset = Math.floor(Math.random() * FIGURE_CAPSULE_COUNT) * FIGURE_CAPSULE_STRIDE;
+    const offset = Math.floor(Math.random() * figure.capsuleCount) * FIGURE_CAPSULE_STRIDE;
     const along = Math.random();
     let directionX = Math.random() - 0.5, directionY = Math.random() - 0.5, directionZ = Math.random() - 0.5;
     const length = Math.sqrt(directionX * directionX + directionY * directionY + directionZ * directionZ) || 1;
