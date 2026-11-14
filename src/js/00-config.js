@@ -112,16 +112,40 @@ const TUNING = {
   hollowRoamSpeed: 1.3,             // wandering between rooms, not aware of you
   hollowInvestigateSpeed: 2.5,      // walking to a noise it heard
   hollowHuntSpeed: 3.5,             // it knows where you are. Faster than your walk, slower than your sprint.
-  hollowEnragedSpeed: 5.3,          // after being held in the beam too long. Faster than your sprint on purpose.
+  hollowEnragedSpeed: 5.3,          // when its anger is full. Faster than your sprint on purpose.
   hollowSpeedBonusWithAllSpools: 1.1, // speed multiplier once you carry all three spools (the walk back is harder)
   hollowHeldSpeedFactor: 0.1,       // speed multiplier while the beam is on it. 0 freezes it, 1 means the beam does nothing.
   hollowBeamHitsToNotice: 2,        // pulses that must land on it in one frame before it counts as "in the beam"
   hollowKillDistance: 0.4,          // closer than this and it has you
-  hollowRageLimitSeconds: 4.2,      // seconds in the beam before it becomes enraged. Higher makes the beam a stronger tool.
-  hollowRageCoolingPerSecond: 0.45, // how fast that timer runs back down while the beam is off it
+  // Anger: one meter from 0 (calm) to 1 (enraged). The beam fills it, time drains it.
+  //   below hollowAngerNoticeLevel  the beam only makes it stop and turn toward the light
+  //   above hollowAngerNoticeLevel  the beam tells it exactly where you are, and it hunts
+  //   at 1                          it is enraged: the beam stops slowing it for hollowEnragedDurationSeconds
+  // Anger also carries over between encounters, so the more you light it up, the shorter your next grace period.
+  hollowAngerPerBeamSecond: 0.24,   // anger gained per second in the beam. 0.24 = about 4.2 s from calm to enraged.
+                                    // A quick tap of the beam (0.2 s) costs about 0.05.
+  hollowAngerNoticeLevel: 0.3,      // 0.3 = about 1.25 s of beam from calm before it knows where you are.
+                                    // Raise it to make brief scans safer, lower it toward 0 to make any touch dangerous.
+  hollowAngerCoolingPerSecond: 0.035, // anger lost per second while the beam is off it and it is not hunting.
+                                    // 0.035 = about 29 s from enraged back to calm. Higher makes it forgive faster.
+  hollowAngerAfterEnraged: 0.55,    // where its anger settles once an enraged spell ends (it stays touchy)
+  hollowAngerSpeedBonus: 0.12,      // at full anger it hunts this much faster (0.12 = 12 %)
+  hollowAngerHearingBonus: 0.3,     // at full anger it hears this much further (0.3 = 30 %)
   hollowEnragedDurationSeconds: 4.0, // how long it stays enraged (ignores the beam, uses hollowEnragedSpeed)
   hollowMemorySeconds: 5.0,         // after losing track of you it keeps heading for where it last sensed you this long
   hollowSearchSeconds: 8.0,         // then it pokes around that area this long before giving up
+  hollowSearchLeadSeconds: 2.5,     // it starts searching this many seconds of travel ahead of where it lost you,
+                                    // in the direction you were moving. 0 = it searches exactly where it lost you.
+  hollowDoubleBackChance: 0.4,      // chance that, after giving up a search, it walks off and then returns to the
+                                    // same spot 6 to 11 seconds later. 0 = never, 1 = always.
+  // Listening: while wandering near you it sometimes stops dead for a few seconds. It makes no footsteps
+  // while it does, and it hears better.
+  hollowListenWithinMetres: 16,     // it only stops to listen when you are within this distance
+  hollowListenSecondsMinimum: 3,    // shortest pause
+  hollowListenSecondsMaximum: 6.5,  // longest pause
+  hollowListenEverySecondsMinimum: 14, // shortest gap between two pauses
+  hollowListenEverySecondsMaximum: 26, // longest gap
+  hollowListenHearingFactor: 1.5,   // how much further it hears while listening (1.5 = 50 %)
   hollowPressureAfterSeconds: 55,   // if it has not hunted you for this long, its wandering drifts toward you.
                                     // Lower means fewer quiet stretches. Very high means you may rarely meet it.
   hollowWakeDelaySeconds: 6,        // seconds between starting the generator and the Hollow appearing at the shaft

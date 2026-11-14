@@ -493,7 +493,7 @@ function updateGameProgress(dt) {
 
   if (hollow.isActive && !game.hasShownHollowHint && hollow.figure.totalHits > 30) {
     game.hasShownHollowHint = true;
-    showMessage('The beam slows it. It also tells it exactly where you are.', 6, 'warning');
+    showMessage('The beam slows it and angers it. Hold it too long and it knows exactly where you are.', 7, 'warning');
   }
 }
 
@@ -517,7 +517,7 @@ function updateAtmosphere(dt) {
   setInterferenceSound(game.interference);
   updateHeartbeat(pressure, game.time);
   updateHollowVoice(hollow.figure.x, hollow.figure.z, hollow.isActive, getHollowAggression(),
-    clampNumber(hollow.rage / TUNING.hollowRageLimitSeconds, 0, 1), dt, game.time);
+    hollow.heldAmount * hollow.anger, dt, game.time);
   const caption = updateAmbientEvents(game.time, player.x, player.z, game.flags.powerOn ? 0.6 : 0.2);
   if (caption) showCaption(caption);
 }

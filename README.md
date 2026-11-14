@@ -79,8 +79,13 @@ If the browser will not capture the mouse, hold the mouse button and drag to loo
 **The Hollow** appears once the generator is running.
 
 - It is blind. It hears sprinting, full sweeps, doors and splashing, and at close range it hears you walk. Crouching and standing still is nearly silent.
-- The beam slows it to a crawl. The beam also tells it exactly where you are.
-- After about four seconds in the beam it stops being slow, and it is faster than you can sprint.
+- The beam slows it to a crawl, and angers it. A quick touch only makes it stop and turn toward the light.
+- Keep the beam on it for more than about a second and it knows exactly where you are.
+- After about four seconds its anger is full: the beam stops slowing it, and it is faster than you can sprint.
+- Anger fades slowly, over half a minute. Light it up again too soon and you have less time than before.
+- Once you have touched it with the beam, an AGITATION bar on the scanner shows its anger.
+- Wandering near you, it sometimes stops dead and listens. It makes no footsteps then, and it hears better.
+- When it loses you it searches ahead in the direction you were heading, and it sometimes pretends to leave.
 - It will not enter the calibration store.
 
 **The Stills** are the calibration dummies in store C4.

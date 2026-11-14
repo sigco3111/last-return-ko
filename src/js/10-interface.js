@@ -29,7 +29,7 @@ function initializeInterface() {
   const elementIds = [
     'hud', 'hud-objective', 'chip-spools', 'chip-power', 'chip-keycard', 'minimap-canvas', 'hud-location',
     'readout-range', 'readout-flight', 'readout-returns', 'readout-heading', 'bar-heat', 'bar-stamina',
-    'bar-interference', 'hud-stance', 'reticle-ring', 'hud-prompt', 'hud-countdown', 'hud-messages', 'hud-caption',
+    'bar-interference', 'meter-agitation', 'bar-agitation', 'hud-stance', 'reticle-ring', 'hud-prompt', 'hud-countdown', 'hud-messages', 'hud-caption',
     'touch-controls', 'map-overlay', 'map-canvas', 'map-close', 'screen-title', 'screen-intro', 'screen-pause',
     'screen-reader', 'screen-death', 'screen-ending', 'screen-rotate', 'button-play-upright', 'fatal-error', 'title-range', 'title-returns',
     'difficulty-description', 'button-begin', 'intro-lines', 'button-skip-intro', 'pause-objective', 'button-resume',
@@ -91,7 +91,7 @@ function initializeInterface() {
 
   const difficultyDescriptions = {
     survey: 'Nothing hunts you. Walk the station, map it, read what the last crew left.',
-    standard: 'It is blind. It hears running, sweeps and doors. The beam slows it and tells it where you are.',
+    standard: 'It is blind. It hears running, sweeps and doors. The beam slows it, and angers it.',
     nightmare: 'It is faster and hears further. The emitter overheats sooner.'
   };
   const difficultyInputs = document.querySelectorAll('input[name="difficulty"]');
@@ -360,6 +360,14 @@ function updateHud(realDt) {
   elements['bar-stamina'].style.width = (player.stamina * 100).toFixed(1) + '%';
   elements['bar-stamina'].classList.toggle('is-critical', player.isStaminaLocked);
   elements['bar-interference'].style.width = (Math.min(1, game.interference) * 100).toFixed(1) + '%';
+  // The agitation bar appears the first time the beam touches the Hollow. It is the Hollow's anger:
+  // amber while a touch only makes it turn, red once the beam is giving your position away.
+  const hasMetHollow = hollow.isActive && hollow.figure.totalHits > 0;
+  elements['meter-agitation'].hidden = !hasMetHollow;
+  if (hasMetHollow) {
+    elements['bar-agitation'].style.width = (hollow.anger * 100).toFixed(1) + '%';
+    elements['bar-agitation'].classList.toggle('is-critical', hollow.anger >= TUNING.hollowAngerNoticeLevel);
+  }
 
   const ring = elements['reticle-ring'];
   const viewHeight = renderer.canvas.clientHeight || 1;
