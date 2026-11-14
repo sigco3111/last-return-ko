@@ -139,6 +139,10 @@ After any change:
 npm run build
 ```
 
+## Voice lines
+
+Dispatch's radio lines and the three survey spools can be voiced. Record them clean, drop the files into `assets/voice/`, and build; the game adds the bad-radio sound itself. [`docs/voice-lines.md`](docs/voice-lines.md) lists every line with its file name and how to say it. Lines without a recording stay text only.
+
 ## Under the hood
 
 The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
@@ -197,6 +201,12 @@ npm run audio-check
 ```
 
 measures every sound, because a test cannot listen: how loud each one is and where its energy sits, and it fails if one is silent or loud enough to distort. It cannot tell you whether a sound is good. Only ears can.
+
+```bash
+npm run voice-script
+```
+
+rewrites `docs/voice-lines.md` from the text in `src/js/00-config.js`. Run it after changing what dispatch or the spools say.
 
 ```bash
 npm run screenshots

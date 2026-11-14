@@ -3,6 +3,7 @@ FROM node:22-alpine AS build
 WORKDIR /app
 COPY build.js ./
 COPY src ./src
+COPY assets ./assets
 RUN node build.js
 
 # Serve the single self-contained page.

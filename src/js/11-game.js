@@ -243,6 +243,7 @@ function resumeGame() {
 
 function returnToTitle() {
   suspendAudio(false);
+  stopVoiceLine();
   debugState.isPanelOpen = false;
   debugState.panelElement.hidden = true;
   if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();
@@ -276,8 +277,8 @@ function collectSpool(interactable, logEntry) {
   refreshObjective();
   openReader(logEntry);
   const collected = game.flags.spoolsCollected;
-  if (collected >= 3) scheduleEvent(1.5, function () { showRadioMessage(RADIO_MESSAGES.allSpools); });
-  else if (collected === 1) scheduleEvent(1.5, function () { showRadioMessage(RADIO_MESSAGES.firstSpool); });
+  if (collected >= 3) scheduleEvent(1.5, function () { playRadioLine('allSpools'); });
+  else if (collected === 1) scheduleEvent(1.5, function () { playRadioLine('firstSpool'); });
 }
 
 function useInteractable(interactable) {
@@ -307,7 +308,7 @@ function useInteractable(interactable) {
     case OBJECT_SPOOL_2:
       collectSpool(interactable, LOG_ENTRIES.spool2);
       scheduleEvent(1.0, function () { awakenStills(); playStinger('still'); });
-      scheduleEvent(2.5, function () { showRadioMessage(RADIO_MESSAGES.secondSpool); });
+      scheduleEvent(2.5, function () { playRadioLine('secondSpool'); });
       break;
     case OBJECT_SPOOL_3:
       collectSpool(interactable, LOG_ENTRIES.spool3);
@@ -318,7 +319,7 @@ function useInteractable(interactable) {
       playPickupSound();
       saveCheckpoint();
       showMessage('Keycard taken.', 3, 'info');
-      scheduleEvent(1.5, function () { showRadioMessage(RADIO_MESSAGES.keycardTaken); });
+      scheduleEvent(1.5, function () { playRadioLine('keycardTaken'); });
       break;
     case OBJECT_NOTE_SECURITY: playInterfaceBlip(620); openReader(LOG_ENTRIES.noteSecurity); break;
     case OBJECT_NOTE_LOCKER: playInterfaceBlip(620); openReader(LOG_ENTRIES.noteLocker); break;
@@ -335,9 +336,9 @@ function startGenerator(interactable) {
   saveCheckpoint();
   refreshObjective();
   showMessage('Generator 2 running. Mains restored.', 4, 'info');
-  scheduleEvent(4.5, function () { showRadioMessage(RADIO_MESSAGES.generatorStarted); });
+  scheduleEvent(4.5, function () { playRadioLine('generatorStarted'); });
   if (game.difficulty.hollowEnabled) {
-    scheduleEvent(11, function () { showRadioMessage(RADIO_MESSAGES.generatorFollowUp); });
+    scheduleEvent(11, function () { playRadioLine('generatorFollowUp'); });
     scheduleEvent(TUNING.hollowWakeDelaySeconds, function () {
       activateHollow(HOLLOW_SPAWN_POSITION.x, HOLLOW_SPAWN_POSITION.z, 3);
       hollow.state = HOLLOW_STATE_INVESTIGATE;
@@ -354,7 +355,7 @@ function startLiftCall() {
   refreshObjective();
   playPickupSound();
   setLiftMachinerySound(0.85);
-  showRadioMessage(RADIO_MESSAGES.uploadStarted);
+  playRadioLine('uploadStarted');
   if (hollow.isActive) {
     scheduleEvent(4, function () {
       if (game.flags.uploadStarted && !game.flags.liftArrived) hollow.knowsPlayerPositionAlways = true;
@@ -369,7 +370,7 @@ function completeLiftArrival() {
   setLiftMachinerySound(0);
   playLiftBell();
   refreshObjective();
-  showRadioMessage(RADIO_MESSAGES.liftArrived);
+  playRadioLine('liftArrived');
 }
 
 // ---------------------------------------------------------------------------
@@ -472,7 +473,7 @@ function updateGameProgress(dt) {
     saveCheckpoint();
     refreshObjective();
     scheduleEvent(1.4, function () { playLiftDepartSound(); });
-    scheduleEvent(3.0, function () { showRadioMessage(RADIO_MESSAGES.leftLift); });
+    scheduleEvent(3.0, function () { playRadioLine('leftLift'); });
   }
 
   if (flags.uploadStarted && !flags.liftArrived) {
@@ -709,6 +710,7 @@ function startApplication() {
     emitNoise: emitNoise,
     setScanHeld: function (isHeld) { input.isScanHeld = isHeld; },
     setScannerSpread: setScannerSpread,
+    voiceState: voiceState, hasVoiceLine: hasVoiceLine, playRadioLine: playRadioLine, playVoiceLine: playVoiceLine,
     debugState: debugState,
     setDebugOption: setDebugOption,
     tuning: TUNING

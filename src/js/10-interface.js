@@ -310,9 +310,16 @@ function showMessage(text, seconds, style) {
   }
 }
 
-function showRadioMessage(text) {
+// A line from dispatch. `key` names both the text in RADIO_MESSAGES and, if one was recorded,
+// the voice file assets/voice/<key>.mp3. Without a recording the line is text only.
+function playRadioLine(key) {
+  const text = RADIO_MESSAGES[key];
   playRadioBlip();
   showMessage(text, Math.max(6, text.length * 0.075), 'radio');
+  playVoiceLine(key, 'radio', 0.35, function (seconds) {
+    // Keep the words on screen until the voice has finished saying them.
+    showMessage(text, seconds + 1.5, 'radio');
+  });
 }
 
 function showCaption(text) {
@@ -461,12 +468,17 @@ function openReader(entry) {
   elements['button-close-reader'].textContent = input.isPointerLocked ? 'Put it away (E or click)' : 'Put it away';
   game.mode = 'reading';
   setScannerSound(0);
+  // A spool that has a recording (assets/voice/spool1.mp3 and so on) is read aloud while its text is open.
+  for (const entryKey in LOG_ENTRIES) {
+    if (LOG_ENTRIES[entryKey] === entry) playVoiceLine(entryKey, 'recorder', 0.4, null);
+  }
   closeMapOverlay();
   showOnlyScreen('screen-reader');
 }
 
 function closeReader() {
   if (game.mode !== 'reading') return;
+  stopVoiceLine();
   showOnlyScreen(null);
   game.mode = 'playing';
   input.isScanHeld = false;
