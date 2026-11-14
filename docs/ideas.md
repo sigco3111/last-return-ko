@@ -10,6 +10,9 @@
       - Could add more growling and crawling across walls and ceilings?
 
 - random objectives
+  - item collection, multi-stage generators, activate and escape
+
+- multiplayer? (mostly for item collection, like extraction looters)
 
 ### Implemented
 ~~- Slower detection of beam pointed at monster, so a tap doesn't immediately end in death but raises the monsters 'anger' level.~~
