@@ -222,7 +222,7 @@ const RADIO_MESSAGES = {
 const LOG_ENTRIES = {
   spool1: {
     heading: 'Survey spool 1 of 3',
-    source: 'Crew 2 · I. Okafor, survey lead · day 1',
+    source: 'Crew 2 · S. Lamb, survey lead · day 1',
     paragraphs: [
       'Fixtures are dead on every level, so we scan dark, as usual.',
       'Tomas ran the main corridor twice. The first pass has a cluster by the east door: upright, about 1.9 m tall, a few hundred returns. The second pass does not have it.',
@@ -231,7 +231,7 @@ const LOG_ENTRIES = {
   },
   spool2: {
     heading: 'Survey spool 2 of 3',
-    source: 'Crew 2 · I. Okafor · day 3',
+    source: 'Crew 2 · S. Lamb · day 3',
     paragraphs: [
       'They only move when nothing is scanning them.',
       'I walked backwards to the door with the beam on wide, sweeping across every one of them, and they stayed where they were.',
@@ -240,7 +240,7 @@ const LOG_ENTRIES = {
   },
   spool3: {
     heading: 'Survey spool 3 of 3',
-    source: 'Crew 2 · I. Okafor · day 4',
+    source: 'Crew 2 · S. Lamb · day 4',
     paragraphs: [
       'We aimed the tripod down Shaft 9 to close out the job. Returns stop at forty metres. It is not a floor. Past that depth the pulses go out and do not come back.',
       'On the last pass something at the bottom of the range was standing on the shaft wall, looking up the beam.',
@@ -268,7 +268,7 @@ const LOG_ENTRIES = {
   },
   noteLab: {
     heading: 'Bench notes',
-    source: 'Crew 2 · I. Okafor',
+    source: 'Crew 2 · S. Lamb',
     paragraphs: [
       'The beam does something to it. When I painted it from the lab door it almost stopped, like a man wading through tar.',
       'Then it turned its whole body toward the emitter. I counted four seconds before it stopped being slow.',
