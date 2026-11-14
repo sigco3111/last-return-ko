@@ -18,7 +18,7 @@ const DIFFICULTY_PRESETS = {
     hollowEnabled: true,
     stillsEnabled: true,
     hollowSpeedFactor: 1.0,
-    hearingFactor: 1.0,
+    hearingFactor: 0.8,
     heatFactor: 1.0
   },
   nightmare: {
@@ -27,15 +27,15 @@ const DIFFICULTY_PRESETS = {
     hollowEnabled: true,
     stillsEnabled: true,
     hollowSpeedFactor: 1.14,
-    hearingFactor: 1.35,
+    hearingFactor: 1.15,
     heatFactor: 1.3
   }
 };
 
 const QUALITY_PRESETS = {
   low: { key: 'low', maximumPoints: 250000, raysPerSecond: 5000, sweepRays: 14000, renderScale: 0.75 },
-  medium: { key: 'medium', maximumPoints: 600000, raysPerSecond: 8000, sweepRays: 26000, renderScale: 1.0 },
-  high: { key: 'high', maximumPoints: 1200000, raysPerSecond: 11000, sweepRays: 40000, renderScale: 1.0 }
+  medium: { key: 'medium', maximumPoints: 500000, raysPerSecond: 8000, sweepRays: 26000, renderScale: 1.0 },
+  high: { key: 'high', maximumPoints: 1000000, raysPerSecond: 11000, sweepRays: 40000, renderScale: 1.0 }
 };
 
 const TUNING = {
@@ -49,7 +49,7 @@ const TUNING = {
   playerAcceleration: 16,
   staminaSeconds: 6.5,
   staminaRecoverySeconds: 10,
-  interactionReach: 2.3,
+  interactionReach: 2.0,
 
   scannerMaximumRange: 60,
   scannerSpreadMinimumDegrees: 3,
@@ -63,20 +63,20 @@ const TUNING = {
   sweepHalfWidthDegrees: 52,
   sweepHalfHeightDegrees: 36,
 
-  noiseRadiusWalkStep: 5,
-  noiseRadiusSprintStep: 13,
-  noiseRadiusCrouchStep: 1.6,
+  noiseRadiusWalkStep: 4,
+  noiseRadiusSprintStep: 14,
+  noiseRadiusCrouchStep: 1.2,
   noiseRadiusScannerHum: 4,
   noiseRadiusSweep: 22,
   noiseRadiusDoor: 8,
   noiseRadiusPickup: 4,
 
-  hollowRoamSpeed: 1.5,
+  hollowRoamSpeed: 1.3,
   hollowInvestigateSpeed: 2.5,
   hollowHuntSpeed: 3.5,
   hollowEnragedSpeed: 5.3,
-  hollowHeldSpeedFactor: 0.18,
-  hollowKillDistance: 0.8,
+  hollowHeldSpeedFactor: 0.1,
+  hollowKillDistance: 0.4,
   hollowRageLimitSeconds: 4.2,
   hollowEnragedDurationSeconds: 4.0,
   hollowMemorySeconds: 5.0,
