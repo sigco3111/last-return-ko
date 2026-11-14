@@ -46,7 +46,7 @@ const CREATURE_WORKSHOP_POSE_FIELDS = [
   ['armSwing', 'Arms: swing', -1, 1, false], ['armRaise', 'Arms: raised forward', -0.3, 1.6, false], ['elbowBend', 'Arms: elbows bent', 0, 1.6, false],
   ['lean', 'Body: leaning forward', -0.3, 0.8, false], ['headTilt', 'Head: cocked sideways', -1, 1, false],
   ['stretch', 'Drawn up to full height', 0, 1, true], ['fingerSplay', 'Fingers spread', 0, 1, true],
-  ['stoop', 'Stooped under a low ceiling', 0, 1, true]
+  ['stoop', 'Stooped under a low ceiling', 0, 1, true], ['crawl', 'On knees and hands (in a vent)', 0, 1, true]
 ];
 
 const creatureWorkshop = {

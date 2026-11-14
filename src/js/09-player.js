@@ -32,6 +32,7 @@ const player = {
   isStaminaLocked: false,
   timeSinceSprint: 9,
   isCrouching: false,
+  isInVent: false,
   isSprinting: false,
   isMoving: false,
   audibleRadius: 2.6,
@@ -354,7 +355,11 @@ function updatePlayerMovement(dt) {
 
   if (debugState.options.flyMode) { debugHooks.updateFlight(dt, forwardInput, strafeInput); return; }
 
-  player.isCrouching = keys.has('KeyC') || input.touchCrouch;
+  // Under a ceiling too low to stand under (a vent), you are down whether you hold the key or not.
+  const isInVent = (getTileFlagsAtPosition(player.x, player.z) & TILE_FLAG_VENT) !== 0;
+  const hasNoRoomToStand = getHeadroomAt(player.x, player.z) < 1.75;
+  player.isCrouching = keys.has('KeyC') || input.touchCrouch || hasNoRoomToStand;
+  player.isInVent = isInVent;
   const wantsSprint = (keys.has('ShiftLeft') || keys.has('ShiftRight') || input.touchSprint) && !player.isCrouching;
   player.isSprinting = wantsSprint && hasMoveInput && forwardInput > 0.2 && !player.isStaminaLocked && player.sweepTimeRemaining <= 0;
 
@@ -411,6 +416,7 @@ function updatePlayerMovement(dt) {
     const loudness = player.isSprinting ? 1.0 : (player.isCrouching ? 0.25 : 0.55);
     playFootstepSound(isInWater, (flags & TILE_FLAG_GRATE) !== 0, loudness);
     let radius = player.isSprinting ? TUNING.noiseRadiusSprintStep : (player.isCrouching ? TUNING.noiseRadiusCrouchStep : TUNING.noiseRadiusWalkStep);
+    if (isInVent) { radius = TUNING.noiseRadiusVentStep; playVentCrawlSound(); }
     if (isInWater) radius *= TUNING.waterStepNoiseFactor;
     emitNoise(player.x, player.z, radius);
   }
@@ -423,6 +429,14 @@ function updatePlayerMovement(dt) {
     player.audibleRadius = player.isCrouching ? TUNING.audibleRadiusCrouchedStill : TUNING.audibleRadiusStanding;
   }
   if (isInWater && player.isMoving) player.audibleRadius *= TUNING.waterAudibleFactor;
+  if (isInVent && player.isMoving) player.audibleRadius = TUNING.audibleRadiusVentCrawling;
+
+  // The first time you walk up to a vent on your feet, say how to get in.
+  if (!game.hasShownVentHint && !player.isCrouching && hasMoveInput &&
+      (getTileFlagsAtPosition(player.x + forwardX * 0.9, player.z + forwardZ * 0.9) & TILE_FLAG_VENT) !== 0) {
+    game.hasShownVentHint = true;
+    showMessage(input.isTouchDevice ? 'A vent. Hold CROUCH to crawl in. It is not quiet in there.' : 'A vent. Hold C to crawl in. It is not quiet in there.', 6, 'info');
+  }
 }
 
 // ---------------------------------------------------------------------------

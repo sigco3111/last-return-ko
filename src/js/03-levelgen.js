@@ -17,10 +17,11 @@ const ZONE_GENERATED_ROOM = 250; // stand-in zone for rooms that only exist in g
 
 // TWEAK: how big each size of station is. "fillers" are the extra rooms per tier (no power, power, keycard).
 const GENERATED_SIZE_PRESETS = {
-  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, spineLength: [10, 14] },
-  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, spineLength: [18, 26] },
+  // vents: crawl-height tunnels between rooms. loops: full-height service ducts. Both join places far apart on foot.
+  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, spineLength: [10, 14] },
+  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, spineLength: [13, 18] },
+  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, spineLength: [16, 22] },
+  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 5, spineLength: [18, 26] },
 };
 
 // TWEAK: how spread out a station is.
@@ -633,8 +634,11 @@ function createDuctBlockGrid(plan) {
 
 // Digs a service duct between two free doorways on the same level, if a way through the rock exists.
 // The door at the end that needs more (power, or the keycard) gets the lock. Returns true if the duct was made.
-function tryPlanDuct(plan, blocked, first, second) {
+// With `isVent` it is a vent instead: crawl height, and open at both ends. A vent has nowhere to put a lock,
+// so it is only ever dug between two places behind the same locks.
+function tryPlanDuct(plan, blocked, first, second, isVent) {
   if (first.floorY !== second.floorY) return false;
+  if (isVent && first.owner.tier !== second.owner.tier) return false;
   const firstStep = WALL_DIRECTIONS[first.wall], secondStep = WALL_DIRECTIONS[second.wall];
   const route = routeDuctThroughRock(blocked, first.tileX + firstStep[0], first.tileZ + firstStep[1], first.wall,
     second.tileX + secondStep[0], second.tileZ + secondStep[1], MAXIMUM_DUCT_COST);
@@ -652,6 +656,14 @@ function tryPlanDuct(plan, blocked, first, second) {
     startX: startX, startZ: startZ, endX: endX, endZ: endZ, floorY: first.floorY, ceiling: 2.4, zone: 0
   };
   plan.rooms.push(duct);
+  if (isVent) {
+    // The two doorway tiles become the vent's mouths: part of the tunnel, with no door in them.
+    duct.key = 'vent'; duct.name = 'VENT'; duct.isVent = true; duct.ceiling = VENT_HEIGHT;
+    duct.route = [tileIndexAt(first.tileX, first.tileZ)].concat(route, [tileIndexAt(second.tileX, second.tileZ)]);
+    duct.mouths = [{ tileX: first.tileX, tileZ: first.tileZ, wall: first.wall }, { tileX: second.tileX, tileZ: second.tileZ, wall: second.wall }];
+    first.isUsed = true; second.isUsed = true;
+    return true;
+  }
   const lockedKind = doorKindForTier(higherTier);
   plan.doors.push({ tileX: first.tileX, tileZ: first.tileZ, kind: first.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC, roomA: first.owner, roomB: duct });
   plan.doors.push({ tileX: second.tileX, tileZ: second.tileZ, kind: second.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC, roomA: duct, roomB: second.owner });
@@ -659,7 +671,9 @@ function tryPlanDuct(plan, blocked, first, second) {
   return true;
 }
 
-function planLoops(plan, wantedCount) {
+// `isVent` plans vents instead of service ducts (see tryPlanDuct). `isLessPicky` accepts pairs that are only two
+// doors apart on foot, and vents that run from corridor to corridor: used when the picky pass came up short.
+function planLoops(plan, wantedCount, isVent, isLessPicky) {
   const blocked = createDuctBlockGrid(plan);
   const isUsable = function (socket) { return !socket.isUsed && socket.owner.key !== 'calibrationStore'; };
   let made = 0;
@@ -673,9 +687,11 @@ function planLoops(plan, wantedCount) {
       const doorsAway = doorsAwayCache.get(first.owner);
       for (const second of plan.sockets) {
         if (!isUsable(second) || second.owner === first.owner || second.floorY !== first.floorY) continue;
+        if (isVent && second.owner.tier !== first.owner.tier) continue;
+        if (isVent && !isLessPicky && first.owner.isCorridor && second.owner.isCorridor) continue;
         if (second.tileZ * GRID_WIDTH + second.tileX <= first.tileZ * GRID_WIDTH + first.tileX) continue; // each pair once
         const onFoot = doorsAway.get(second.owner);
-        if (onFoot === undefined || onFoot < 3) continue;
+        if (onFoot === undefined || onFoot < (isLessPicky ? 2 : 3)) continue;
         const throughRock = Math.abs(first.tileX - second.tileX) + Math.abs(first.tileZ - second.tileZ);
         if (throughRock > 26 || throughRock < 3) continue;
         candidates.push({ first: first, second: second, score: onFoot * 5 - throughRock + plan.random() * 6 });
@@ -684,7 +700,7 @@ function planLoops(plan, wantedCount) {
     candidates.sort(function (a, b) { return b.score - a.score; });
     let madeThisRound = false;
     for (let attempt = 0; attempt < Math.min(candidates.length, 25) && !madeThisRound; attempt++) {
-      madeThisRound = tryPlanDuct(plan, blocked, candidates[attempt].first, candidates[attempt].second);
+      madeThisRound = tryPlanDuct(plan, blocked, candidates[attempt].first, candidates[attempt].second, isVent);
     }
     if (!madeThisRound) break;
     made++;
@@ -791,13 +807,43 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   for (let stairAttempt = 0; stairAttempt < 8 && hasLowerLevel && sizeKey !== 'small' && plan.stairCount < 2; stairAttempt++) {
     if (planSecondStair(plan)) plan.stairCount = 2;
   }
-  plan.loopCount = planLoops(plan, size.loops);
+  // Vents first: they are pickier about where they can go (both ends behind the same locks).
+  plan.ventCount = planLoops(plan, size.vents || 0, true, false);
+  if (plan.ventCount < (size.vents || 0)) plan.ventCount += planLoops(plan, size.vents - plan.ventCount, true, true);
+  plan.loopCount = planLoops(plan, size.loops, false);
   return plan;
 }
 
 // ---------------------------------------------------------------------------
 // Step 3: building the plan
 // ---------------------------------------------------------------------------
+
+// Dresses the mouth of a vent. `mouth.wall` is the side of the room the vent leaves from, so the room is on the
+// opposite side of the mouth's tile. Heights are from the floor of the room being built (placement.offsetY).
+function addVentMouth(mouth, random) {
+  const frame = { surfaceClass: SURFACE_METAL, blocksMovement: false };
+  const outward = WALL_DIRECTIONS[mouth.wall];
+  // The face of the mouth's tile that looks into the room, and a strip 6 cm thick standing proud of the wall there.
+  const faceX = outward[0] > 0 ? mouth.tileX : mouth.tileX + 1, faceZ = outward[1] > 0 ? mouth.tileZ : mouth.tileZ + 1;
+  if (outward[0] !== 0) {
+    const nearX = outward[0] > 0 ? faceX - 0.06 : faceX, farX = nearX + 0.06;
+    addBoxBetween(nearX, VENT_HEIGHT, mouth.tileZ - 0.08, farX, VENT_HEIGHT + 0.08, mouth.tileZ + 1.08, frame);
+    addBoxBetween(nearX, 0, mouth.tileZ - 0.08, farX, VENT_HEIGHT, mouth.tileZ, frame);
+    addBoxBetween(nearX, 0, mouth.tileZ + 1, farX, VENT_HEIGHT, mouth.tileZ + 1.08, frame);
+  } else {
+    const nearZ = outward[1] > 0 ? faceZ - 0.06 : faceZ, farZ = nearZ + 0.06;
+    addBoxBetween(mouth.tileX - 0.08, VENT_HEIGHT, nearZ, mouth.tileX + 1.08, VENT_HEIGHT + 0.08, farZ, frame);
+    addBoxBetween(mouth.tileX - 0.08, 0, nearZ, mouth.tileX, VENT_HEIGHT, farZ, frame);
+    addBoxBetween(mouth.tileX + 1, 0, nearZ, mouth.tileX + 1.08, VENT_HEIGHT, farZ, frame);
+  }
+  // The grille, flat on the floor a step inside the room.
+  const grilleX = mouth.tileX + 0.5 - outward[0] * 1.2 + (random() - 0.5) * 0.3, grilleZ = mouth.tileZ + 0.5 - outward[1] * 1.2 + (random() - 0.5) * 0.3;
+  const grilleYaw = random() * 3;
+  addBoxProp(grilleX, 0.02, grilleZ, 0.47, 0.02, 0.5, { yaw: grilleYaw, surfaceClass: SURFACE_METAL, blocksMovement: false });
+  for (let slat = -2; slat <= 2; slat++) {
+    addBoxProp(grilleX + Math.cos(grilleYaw) * slat * 0.17, 0.05, grilleZ + Math.sin(grilleYaw) * slat * 0.17, 0.02, 0.012, 0.44, { yaw: grilleYaw, surfaceClass: SURFACE_METAL, blocksMovement: false });
+  }
+}
 
 // Finds a stretch of one side wall of a corridor that has no doorway in it, as near the middle as possible.
 // Returns the first tile of the stretch (counted along the corridor), or -1 if there is none.
@@ -872,6 +918,18 @@ function furnishGeneratedCorridor(corridor, random) {
   const startX = corridor.startX, startZ = corridor.startZ, endX = corridor.endX, endZ = corridor.endZ;
   const ceiling = corridor.ceiling;
   if (corridor.isFlooded) setTileFlagInRectangle(startX, startZ, endX, endZ, TILE_FLAG_WATER);
+  if (corridor.isVent) {
+    // A vent: nothing in it but the seams of the sheet metal, one every other tile, so a scan has something to
+    // catch on. At each mouth, a frame round the opening and the grille that used to cover it, lying where it fell.
+    for (let step = 1; step < corridor.route.length - 1; step += 2) {
+      const index = corridor.route[step];
+      const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
+      addBoxBetween(tileX, 0, tileZ + 0.47, tileX + 1, 0.015, tileZ + 0.53, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+      addBoxBetween(tileX + 0.47, 0, tileZ, tileX + 0.53, 0.015, tileZ + 1, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+    }
+    for (const mouth of corridor.mouths) addVentMouth(mouth, random);
+    return;
+  }
   if (corridor.isDuct) {
     // A service duct: low, one tile wide, with a fat pipe overhead along every straight stretch.
     const route = corridor.route;
@@ -960,7 +1018,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   for (const room of plan.rooms) {
     room.zone = ZONE_NAMES.length;
     let name = room.name;
-    if (room.key === 'corridor') name = 'CORRIDOR ' + String.fromCharCode(65 + (corridorLetter++ % 26));
+    if (room.key === 'corridor') name = 'CORRIDOR ' + String.fromCharCode(65 + (corridorLetter++ % 26)) + (corridorLetter > 26 ? '2' : '');
     else {
       // A second room of a kind is numbered: WORKSHOP, WORKSHOP 2. One that already ends in a number counts on: SUMP 3, SUMP 4.
       nameCounts[name] = (nameCounts[name] || 0) + 1;
@@ -1009,6 +1067,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
       for (const index of room.route) {
         const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
         carveRoom(tileX, tileZ, tileX + 1, tileZ + 1, room.ceiling, ZONE_GENERATED_ROOM);
+        if (room.isVent) tileFlags[index] |= TILE_FLAG_VENT | TILE_FLAG_GRATE; // sheet metal: it rings underfoot
       }
     } else carveRoom(room.startX, room.startZ, room.endX, room.endZ, room.ceiling, ZONE_GENERATED_ROOM);
   }
@@ -1087,7 +1146,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
 
   // Places for the Hollow to wander between: the middle of every room and corridor.
   for (const room of plan.rooms) {
-    if (room.key === 'calibrationStore') continue;
+    if (room.key === 'calibrationStore' || room.isVent) continue; // a vent is a way through, not somewhere to wander to
     if (room.route) {
       const middle = room.route[Math.floor(room.route.length / 2)];
       roamingWaypoints.push([middle % GRID_WIDTH + 0.5, Math.floor(middle / GRID_WIDTH) + 0.5]);
@@ -1098,6 +1157,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   }
   level.roomCount = plan.rooms.length;
   level.loopCount = plan.loopCount;
+  level.ventCount = plan.ventCount;
   return true;
 }
 
@@ -1122,6 +1182,7 @@ function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
   level.roomCount = 0;
   level.loopCount = 0;
   level.stairCount = 0;
+  level.ventCount = 0;
   return kind !== 'generated';
 }
 

@@ -96,6 +96,7 @@ const TUNING = {
   // Bigger numbers make the Hollow find you more often. All are multiplied by hearingFactor.
   noiseRadiusWalkStep: 4,
   noiseRadiusSprintStep: 14,
+  noiseRadiusVentStep: 5,       // one shuffle forward inside a vent. Sheet metal booms: this is the price of the shortcut.
   noiseRadiusCrouchStep: 1.2,
   noiseRadiusScannerHum: 4,     // emitted twice a second while painting
   noiseRadiusSweep: 22,
@@ -110,6 +111,7 @@ const TUNING = {
   audibleRadiusWalking: 4.2,
   audibleRadiusStanding: 2.6,
   audibleRadiusCrouchWalking: 2.0,
+  audibleRadiusVentCrawling: 4.0, // crawling in a vent: it notices you from here even between the booms of your knees
   audibleRadiusCrouchedStill: 0.8, // the "hold your breath" distance. Below hollowKillDistance would make hiding perfect.
   waterAudibleFactor: 1.3,          // moving through water makes all of the above this much larger
 
@@ -120,6 +122,8 @@ const TUNING = {
   hollowEnragedSpeed: 5.3,          // when its anger is full. Faster than your sprint on purpose.
   hollowSpeedBonusWithAllSpools: 1.1, // speed multiplier once you carry all three spools (the walk back is harder)
   hollowHeldSpeedFactor: 0.1,       // speed multiplier while the beam is on it. 0 freezes it, 1 means the beam does nothing.
+  hollowVentSpeedFactor: 0.7,       // speed multiplier while it crawls through a vent. Below about 0.4 a vent stops being
+                                    // a shortcut for it; at 1 it is as fast on its knees as on its feet.
   hollowBeamHitsToNotice: 2,        // pulses that must land on it in one frame before it counts as "in the beam"
   hollowKillDistance: 0.4,          // closer than this and it has you
   // How the Hollow holds itself. Its size is in FIGURE_PROPORTIONS_HOLLOW (04-figures.js); these two decide how bent it is.

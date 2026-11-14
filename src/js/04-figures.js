@@ -48,7 +48,8 @@ function createFigure(proportions, surfaceClass, imprintTuningKey) {
     //   stretch              Hollow only: 0 hunched, 1 drawn up to full height
     //   fingerSplay          Hollow only: 0 fingers together and curled, 1 spread wide
     //   stoop                Hollow only: 0 as it stands, 1 folded as low as it can go to get under a low ceiling
-    pose: { legSwing: 0, kneeBend: 0, armSwing: 0, armRaise: 0, elbowBend: 0.1, lean: 0, headTilt: 0, stretch: 0, fingerSplay: 0.25, stoop: 0 },
+    //   crawl                Hollow only: 0 on its feet, 1 down on knees and hands, the way it goes through a vent
+    pose: { legSwing: 0, kneeBend: 0, armSwing: 0, armRaise: 0, elbowBend: 0.1, lean: 0, headTilt: 0, stretch: 0, fingerSplay: 0.25, stoop: 0, crawl: 0 },
     capsules: new Float32Array(FIGURE_MAXIMUM_CAPSULES * FIGURE_CAPSULE_STRIDE),
     capsuleCount: 0,
     headHeight: 1.6,
@@ -101,6 +102,13 @@ function buildHollowCapsules(figure) {
   // TWEAK: the four STOOP numbers say how much each joint gives. Larger = it can get under lower ceilings.
   const stoop = clampNumber(pose.stoop || 0, 0, 1);
   const STOOP_THIGH = 0.5, STOOP_KNEE = 1.0, STOOP_LOWER_BACK = 0.3, STOOP_UPPER_BACK = 0.55;
+  // Crawling: knees on the floor under the hips, shins lying back, the back level, the neck stuck out, and the
+  // long arms reaching ahead with the elbows cocked out to the sides. Every joint moves from where it would be
+  // standing to where it is crawling as `crawl` goes from 0 to 1.
+  // TWEAK: the CRAWL numbers are joint angles in radians (0 = straight down or straight up, 1.57 = level).
+  const crawl = clampNumber(pose.crawl || 0, 0, 1);
+  const CRAWL_THIGH = 0.55, CRAWL_SHIN = -1.5, CRAWL_LOWER_BACK = 1.5, CRAWL_UPPER_BACK = 1.62, CRAWL_NECK = 1.45;
+  const CRAWL_ELBOW_OUT = 0.26, CRAWL_ELBOW_DROP = 0.22; // metres the elbow sits out from and below the shoulder
   let next = 0;
   const add = function (start, end, radius) { writeFigureCapsule(figure, next++, start, end, radius); };
 
@@ -109,8 +117,10 @@ function buildHollowCapsules(figure) {
   let lowestAnkle = 0;
   for (let side = -1; side <= 1; side += 2) {
     const swing = pose.legSwing * (side < 0 ? 1 : -1);
-    const thighAngle = swing + 0.38 * hunch + pose.kneeBend * 0.5 + STOOP_THIGH * stoop;
-    const shinAngle = thighAngle - (0.8 * hunch + pose.kneeBend + Math.max(0, -swing) * 0.6 + STOOP_KNEE * stoop);
+    const standingThighAngle = swing + 0.38 * hunch + pose.kneeBend * 0.5 + STOOP_THIGH * stoop;
+    const standingShinAngle = standingThighAngle - (0.8 * hunch + pose.kneeBend + Math.max(0, -swing) * 0.6 + STOOP_KNEE * stoop);
+    const thighAngle = interpolateLinear(standingThighAngle, CRAWL_THIGH + swing * 0.6, crawl);
+    const shinAngle = interpolateLinear(standingShinAngle, CRAWL_SHIN, crawl);
     const hip = [side * body.hipWidth / 2, 0, 0];
     const knee = [hip[0], -Math.cos(thighAngle) * body.thigh, Math.sin(thighAngle) * body.thigh];
     const ankle = [knee[0], knee[1] - Math.cos(shinAngle) * body.shin, knee[2] + Math.sin(shinAngle) * body.shin];
@@ -122,14 +132,15 @@ function buildHollowCapsules(figure) {
 
   // Spine in two pieces, so the back curves instead of tipping like a plank.
   const pelvis = [0, pelvisHeight, 0];
-  const lowerLean = pose.lean * 0.7 + 0.25 * hunch + STOOP_LOWER_BACK * stoop, upperLean = pose.lean * 1.5 + 0.6 * hunch + STOOP_UPPER_BACK * stoop;
+  const lowerLean = interpolateLinear(pose.lean * 0.7 + 0.25 * hunch + STOOP_LOWER_BACK * stoop, CRAWL_LOWER_BACK, crawl);
+  const upperLean = interpolateLinear(pose.lean * 1.5 + 0.6 * hunch + STOOP_UPPER_BACK * stoop, CRAWL_UPPER_BACK, crawl);
   const midSpine = addLocalPoints(pelvis, [0, Math.cos(lowerLean), Math.sin(lowerLean)], body.lowerSpine);
   const chest = addLocalPoints(midSpine, [0, Math.cos(upperLean), Math.sin(upperLean)], body.upperSpine);
   add(pelvis, midSpine, body.torsoRadius);
   add(midSpine, chest, body.torsoRadius * 1.08);
 
   // Neck jutting forward, head cocked hard to one side, jaw hanging.
-  const neckLean = upperLean * 0.6 + 0.55 * hunch;
+  const neckLean = interpolateLinear(upperLean * 0.6 + 0.55 * hunch, CRAWL_NECK, crawl);
   const neckDirection = normalizeLocalVector([Math.sin(pose.headTilt) * 0.45, Math.cos(neckLean), Math.sin(neckLean)]);
   const headBase = addLocalPoints(chest, neckDirection, body.neckLength);
   const headDirection = normalizeLocalVector([Math.sin(pose.headTilt), Math.cos(pose.headTilt) * Math.cos(neckLean * 0.6), Math.sin(neckLean * 0.6)]);
@@ -154,7 +165,21 @@ function buildHollowCapsules(figure) {
     const elbow = [shoulder[0] + side * 0.08 * (1 + stretch), shoulder[1] - Math.cos(armAngle) * body.upperArm, shoulder[2] + Math.sin(armAngle) * body.upperArm];
     const foreArmAngle = armAngle + pose.elbowBend + (side < 0 ? 0.14 * hunch : 0);
     const wrist = [elbow[0] + side * 0.03, elbow[1] - Math.cos(foreArmAngle) * body.foreArm, elbow[2] + Math.sin(foreArmAngle) * body.foreArm];
-    const foreArmDirection = normalizeLocalVector([wrist[0] - elbow[0], wrist[1] - elbow[1], wrist[2] - elbow[2]]);
+    if (crawl > 0) {
+      // Crawling: the elbow out to the side and a little below the shoulder, the hand flat on the floor ahead.
+      // The two arms reach in turn, opposite to the legs.
+      const reach = pose.legSwing * (side < 0 ? -1 : 1) * 0.25;
+      const elbowForward = Math.sqrt(Math.max(0.01, body.upperArm * body.upperArm - CRAWL_ELBOW_OUT * CRAWL_ELBOW_OUT - CRAWL_ELBOW_DROP * CRAWL_ELBOW_DROP));
+      const crawlElbow = [shoulder[0] + side * CRAWL_ELBOW_OUT, shoulder[1] - CRAWL_ELBOW_DROP, shoulder[2] + elbowForward + reach];
+      const drop = Math.max(0, crawlElbow[1] - 0.06);
+      const crawlWrist = [crawlElbow[0] + side * 0.03, 0.06, crawlElbow[2] + Math.sqrt(Math.max(0.01, body.foreArm * body.foreArm - drop * drop))];
+      for (let axis = 0; axis < 3; axis++) {
+        elbow[axis] = interpolateLinear(elbow[axis], crawlElbow[axis], crawl);
+        wrist[axis] = interpolateLinear(wrist[axis], crawlWrist[axis], crawl);
+      }
+    }
+    // The hand follows the forearm, except when crawling, where it lies along the floor.
+    const foreArmDirection = normalizeLocalVector([wrist[0] - elbow[0], (wrist[1] - elbow[1]) * (1 - 0.9 * crawl), wrist[2] - elbow[2] + crawl * 0.4]);
     const knuckles = addLocalPoints(wrist, foreArmDirection, body.handLength);
     add(shoulder, elbow, body.limbRadius);
     add(elbow, wrist, body.limbRadius * 0.9);
@@ -171,7 +196,7 @@ function buildHollowCapsules(figure) {
   for (const leg of legs) {
     add(leg.hip, leg.knee, body.legRadius);
     add(leg.knee, leg.ankle, body.legRadius * 0.85);
-    add(leg.ankle, [leg.ankle[0] + leg.side * 0.03, 0.035, leg.ankle[2] + body.footLength], 0.035);
+    add(leg.ankle, [leg.ankle[0] + leg.side * 0.03, 0.035, leg.ankle[2] + body.footLength * (1 - 2 * crawl)], 0.035); // crawling, the toes trail behind
   }
   figure.capsuleCount = next;
   return headTop[1] + body.headRadius;
@@ -271,12 +296,12 @@ function updateFigureCapsules(figure) {
 // How high the top of the Hollow's body would be, standing on flat ground, with a given stretch and stoop and
 // otherwise posed as `figure` is now. Worked out on a spare body, so `figure` itself is not touched.
 let hollowFittingFigure = null;
-function measureHollowTop(figure, stretch, stoop) {
+function measureHollowTop(figure, stretch, stoop, crawl) {
   if (!hollowFittingFigure) hollowFittingFigure = createFigure(figure.proportions, figure.surfaceClass, figure.imprintTuningKey);
   const spare = hollowFittingFigure;
   spare.proportions = figure.proportions;
   Object.assign(spare.pose, figure.pose);
-  spare.pose.stretch = stretch; spare.pose.stoop = stoop;
+  spare.pose.stretch = stretch; spare.pose.stoop = stoop; spare.pose.crawl = crawl || 0;
   spare.pose.legSwing = 0; // or the answer would bob up and down with every step
   spare.x = 0; spare.z = 0; spare.yaw = 0;
   buildHollowCapsules(spare);
@@ -289,13 +314,14 @@ function measureHollowTop(figure, stretch, stoop) {
 }
 
 // Decides how the Hollow must hold itself to fit under a ceiling `headroom` metres above its feet:
-// as drawn up as it wants to be if there is room, less so if not, and stooping if it is too tall even hunched.
+// as drawn up as it wants to be if there is room, less so if not, stooping if it is too tall even hunched,
+// and down on knees and hands if stooping is not enough (a vent).
 // The heights come from the body itself, so this stays right whatever FIGURE_PROPORTIONS_HOLLOW is changed to.
-// `gap` is how far below the ceiling the top of it must stay. Returns the same object every time: { stretch, stoop }.
-const hollowFit = { stretch: 0, stoop: 0 };
+// `gap` is how far below the ceiling the top of it must stay. Returns the same object every time: { stretch, stoop, crawl }.
+const hollowFit = { stretch: 0, stoop: 0, crawl: 0 };
 function fitHollowUnderCeiling(figure, headroom, wantedStretch, gap) {
   const limit = headroom - gap;
-  hollowFit.stretch = wantedStretch; hollowFit.stoop = 0;
+  hollowFit.stretch = wantedStretch; hollowFit.stoop = 0; hollowFit.crawl = 0;
   if (measureHollowTop(figure, wantedStretch, 0) <= limit) return hollowFit;
   if (measureHollowTop(figure, 0, 0) <= limit) {
     // Somewhere between hunched and what it wanted: close in on the most that fits.
@@ -309,12 +335,24 @@ function fitHollowUnderCeiling(figure, headroom, wantedStretch, gap) {
   }
   // Too tall even hunched: stoop as little as will do.
   hollowFit.stretch = 0;
+  if (measureHollowTop(figure, 0, 1) <= limit) {
+    let low = 0, high = 1;
+    for (let step = 0; step < 6; step++) {
+      const middle = (low + high) / 2;
+      if (measureHollowTop(figure, 0, middle) <= limit) high = middle; else low = middle;
+    }
+    hollowFit.stoop = high;
+    return hollowFit;
+  }
+  // Too low even for that: down on knees and hands, as far as it takes. Crawling it only needs a finger's
+  // width over its back, whatever gap it keeps when it is on its feet.
+  const crawlLimit = headroom - Math.min(gap, 0.05);
   let low = 0, high = 1;
   for (let step = 0; step < 6; step++) {
     const middle = (low + high) / 2;
-    if (measureHollowTop(figure, 0, middle) <= limit) high = middle; else low = middle;
+    if (measureHollowTop(figure, 0, 0, middle) <= crawlLimit) high = middle; else low = middle;
   }
-  hollowFit.stoop = high;
+  hollowFit.crawl = high;
   return hollowFit;
 }
 

@@ -23,6 +23,11 @@ const TILE_FLAG_PIT = 2;
 const TILE_FLAG_GRATE = 4;
 const TILE_FLAG_HAZARD = 8;
 const TILE_FLAG_DOOR = 16;
+const TILE_FLAG_VENT = 32; // a crawl-height tunnel: sheet metal underfoot, and no room to stand
+
+// TWEAK: how high a vent is inside, in metres. You crouch at 1.0 m and the Hollow crawls at about the same,
+// so much lower than 1.1 and neither of you fits.
+const VENT_HEIGHT = 1.15;
 
 const ZONE_LIFT_CAR = 1;
 const ZONE_LOBBY = 2;
@@ -147,6 +152,7 @@ const level = {
   layoutKey: 'mixed',
   levelsKey: 'two',
   stairCount: 0,          // flights of stairs between the levels (0 in a one-level station)
+  ventCount: 0,           // crawl-height vents (generated stations only)
   keycardRoomText: 'the laboratory', // filled into the security office note
   loopCount: 0,
   storeZone: 0,           // the calibration store: the Hollow will not enter it
@@ -972,7 +978,9 @@ function resolveBodyCollision(x, z, radius, bodyTopHeight, floorHeight) {
         // Rock, the pit, and any floor too far above or below to step onto all stop a body.
         const isSolid = !isInsideGrid(tileX, tileZ) || tileIsOpen[tileZ * GRID_WIDTH + tileX] === 0 ||
           (tileFlags[tileZ * GRID_WIDTH + tileX] & TILE_FLAG_PIT) !== 0 ||
-          Math.abs(tileFloorHeight[tileZ * GRID_WIDTH + tileX] - floorHeight) > MAXIMUM_STEP_HEIGHT;
+          Math.abs(tileFloorHeight[tileZ * GRID_WIDTH + tileX] - floorHeight) > MAXIMUM_STEP_HEIGHT ||
+          // too low to get under at this height: a vent, to someone standing up
+          tileCeilingHeight[tileZ * GRID_WIDTH + tileX] - tileFloorHeight[tileZ * GRID_WIDTH + tileX] < bodyTopHeight + 0.02;
         if (isSolid) {
           pushCircleOutOfRectangle(collisionResult, radius, tileX, tileZ, tileX + 1, tileZ + 1);
           continue;
