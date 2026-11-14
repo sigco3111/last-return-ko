@@ -57,11 +57,37 @@ function check(description, condition, detail) {
     const debug = window.noReturnDebug;
     debug.hollow.figure.x = 30.5; debug.hollow.figure.z = 52.5; debug.hollow.graceTimer = 0;
     debug.teleport(22.5, 52.5, Math.PI / 2);
+    // A tap of the beam: it must not start a hunt.
+    debug.setScannerSpread(6);
     debug.setScanHeld(true);
-    debug.simulate(1.5);
+    debug.simulate(0.3);
+    debug.setScanHeld(false);
+    window.tapResult = { anger: debug.hollow.anger, state: debug.hollow.state, hits: debug.hollow.figure.totalHits };
+    debug.simulate(0.2);
+    window.tapResult.stateAfter = debug.hollow.state;
+    // Holding the beam: after about 1.25 s it knows where the light comes from.
+    debug.hollow.figure.x = 30.5; debug.hollow.figure.z = 52.5;
+    debug.setScanHeld(true);
+    debug.simulate(2.2);
   });
-  const held = await inGame(() => ({ held: window.noReturnDebug.hollow.heldAmount, speed: window.noReturnDebug.hollow.currentSpeed, state: window.noReturnDebug.hollow.state }));
-  check('painting the Hollow puts it in a hunt and slows it', held.state === 2 && held.held > 0.9 && held.speed < 1, held);
+  const tap = await inGame(() => window.tapResult);
+  check('a tap of the beam raises its anger without starting a hunt',
+    tap.hits > 0 && tap.anger > 0.03 && tap.anger < 0.15 && tap.state !== 2 && tap.stateAfter !== 2, tap);
+  const held = await inGame(() => ({ held: window.noReturnDebug.hollow.heldAmount, speed: window.noReturnDebug.hollow.currentSpeed, state: window.noReturnDebug.hollow.state, anger: window.noReturnDebug.hollow.anger }));
+  check('holding the beam on it starts a hunt and slows it', held.state === 2 && held.held > 0.9 && held.speed < 1 && held.anger >= 0.3, held);
+  const enraged = await inGame(() => {
+    const debug = window.noReturnDebug;
+    debug.player.heat = 0;
+    debug.hollow.figure.x = 30.5; debug.hollow.figure.z = 52.5;
+    debug.simulate(3.2);
+    const result = { anger: debug.hollow.anger, enragedTimer: debug.hollow.enragedTimer };
+    // put things back for the next check: calm, eight metres away, beam still on
+    debug.hollow.enragedTimer = 0; debug.hollow.anger = 0.35;
+    debug.hollow.figure.x = 30.5; debug.hollow.figure.z = 52.5;
+    debug.player.heat = 0; debug.player.isOverheated = false;
+    return result;
+  });
+  check('holding it until its anger is full enrages it', enraged.enragedTimer > 0, enraged);
   await inGame(() => { window.noReturnDebug.setScanHeld(false); window.noReturnDebug.simulate(8); });
   check('with the beam off it reaches the player', (await inGame(() => window.noReturnDebug.game.mode)) === 'dying');
   await page.waitForFunction(() => window.noReturnDebug.game.mode === 'dead', null, { timeout: 60000 });
@@ -72,9 +98,40 @@ function check(description, condition, detail) {
   });
   check('retry resumes at the checkpoint with the Hollow far away', afterRetry.mode === 'playing' && afterRetry.distance > 20, afterRetry);
 
+  // --- suspense behaviour: it stops to listen, and it searches ahead of where it lost you ---
+  const listening = await inGame(() => {
+    const debug = window.noReturnDebug;
+    debug.teleport(14, 51, 0);
+    debug.hollow.state = 0; debug.hollow.anger = 0; debug.hollow.graceTimer = 0;
+    debug.hollow.figure.x = 24.5; debug.hollow.figure.z = 52.5;
+    debug.hollow.targetX = 38; debug.hollow.targetZ = 52.5;
+    debug.hollow.nextListenIn = 0.05;
+    debug.simulate(0.5);
+    const during = { state: debug.hollow.state, speed: debug.hollow.currentSpeed, timer: debug.hollow.listenTimer };
+    debug.simulate(7.5);
+    return { during: during, stateAfter: debug.hollow.state };
+  });
+  check('wandering near the player it stops dead to listen, then moves on',
+    listening.during.state === 4 && listening.during.speed === 0 && listening.stateAfter !== 4, listening);
+  const searchLead = await inGame(() => {
+    const debug = window.noReturnDebug;
+    const hollow = debug.hollow;
+    // It last sensed the player at x 22 walking east at 2.5 m/s, then lost them.
+    hollow.state = 2; hollow.figure.x = 21.5; hollow.figure.z = 52.5;
+    hollow.lastKnownPlayerX = 22; hollow.lastKnownPlayerZ = 52.5;
+    hollow.lastKnownVelocityX = 2.5; hollow.lastKnownVelocityZ = 0;
+    hollow.timeSinceSensed = 99;
+    debug.teleport(14, 45.5, 0); // the player is out of earshot, in the security office
+    debug.simulate(0.1);
+    return { state: hollow.state, searchCenterX: hollow.searchCenterX };
+  });
+  check('after losing the player it searches ahead in the direction they were moving',
+    searchLead.state === 3 && searchLead.searchCenterX > 27, searchLead);
+  await inGame(() => { window.noReturnDebug.hollow.isActive = false; });
+
   // --- doors ---
   const doorFraction = (tileX, tileZ) => inGame(([x, z]) => window.noReturnDebug.doors.find((door) => door.tileX === x && door.tileZ === z).openFraction, [tileX, tileZ]);
-  await inGame(() => { const debug = window.noReturnDebug; debug.hollow.isActive = false; debug.teleport(31.5, 38.7, 0); debug.simulate(1.5); });
+  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(31.5, 38.7, 0); debug.simulate(1.5); });
   check('powered door opens once the mains is on', (await doorFraction(31, 37)) === 1);
   await inGame(() => { const debug = window.noReturnDebug; debug.teleport(41.3, 30.5, Math.PI / 2); debug.simulate(1.5); });
   check('keycard door stays shut without the card', (await doorFraction(42, 30)) === 0);

@@ -389,7 +389,7 @@ function drawDebugMapMarkers(context, toCanvasX, toCanvasY, markerSize) {
 // The panel
 // ---------------------------------------------------------------------------
 
-const HOLLOW_STATE_NAMES = ['roaming', 'investigating a noise', 'hunting', 'searching'];
+const HOLLOW_STATE_NAMES = ['roaming', 'investigating', 'hunting', 'searching', 'standing still, listening'];
 
 function buildDebugReadout() {
   const lines = [];
@@ -404,7 +404,8 @@ function buildDebugReadout() {
     const distance = distanceBetweenPoints(hollow.figure.x, hollow.figure.z, player.x, player.z);
     lines.push('HOLLOW      ' + (hollow.enragedTimer > 0 ? 'ENRAGED' : HOLLOW_STATE_NAMES[hollow.state]));
     lines.push('  distance  ' + distance.toFixed(1) + ' m   speed ' + hollow.currentSpeed.toFixed(1) + ' m/s');
-    lines.push('  in beam   ' + (hollow.heldAmount > 0.5 ? 'yes' : 'no') + '   rage ' + hollow.rage.toFixed(1) + ' of ' + TUNING.hollowRageLimitSeconds);
+    lines.push('  in beam   ' + (hollow.wasInBeam ? 'yes' : 'no') + '   anger ' + hollow.anger.toFixed(2) + ' (notices at ' + TUNING.hollowAngerNoticeLevel + ')');
+    if (hollow.doubleBackTimer > 0) lines.push('  feint     doubling back in ' + hollow.doubleBackTimer.toFixed(1) + ' s');
     lines.push('  sensed    ' + (hollow.timeSinceSensed < 90 ? hollow.timeSinceSensed.toFixed(1) + ' s ago' : 'never'));
   } else {
     lines.push('HOLLOW      not in the station');
