@@ -46,7 +46,7 @@ The title screen offers two places to go down into.
 
 - **Size** is small, medium or large: roughly 24, 32 or 41 rooms and corridors. Kessel-9 has 19.
 - **Layout** is tight (rooms open straight into rooms), mixed, or sprawling (long corridors).
-- **Levels** is one or two. With two, everything behind the keycard, Shaft 9 included, is three metres further down, at the foot of a flight of stairs. Medium and large stations usually get a second, back stair, so the lower level is not a dead end.
+- **Levels** is one or two. With two, everything behind the keycard, Shaft 9 included, is further down, at the foot of a flight of stairs; how long and how steep the flight is depends on the seed. Medium and large stations usually get a second, back stair, so the lower level is not a dead end.
 - **Seed** decides the station. Leave it empty for a different one every descent. Type a number or a word to get the same station again, or to give a friend the one you played. The seed of the station you are in is shown on the pause and ending screens.
 
 What stays true in every station, so the radio and the notes never lie:
