@@ -205,11 +205,17 @@ function check(description, condition, detail) {
   check('the ending screen is shown', await page.evaluate(() => !document.getElementById('screen-ending').hidden));
 
   check('a normal run is not marked as a debug run', await inGame(() => !window.noReturnDebug.debugState.hasBeenUsedThisRun));
+  const plainGame = await inGame(() => ({
+    panel: document.getElementById('debug-panel') !== null, button: document.getElementById('button-open-debug') !== null,
+    switches: Object.keys(window.noReturnDebug.debugState.options).length, fieldCard: document.querySelector('.controls-list').textContent.includes('Debug')
+  }));
+  check('the plain game has no debug mode: no panel, no pause-menu button, no switches',
+    !plainGame.panel && !plainGame.button && plainGame.switches === 0 && !plainGame.fieldCard, plainGame);
   check('no script errors were reported', problems.length === 0, problems);
   await browser.close();
 
-  // --- debug mode: every switch does what its label says ---
-  const debugSession = await openGame();
+  // --- debug mode (only in the dev build): every switch does what its label says ---
+  const debugSession = await openGame({ dev: true });
   const debugPage = debugSession.page;
   const inDebugGame = (callback, argument) => debugPage.evaluate(callback, argument);
   const clickInPage = (elementId) => debugPage.evaluate((id) => document.getElementById(id).click(), elementId);

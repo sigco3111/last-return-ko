@@ -33,9 +33,6 @@
       <div id="hud-stance" class="hud-label"></div>
     </div>
 
-    <div id="hud-debug-badge" hidden>DEBUG</div>
-    <aside id="debug-panel" aria-label="Debug mode" hidden></aside>
-
     <div id="reticle" aria-hidden="true"><div id="reticle-ring"></div><div id="reticle-dot"></div></div>
     <div id="hud-prompt" hidden></div>
     <div id="hud-countdown" hidden></div>
@@ -103,6 +100,7 @@
                 <option value="small">Small</option>
                 <option value="medium">Medium</option>
                 <option value="large">Large</option>
+                <option value="massive">Massive</option>
               </select>
             </label>
             <label>Layout
@@ -144,15 +142,15 @@
           <div><dt>Map</dt><dd><kbd>Tab</kbd> or <kbd>M</kbd></dd></div>
           <div><dt>Colours</dt><dd><kbd>V</kbd></dd></div>
           <div><dt>Pause</dt><dd><kbd>Esc</kbd></dd></div>
-          <div><dt>Debug mode</dt><dd><kbd>`</kbd> or <kbd>F2</kbd></dd></div>
         </dl>
         <p class="card-note">On a touch screen the controls appear on screen: left thumb moves, right thumb looks, hold SCAN to paint.</p>
         <div class="settings-grid">
-          <label for="title-quality">Point budget</label>
+          <label for="title-quality">Quality</label>
           <select id="title-quality" data-setting="quality">
             <option value="low">Low</option>
             <option value="medium">Medium</option>
             <option value="high">High</option>
+            <option value="ultra">Ultra</option>
           </select>
           <label for="title-sensitivity">Look speed</label>
           <input type="range" id="title-sensitivity" data-setting="sensitivity" min="0.2" max="3" step="0.1" value="1">
@@ -191,7 +189,6 @@
       <div class="button-row">
         <button type="button" id="button-resume" class="button-primary">Resume</button>
         <button type="button" id="button-pause-restart" class="button-quiet">Abandon survey</button>
-        <button type="button" id="button-open-debug" class="button-quiet">Debug mode</button>
       </div>
     </div>
   </section>

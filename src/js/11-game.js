@@ -108,7 +108,7 @@ function resetWorldState() {
   clearAllPoints();
   clearMap();
   clearMessages();
-  resetDebugForNewRun();
+  if (debugHooks.resetForNewRun) debugHooks.resetForNewRun();
   setGeneratorSoundRunning(false);
   setLiftMachinerySound(0);
 }
@@ -119,7 +119,7 @@ function resetWorldState() {
 function loadStation(kind, seed, sizeKey, layoutKey, levelsKey) {
   const wasBuiltAsAsked = buildStation(kind, seed, sizeKey, layoutKey, levelsKey);
   uploadWorldOccluderMesh(buildWorldOccluderVertices());
-  rebuildDebugZoneList();
+  if (debugHooks.stationLoaded) debugHooks.stationLoaded();
   moveMachinerySoundsToLevel();
   return wasBuiltAsAsked;
 }
@@ -279,8 +279,7 @@ function resumeGame() {
 function returnToTitle() {
   suspendAudio(false);
   stopVoiceLine();
-  debugState.isPanelOpen = false;
-  debugState.panelElement.hidden = true;
+  if (debugHooks.hidePanel) debugHooks.hidePanel();
   if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();
   resetWorldState();
   game.mode = 'title';
@@ -702,10 +701,10 @@ function runFrame(timestamp) {
   frameState.scannerActivity = player.scannerActivity;
   frameState.scannerHeat = player.heat;
   if (game.mode === 'workshop') frameState.debug = workshopHooks.buildFrameData();
-  else frameState.debug = game.mode === 'title' ? null : buildDebugFrameData();
+  else frameState.debug = game.mode === 'title' || !debugHooks.buildFrameData ? null : debugHooks.buildFrameData();
   renderFrame(renderCamera, frameState);
   updateHud(realDt);
-  updateDebugMode(realDt);
+  if (debugHooks.update) debugHooks.update(realDt);
 }
 
 // ---------------------------------------------------------------------------
@@ -728,7 +727,6 @@ function startApplication() {
   createPhantoms();
   initializeInput();
   initializeInterface();
-  initializeDebugMode();
   liftDoor.forcedState = true;
   liftDoor.openFraction = 1;
   liftDoor.slab.isRemoved = true;
@@ -787,7 +785,6 @@ function startApplication() {
     updateFigureCapsules: updateFigureCapsules,
     voiceState: voiceState, hasVoiceLine: hasVoiceLine, playRadioLine: playRadioLine, playVoiceLine: playVoiceLine,
     debugState: debugState,
-    setDebugOption: setDebugOption,
     tuning: TUNING
   };
 
