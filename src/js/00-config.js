@@ -117,6 +117,13 @@ const TUNING = {
   hollowHeldSpeedFactor: 0.1,       // speed multiplier while the beam is on it. 0 freezes it, 1 means the beam does nothing.
   hollowBeamHitsToNotice: 2,        // pulses that must land on it in one frame before it counts as "in the beam"
   hollowKillDistance: 0.4,          // closer than this and it has you
+  // How the Hollow holds itself. Its size is in FIGURE_PROPORTIONS_HOLLOW (04-figures.js); these two decide how bent it is.
+  hollowBaseStoop: 0.2,             // how bent it always is, from 0 (as upright as its hunch allows) to 1 (folded right over).
+                                    // It still draws itself up when it stops to listen.
+  hollowCeilingGap: 0.25,           // metres it keeps between its head and the ceiling. It reads the ceiling over it and
+                                    // just ahead, and bends further to keep this gap. Raise it and it crouches along low
+                                    // corridors and ducks deep through doors; at 0.05 it only just clears them.
+                                    // Standing drawn up to listen, it ignores this and stops just short of the ceiling.
   // Anger: one meter from 0 (calm) to 1 (enraged). The beam fills it, time drains it.
   //   below hollowAngerNoticeLevel  the beam only makes it stop and turn toward the light
   //   above hollowAngerNoticeLevel  the beam tells it exactly where you are, and it hunts

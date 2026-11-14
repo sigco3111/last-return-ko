@@ -109,6 +109,7 @@ If the browser will not capture the mouse, hold the mouse button and drag to loo
 - Once you have touched it with the beam, an AGITATION bar on the scanner shows its anger.
 - Wandering near you, it sometimes stops dead and listens. It makes no footsteps then, and it hears better.
 - When it loses you it searches ahead in the direction you were heading, and it sometimes pretends to leave.
+- It is taller than most of the station's ceilings. It bends to fit under whatever is over it, ducks through doorways, and draws itself up to the ceiling when it stops to listen.
 - It will not enter the calibration store.
 
 **The Stills** are the calibration dummies in store C4.
@@ -180,6 +181,8 @@ Without the dev server (`node build.js --dev`, then open `build/workshop.html`) 
 ## Tweaking the game
 
 Start with `src/js/00-config.js`. Every value there has a comment saying what it does, its unit, and what raising or lowering it changes. For example, `heatFactor` multiplies how fast the scanner heats up on a threat level: at 1.3 you get about 7.7 seconds of continuous painting instead of 10.
+
+How bent the Hollow is has two values there: `hollowBaseStoop` (how bent it always is) and `hollowCeilingGap` (how much room it keeps over its head, so how deeply it ducks under low ceilings and doors). Its size is in `FIGURE_PROPORTIONS_HOLLOW`, best changed in the workshop; whatever size you give it, it fits itself to the ceilings.
 
 For looks and feel that live elsewhere (point colours and size, glow, mouse sensitivity, footstep spacing, door speed, body shapes, sound levels), search the `src/js` folder for `TWEAK`. Each one marks a number that is safe to change and says what it does.
 

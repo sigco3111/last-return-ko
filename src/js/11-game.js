@@ -786,6 +786,7 @@ function startApplication() {
     setScannerSpread: setScannerSpread,
     updateFigureCapsules: updateFigureCapsules,
     voiceState: voiceState, hasVoiceLine: hasVoiceLine, playRadioLine: playRadioLine, playVoiceLine: playVoiceLine,
+    loadVoiceLine: loadVoiceLine, radioLineKeys: Object.keys(RADIO_MESSAGES),
     debugState: debugState,
     setDebugOption: setDebugOption,
     tuning: TUNING

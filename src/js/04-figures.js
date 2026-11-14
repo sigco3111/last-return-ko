@@ -47,7 +47,8 @@ function createFigure(proportions, surfaceClass, imprintTuningKey) {
     //   headTilt             head cocked sideways
     //   stretch              Hollow only: 0 hunched, 1 drawn up to full height
     //   fingerSplay          Hollow only: 0 fingers together and curled, 1 spread wide
-    pose: { legSwing: 0, kneeBend: 0, armSwing: 0, armRaise: 0, elbowBend: 0.1, lean: 0, headTilt: 0, stretch: 0, fingerSplay: 0.25 },
+    //   stoop                Hollow only: 0 as it stands, 1 folded as low as it can go to get under a low ceiling
+    pose: { legSwing: 0, kneeBend: 0, armSwing: 0, armRaise: 0, elbowBend: 0.1, lean: 0, headTilt: 0, stretch: 0, fingerSplay: 0.25, stoop: 0 },
     capsules: new Float32Array(FIGURE_MAXIMUM_CAPSULES * FIGURE_CAPSULE_STRIDE),
     capsuleCount: 0,
     headHeight: 1.6,
@@ -96,6 +97,10 @@ function buildHollowCapsules(figure) {
   const body = figure.proportions, pose = figure.pose;
   const stretch = clampNumber(pose.stretch, 0, 1), hunch = 1 - stretch;
   const splay = clampNumber(pose.fingerSplay, 0, 1);
+  // Stooping folds the legs further and tips the back and neck over, the way a tall man goes through a low door.
+  // TWEAK: the four STOOP numbers say how much each joint gives. Larger = it can get under lower ceilings.
+  const stoop = clampNumber(pose.stoop || 0, 0, 1);
+  const STOOP_THIGH = 0.5, STOOP_KNEE = 1.0, STOOP_LOWER_BACK = 0.3, STOOP_UPPER_BACK = 0.55;
   let next = 0;
   const add = function (start, end, radius) { writeFigureCapsule(figure, next++, start, end, radius); };
 
@@ -104,8 +109,8 @@ function buildHollowCapsules(figure) {
   let lowestAnkle = 0;
   for (let side = -1; side <= 1; side += 2) {
     const swing = pose.legSwing * (side < 0 ? 1 : -1);
-    const thighAngle = swing + 0.38 * hunch + pose.kneeBend * 0.5;
-    const shinAngle = thighAngle - (0.8 * hunch + pose.kneeBend + Math.max(0, -swing) * 0.6);
+    const thighAngle = swing + 0.38 * hunch + pose.kneeBend * 0.5 + STOOP_THIGH * stoop;
+    const shinAngle = thighAngle - (0.8 * hunch + pose.kneeBend + Math.max(0, -swing) * 0.6 + STOOP_KNEE * stoop);
     const hip = [side * body.hipWidth / 2, 0, 0];
     const knee = [hip[0], -Math.cos(thighAngle) * body.thigh, Math.sin(thighAngle) * body.thigh];
     const ankle = [knee[0], knee[1] - Math.cos(shinAngle) * body.shin, knee[2] + Math.sin(shinAngle) * body.shin];
@@ -117,7 +122,7 @@ function buildHollowCapsules(figure) {
 
   // Spine in two pieces, so the back curves instead of tipping like a plank.
   const pelvis = [0, pelvisHeight, 0];
-  const lowerLean = pose.lean * 0.7 + 0.25 * hunch, upperLean = pose.lean * 1.5 + 0.6 * hunch;
+  const lowerLean = pose.lean * 0.7 + 0.25 * hunch + STOOP_LOWER_BACK * stoop, upperLean = pose.lean * 1.5 + 0.6 * hunch + STOOP_UPPER_BACK * stoop;
   const midSpine = addLocalPoints(pelvis, [0, Math.cos(lowerLean), Math.sin(lowerLean)], body.lowerSpine);
   const chest = addLocalPoints(midSpine, [0, Math.cos(upperLean), Math.sin(upperLean)], body.upperSpine);
   add(pelvis, midSpine, body.torsoRadius);
@@ -263,6 +268,56 @@ function updateFigureCapsules(figure) {
 }
 
 // Height of the head above the lift's floor level (not above the figure's own feet).
+// How high the top of the Hollow's body would be, standing on flat ground, with a given stretch and stoop and
+// otherwise posed as `figure` is now. Worked out on a spare body, so `figure` itself is not touched.
+let hollowFittingFigure = null;
+function measureHollowTop(figure, stretch, stoop) {
+  if (!hollowFittingFigure) hollowFittingFigure = createFigure(figure.proportions, figure.surfaceClass, figure.imprintTuningKey);
+  const spare = hollowFittingFigure;
+  spare.proportions = figure.proportions;
+  Object.assign(spare.pose, figure.pose);
+  spare.pose.stretch = stretch; spare.pose.stoop = stoop;
+  spare.pose.legSwing = 0; // or the answer would bob up and down with every step
+  spare.x = 0; spare.z = 0; spare.yaw = 0;
+  buildHollowCapsules(spare);
+  let top = 0;
+  for (let capsuleIndex = 0; capsuleIndex < spare.capsuleCount; capsuleIndex++) {
+    const offset = capsuleIndex * FIGURE_CAPSULE_STRIDE, radius = spare.capsules[offset + 6];
+    top = Math.max(top, spare.capsules[offset + 1] + radius, spare.capsules[offset + 4] + radius);
+  }
+  return top;
+}
+
+// Decides how the Hollow must hold itself to fit under a ceiling `headroom` metres above its feet:
+// as drawn up as it wants to be if there is room, less so if not, and stooping if it is too tall even hunched.
+// The heights come from the body itself, so this stays right whatever FIGURE_PROPORTIONS_HOLLOW is changed to.
+// `gap` is how far below the ceiling the top of it must stay. Returns the same object every time: { stretch, stoop }.
+const hollowFit = { stretch: 0, stoop: 0 };
+function fitHollowUnderCeiling(figure, headroom, wantedStretch, gap) {
+  const limit = headroom - gap;
+  hollowFit.stretch = wantedStretch; hollowFit.stoop = 0;
+  if (measureHollowTop(figure, wantedStretch, 0) <= limit) return hollowFit;
+  if (measureHollowTop(figure, 0, 0) <= limit) {
+    // Somewhere between hunched and what it wanted: close in on the most that fits.
+    let low = 0, high = wantedStretch;
+    for (let step = 0; step < 6; step++) {
+      const middle = (low + high) / 2;
+      if (measureHollowTop(figure, middle, 0) <= limit) low = middle; else high = middle;
+    }
+    hollowFit.stretch = low;
+    return hollowFit;
+  }
+  // Too tall even hunched: stoop as little as will do.
+  hollowFit.stretch = 0;
+  let low = 0, high = 1;
+  for (let step = 0; step < 6; step++) {
+    const middle = (low + high) / 2;
+    if (measureHollowTop(figure, 0, middle) <= limit) high = middle; else low = middle;
+  }
+  hollowFit.stoop = high;
+  return hollowFit;
+}
+
 function getFigureHeadHeight(figure) {
   return figure.y + figure.headHeight;
 }

@@ -183,6 +183,16 @@ function getFloorHeightAt(x, z) {
   return tileFloorHeight[index];
 }
 
+// How much room there is between floor and ceiling at a point, in metres. Solid rock and the pit count as "plenty",
+// so that something asking about the tile ahead of it is not made to duck for a wall.
+function getHeadroomAt(x, z) {
+  const tileX = Math.floor(x), tileZ = Math.floor(z);
+  if (!isInsideGrid(tileX, tileZ)) return 99;
+  const index = tileZ * GRID_WIDTH + tileX;
+  if (!tileIsOpen[index] || (tileFlags[index] & TILE_FLAG_PIT)) return 99;
+  return tileCeilingHeight[index] - tileFloorHeight[index];
+}
+
 function getZoneAtPosition(x, z) {
   const tileX = Math.floor(x), tileZ = Math.floor(z);
   if (!isInsideGrid(tileX, tileZ)) return 0;
