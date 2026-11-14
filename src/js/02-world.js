@@ -91,13 +91,14 @@ const roamingWaypoints = [];
 const placement = {
   turns: 0,          // quarter turns clockwise seen from above (0 to 3)
   offsetX: 0, offsetZ: 0,
+  offsetY: 0,        // how far below (negative) or above the lift's floor this room's floor is, in metres
   isGenerating: false,
   zone: 0,           // zone given to tiles carved by the room being placed
   zoneMap: null      // optional: classic zone number -> zone number in this station
 };
 
 function clearPlacement() {
-  placement.turns = 0; placement.offsetX = 0; placement.offsetZ = 0;
+  placement.turns = 0; placement.offsetX = 0; placement.offsetZ = 0; placement.offsetY = 0;
   placement.zone = 0; placement.zoneMap = null;
 }
 
@@ -144,6 +145,8 @@ const level = {
   seed: 0,
   sizeKey: 'medium',
   layoutKey: 'mixed',
+  levelsKey: 'two',
+  stairCount: 0,          // flights of stairs between the levels (0 in a one-level station)
   keycardRoomText: 'the laboratory', // filled into the security office note
   loopCount: 0,
   storeZone: 0,           // the calibration store: the Hollow will not enter it
@@ -168,6 +171,18 @@ function isTileOpenAt(tileX, tileZ) {
   return isInsideGrid(tileX, tileZ) && tileIsOpen[tileZ * GRID_WIDTH + tileX] === 1;
 }
 
+// The tallest step anything can walk up or down between two neighbouring tiles, in metres.
+const MAXIMUM_STEP_HEIGHT = 0.45;
+
+// Height of the floor under a point: 0 on the lift's level, negative on a lower one.
+function getFloorHeightAt(x, z) {
+  const tileX = Math.floor(x), tileZ = Math.floor(z);
+  if (!isInsideGrid(tileX, tileZ)) return 0;
+  const index = tileZ * GRID_WIDTH + tileX;
+  if (!tileIsOpen[index] || (tileFlags[index] & TILE_FLAG_PIT)) return 0;
+  return tileFloorHeight[index];
+}
+
 function getZoneAtPosition(x, z) {
   const tileX = Math.floor(x), tileZ = Math.floor(z);
   if (!isInsideGrid(tileX, tileZ)) return 0;
@@ -188,8 +203,8 @@ function carveRoom(startX, startZ, endX, endZ, ceilingHeight, zone) {
       const placed = placeTile(tileX, tileZ);
       const index = tileIndexAt(placed[0], placed[1]);
       tileIsOpen[index] = 1;
-      tileFloorHeight[index] = 0;
-      tileCeilingHeight[index] = ceilingHeight;
+      tileFloorHeight[index] = placement.offsetY;
+      tileCeilingHeight[index] = placement.offsetY + ceilingHeight;
       tileZone[index] = resolvedZone;
     }
   }
@@ -200,6 +215,21 @@ function setTileFlagInRectangle(startX, startZ, endX, endZ, flag) {
     for (let tileX = startX; tileX < endX; tileX++) {
       const placed = placeTile(tileX, tileZ);
       if (isTileOpenAt(placed[0], placed[1])) tileFlags[tileIndexAt(placed[0], placed[1])] |= flag;
+    }
+  }
+}
+
+// Lowers (or raises) the floor of a rectangle of tiles that is already carved, ceiling and all.
+// `floorHeight` is measured from the floor of the room being built. This is how stairs are made: one call per step.
+function setFloorHeightInRectangle(startX, startZ, endX, endZ, floorHeight) {
+  for (let tileZ = startZ; tileZ < endZ; tileZ++) {
+    for (let tileX = startX; tileX < endX; tileX++) {
+      const placed = placeTile(tileX, tileZ);
+      if (!isTileOpenAt(placed[0], placed[1])) continue;
+      const index = tileIndexAt(placed[0], placed[1]);
+      const roomHeight = tileCeilingHeight[index] - tileFloorHeight[index];
+      tileFloorHeight[index] = placement.offsetY + floorHeight;
+      tileCeilingHeight[index] = tileFloorHeight[index] + roomHeight;
     }
   }
 }
@@ -295,6 +325,7 @@ function addBoxProp(centerX, centerY, centerZ, halfX, halfY, halfZ, options) {
   const yaw = placeYaw(options && options.yaw ? options.yaw : 0);
   const placedCenter = placePoint(centerX, centerZ);
   centerX = placedCenter[0]; centerZ = placedCenter[1];
+  centerY += placement.offsetY;
   prop.centerX = centerX; prop.centerY = centerY; prop.centerZ = centerZ;
   prop.halfX = halfX; prop.halfY = halfY; prop.halfZ = halfZ;
   prop.cosineYaw = Math.cos(yaw); prop.sineYaw = Math.sin(yaw);
@@ -315,6 +346,7 @@ function addCylinderProp(axis, centerX, centerY, centerZ, radius, halfLength, op
   if (placement.turns % 2 === 1 && axis !== AXIS_Y) axis = axis === AXIS_X ? AXIS_Z : AXIS_X;
   const placedCenter = placePoint(centerX, centerZ);
   centerX = placedCenter[0]; centerZ = placedCenter[1];
+  centerY += placement.offsetY;
   prop.axis = axis;
   prop.centerX = centerX; prop.centerY = centerY; prop.centerZ = centerZ;
   prop.radius = radius; prop.halfLength = halfLength;
@@ -330,6 +362,7 @@ function addSphereProp(centerX, centerY, centerZ, radius, options) {
   const prop = createEmptyProp(PROP_KIND_SPHERE);
   const placedCenter = placePoint(centerX, centerZ);
   centerX = placedCenter[0]; centerZ = placedCenter[1];
+  centerY += placement.offsetY;
   prop.centerX = centerX; prop.centerY = centerY; prop.centerZ = centerZ;
   prop.radius = radius;
   prop.halfX = radius; prop.halfY = radius; prop.halfZ = radius;
@@ -647,13 +680,15 @@ function addWallSign(text, tileX, tileZ, wall, options) {
   const runsAlongX = wall === WALL_NORTH || wall === WALL_SOUTH;
   const alongCenter = (runsAlongX ? tileX + 0.5 : tileZ + 0.5) + alongOffset;
   const rendered = renderSignBitmap(text, width, height, options.isScrawled === true);
+  // Heights are measured from the floor of the tile the sign belongs to.
+  const signFloor = isTileOpenAt(tileX, tileZ) ? tileFloorHeight[tileIndexAt(tileX, tileZ)] : 0;
   const sign = {
     text: text, // kept only so tests and debugging can find a sign by what it says
     wall: wall,
     alongMinimum: alongCenter - width / 2,
     alongMaximum: alongCenter + width / 2,
-    bottomY: options.centerY - height / 2,
-    topY: options.centerY + height / 2,
+    bottomY: signFloor + options.centerY - height / 2,
+    topY: signFloor + options.centerY + height / 2,
     isReversed: wall === WALL_SOUTH || wall === WALL_WEST,
     bitmap: rendered.bitmap,
     pixelWidth: rendered.pixelWidth,
@@ -701,12 +736,18 @@ function addDoor(tileX, tileZ, kind) {
   const placedTile = placeTile(tileX, tileZ);
   tileX = placedTile[0]; tileZ = placedTile[1];
   // The slab and frame below are given in final map coordinates, so placement is set aside while they are built.
-  const savedPlacement = { turns: placement.turns, offsetX: placement.offsetX, offsetZ: placement.offsetZ };
+  const savedPlacement = { turns: placement.turns, offsetX: placement.offsetX, offsetZ: placement.offsetZ, offsetY: placement.offsetY };
   placement.turns = 0; placement.offsetX = 0; placement.offsetZ = 0;
   const index = tileIndexAt(tileX, tileZ);
+  // A door stands on the floor of the room beside it.
+  let baseY = 0;
+  for (const step of [[-1, 0], [1, 0], [0, 1], [0, -1]]) {
+    if (isTileOpenAt(tileX + step[0], tileZ + step[1])) { baseY = tileFloorHeight[tileIndexAt(tileX + step[0], tileZ + step[1])]; break; }
+  }
+  placement.offsetY = baseY;
   tileIsOpen[index] = 1;
-  tileFloorHeight[index] = 0;
-  tileCeilingHeight[index] = DOOR_OPENING_HEIGHT;
+  tileFloorHeight[index] = baseY;
+  tileCeilingHeight[index] = baseY + DOOR_OPENING_HEIGHT;
   tileFlags[index] |= TILE_FLAG_DOOR;
   const passageRunsAlongX = isTileOpenAt(tileX - 1, tileZ) && isTileOpenAt(tileX + 1, tileZ);
   tileZone[index] = passageRunsAlongX ? tileZone[tileIndexAt(tileX - 1, tileZ)] : tileZone[tileIndexAt(tileX, tileZ + 1)];
@@ -740,6 +781,7 @@ function addDoor(tileX, tileZ, kind) {
     centerX: tileX + 0.5, centerZ: tileZ + 0.5,
     kind: kind,
     slab: slab,
+    baseY: baseY, // height of the floor the door stands on
     openFraction: 0,
     isOpening: false,
     closeDelay: 0,
@@ -748,12 +790,14 @@ function addDoor(tileX, tileZ, kind) {
   };
   doors.push(door);
   placement.turns = savedPlacement.turns; placement.offsetX = savedPlacement.offsetX; placement.offsetZ = savedPlacement.offsetZ;
+  placement.offsetY = savedPlacement.offsetY;
   return door;
 }
 
 function registerInteractable(objectId, x, y, z, prompt, props, options) {
   const placedPosition = placePoint(x, z);
   x = placedPosition[0]; z = placedPosition[1];
+  y += placement.offsetY;
   const interactable = {
     objectId: objectId,
     x: x, y: y, z: z,
@@ -787,7 +831,6 @@ function computeNavigationGrid() {
   const clearance = 0.28;
   for (const prop of worldProps) {
     if (!prop.blocksMovement || prop.isDynamic) continue;
-    if (prop.maximumY < 0.3 || prop.minimumY > 1.6) continue;
     const firstTileX = Math.floor(prop.centerX - prop.boundsHalfX - clearance);
     const lastTileX = Math.floor(prop.centerX + prop.boundsHalfX + clearance);
     const firstTileZ = Math.floor(prop.centerZ - prop.boundsHalfZ - clearance);
@@ -795,6 +838,9 @@ function computeNavigationGrid() {
     for (let tileZ = firstTileZ; tileZ <= lastTileZ; tileZ++) {
       for (let tileX = firstTileX; tileX <= lastTileX; tileX++) {
         if (!isInsideGrid(tileX, tileZ)) continue;
+        // Only things between shin and head height (measured from that tile's own floor) are in the way.
+        const tileFloor = tileFloorHeight[tileIndexAt(tileX, tileZ)];
+        if (prop.maximumY < tileFloor + 0.3 || prop.minimumY > tileFloor + 1.6) continue;
         const centerX = tileX + 0.5, centerZ = tileZ + 0.5;
         let isCovered;
         if (prop.kind === PROP_KIND_CYLINDER && prop.axis === AXIS_Y || prop.kind === PROP_KIND_SPHERE) {
@@ -851,6 +897,7 @@ function computeDistanceField(field, targetIndex, forbiddenZone, allowedZones) {
       if (!isInsideGrid(neighbourX, neighbourZ)) continue;
       const neighbourIndex = neighbourZ * GRID_WIDTH + neighbourX;
       if (tileIsWalkable[neighbourIndex] === 0 || field[neighbourIndex] <= nextDistance) continue;
+      if (Math.abs(tileFloorHeight[neighbourIndex] - tileFloorHeight[index]) > MAXIMUM_STEP_HEIGHT) continue; // too tall to step
       const zone = tileZone[neighbourIndex];
       if (forbiddenZone && zone === forbiddenZone) continue;
       if (allowedZones && allowedZones.indexOf(zone) < 0) continue;
@@ -901,7 +948,9 @@ function pushCircleOutOfRectangle(circle, radius, minimumX, minimumZ, maximumX, 
   else circle.z = maximumZ + radius;
 }
 
-function resolveBodyCollision(x, z, radius, bodyTopHeight) {
+// `floorHeight` is the height of the floor the body is standing on (0 on the lift's level).
+function resolveBodyCollision(x, z, radius, bodyTopHeight, floorHeight) {
+  floorHeight = floorHeight || 0;
   collisionResult.x = x;
   collisionResult.z = z;
   for (let pass = 0; pass < 3; pass++) {
@@ -909,8 +958,10 @@ function resolveBodyCollision(x, z, radius, bodyTopHeight) {
     const stamp = ++collisionStampCounter;
     for (let tileZ = centerTileZ - 1; tileZ <= centerTileZ + 1; tileZ++) {
       for (let tileX = centerTileX - 1; tileX <= centerTileX + 1; tileX++) {
+        // Rock, the pit, and any floor too far above or below to step onto all stop a body.
         const isSolid = !isInsideGrid(tileX, tileZ) || tileIsOpen[tileZ * GRID_WIDTH + tileX] === 0 ||
-          (tileFlags[tileZ * GRID_WIDTH + tileX] & TILE_FLAG_PIT) !== 0;
+          (tileFlags[tileZ * GRID_WIDTH + tileX] & TILE_FLAG_PIT) !== 0 ||
+          Math.abs(tileFloorHeight[tileZ * GRID_WIDTH + tileX] - floorHeight) > MAXIMUM_STEP_HEIGHT;
         if (isSolid) {
           pushCircleOutOfRectangle(collisionResult, radius, tileX, tileZ, tileX + 1, tileZ + 1);
           continue;
@@ -922,7 +973,7 @@ function resolveBodyCollision(x, z, radius, bodyTopHeight) {
           if (prop.collisionStamp === stamp) continue;
           prop.collisionStamp = stamp;
           if (!prop.blocksMovement || prop.isRemoved) continue;
-          if (prop.minimumY > bodyTopHeight || prop.maximumY < 0.3) continue;
+          if (prop.minimumY > floorHeight + bodyTopHeight || prop.maximumY < floorHeight + 0.3) continue;
           if ((prop.kind === PROP_KIND_CYLINDER && prop.axis === AXIS_Y) || prop.kind === PROP_KIND_SPHERE) {
             const deltaX = collisionResult.x - prop.centerX, deltaZ = collisionResult.z - prop.centerZ;
             const distance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);

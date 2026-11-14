@@ -39,6 +39,7 @@ function convertSecondsToPointLifeCode(seconds) {
 function createFigure(proportions, surfaceClass, imprintTuningKey) {
   return {
     x: 0, z: 0, yaw: 0,
+    y: 0, // height of the floor it stands on; worked out from x and z whenever the body is rebuilt
     proportions: proportions,
     // Pose, all angles in radians:
     //   legSwing / armSwing  walking motion          armRaise     arms lifted forward (0 hanging, 1.4 reaching)
@@ -236,10 +237,19 @@ function buildDummyCapsules(figure) {
 function updateFigureCapsules(figure) {
   const topHeight = figure.proportions.kind === 'hollow' ? buildHollowCapsules(figure) : buildDummyCapsules(figure);
 
-  // Bounding sphere for quick rejection in the ray caster.
-  figure.boundsCenterY = topHeight / 2;
-  let largestDistanceSquared = 0;
+  // The body is built standing at height 0; lift or lower it onto the floor it is really on.
   const capsules = figure.capsules;
+  figure.y = getFloorHeightAt(figure.x, figure.z);
+  if (figure.y !== 0) {
+    for (let capsuleIndex = 0; capsuleIndex < figure.capsuleCount; capsuleIndex++) {
+      capsules[capsuleIndex * FIGURE_CAPSULE_STRIDE + 1] += figure.y;
+      capsules[capsuleIndex * FIGURE_CAPSULE_STRIDE + 4] += figure.y;
+    }
+  }
+
+  // Bounding sphere for quick rejection in the ray caster.
+  figure.boundsCenterY = figure.y + topHeight / 2;
+  let largestDistanceSquared = 0;
   for (let capsuleIndex = 0; capsuleIndex < figure.capsuleCount; capsuleIndex++) {
     const offset = capsuleIndex * FIGURE_CAPSULE_STRIDE;
     for (let endIndex = 0; endIndex < 2; endIndex++) {
@@ -252,8 +262,9 @@ function updateFigureCapsules(figure) {
   figure.boundsRadius = Math.sqrt(largestDistanceSquared) + 0.16;
 }
 
+// Height of the head above the lift's floor level (not above the figure's own feet).
 function getFigureHeadHeight(figure) {
-  return figure.headHeight;
+  return figure.y + figure.headHeight;
 }
 
 // Sprays points straight onto a figure's surface. Used for the moment it reaches you.

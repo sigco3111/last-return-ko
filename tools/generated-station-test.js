@@ -9,7 +9,8 @@ function check(description, condition, detail) {
   if (!condition) failures.push(description);
 }
 
-// How many seeds to try for each size. Each one is tried with one of the three layouts in turn.
+// How many seeds to try for each size. Each one is tried with one of the three layouts in turn,
+// and alternately with one level and with two.
 const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
 
 (async () => {
@@ -22,18 +23,24 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
       const debug = window.noReturnDebug;
       const layouts = ['tight', 'mixed', 'sprawling'];
       const bad = [];
-      let roomTotal = 0, loopTotal = 0;
+      let roomTotal = 0, loopTotal = 0, stairTotal = 0, twoLevelCount = 0;
       for (let seed = 1; seed <= seedCount; seed++) {
-        const layout = layouts[seed % 3];
-        const wasBuilt = debug.loadStation('generated', seed, size, layout);
+        const layout = layouts[seed % 3], levels = seed % 2 === 0 ? 'two' : 'one';
+        const wasBuilt = debug.loadStation('generated', seed, size, layout, levels);
         const found = wasBuilt ? debug.auditLayout().concat(debug.auditProgression()) : ['no plan could be made'];
-        if (found.length > 0) bad.push({ seed: seed, layout: layout, problems: found.slice(0, 4) });
+        // A two-level station must have its shaft a flight of stairs down; a one-level station must be flat.
+        const shaftFloor = debug.getFloorHeightAt(debug.findInteractable(5).x, debug.findInteractable(5).z);
+        if (wasBuilt && levels === 'two' && !(shaftFloor < -2 && debug.level.stairCount >= 1)) found.push('two levels were asked for but the shaft is at ' + shaftFloor);
+        if (wasBuilt && levels === 'one' && (shaftFloor !== 0 || debug.level.stairCount !== 0)) found.push('one level was asked for but the shaft is at ' + shaftFloor);
+        if (found.length > 0) bad.push({ seed: seed, layout: layout, levels: levels, problems: found.slice(0, 4) });
         roomTotal += debug.level.roomCount; loopTotal += debug.level.loopCount;
+        if (levels === 'two') { twoLevelCount++; stairTotal += debug.level.stairCount; }
       }
-      return { bad: bad, averageRooms: Math.round(roomTotal / seedCount), averageLoops: Math.round(loopTotal / seedCount * 10) / 10 };
+      return { bad: bad, averageRooms: Math.round(roomTotal / seedCount), averageLoops: Math.round(loopTotal / seedCount * 10) / 10,
+        averageStairs: Math.round(stairTotal / Math.max(1, twoLevelCount) * 10) / 10 };
     }, [sizeKey, SEEDS_PER_SIZE]);
-    check(SEEDS_PER_SIZE + ' ' + sizeKey + ' stations: all can be built, walked and finished in order (about ' +
-      result.averageRooms + ' rooms and corridors, ' + result.averageLoops + ' extra ducts each)', result.bad.length === 0, result.bad.slice(0, 3));
+    check(SEEDS_PER_SIZE + ' ' + sizeKey + ' stations, half of them with two levels: all can be built, walked and finished in order (about ' +
+      result.averageRooms + ' rooms and corridors, ' + result.averageLoops + ' extra ducts, ' + result.averageStairs + ' stairs each)', result.bad.length === 0, result.bad.slice(0, 3));
   }
 
   // --- a seed is a promise: the same seed must give the same station, a different seed a different one ---
@@ -77,6 +84,40 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   check('walking forward leaves the lift car', await inGame(() => window.noReturnDebug.game.flags.hasLeftLift));
   await inGame(() => window.noReturnDebug.simulate(4));
   check('lift door closes behind the player', (await inGame(() => window.noReturnDebug.getLiftDoor().openFraction)) === 0);
+
+  // --- the stairs: walk down them on foot, and check the view goes down with the floor ---
+  const stairs = await inGame(() => {
+    const debug = window.noReturnDebug, level = debug.level;
+    const zone = debug.zoneNames.indexOf('STAIRS');
+    let top = null, bottom = null;
+    for (let z = level.boundsMinimumZ; z < level.boundsMaximumZ; z++) for (let x = level.boundsMinimumX; x < level.boundsMaximumX; x++) {
+      if (debug.getZoneAt(x + 0.5, z + 0.5) !== zone) continue;
+      const floor = debug.getFloorHeightAt(x + 0.5, z + 0.5);
+      if (!top || floor > top.floor) top = { x: x + 0.5, z: z + 0.5, floor: floor };
+      if (!bottom || floor < bottom.floor) bottom = { x: x + 0.5, z: z + 0.5, floor: floor };
+    }
+    // Stand at the top, in the same lane as the bottom tile found, facing down the flight.
+    const alongX = Math.abs(bottom.x - top.x) > Math.abs(bottom.z - top.z);
+    if (alongX) top.z = bottom.z; else top.x = bottom.x;
+    debug.teleport(top.x, top.z, Math.atan2(bottom.x - top.x, -(bottom.z - top.z)));
+    debug.simulate(0.2);
+    return { top: top, bottom: bottom, floorAtTop: debug.player.floorY };
+  });
+  await page.keyboard.down('KeyW');
+  const descent = await inGame(() => {
+    const debug = window.noReturnDebug;
+    const heights = [];
+    for (let step = 0; step < 16; step++) { debug.simulate(0.5); heights.push(Math.round(debug.player.floorY * 100) / 100); }
+    return { heights: heights, camera: debug.renderCamera.y, mode: debug.game.mode };
+  });
+  await page.keyboard.up('KeyW');
+  await drawFrames(page, 1);
+  const cameraAtFoot = await inGame(() => window.noReturnDebug.renderCamera.y);
+  const neverJumps = descent.heights.every((height, index) => index === 0 || Math.abs(height - descent.heights[index - 1]) < 1);
+  check('walking down the stairs lowers the floor under you smoothly, three metres in all',
+    stairs.floorAtTop === 0 && stairs.bottom.floor < -2.9 && Math.abs(descent.heights[descent.heights.length - 1] - stairs.bottom.floor) < 0.05 && neverJumps, { stairs: stairs, descent: descent });
+  check('the view follows the floor down', cameraAtFoot < -1 && cameraAtFoot > -1.6, cameraAtFoot);
+  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
 
   // Helpers that work in any station: stand next to a thing, or next to the first door of a kind.
   const standNear = (objectId) => inGame((id) => {

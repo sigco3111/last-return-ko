@@ -32,6 +32,12 @@ const GENERATED_LAYOUT_PRESETS = {
   sprawling: { label: 'Sprawling', corridorChance: 0.8, corridorLength: [5, 12], spread: 60 }
 };
 
+// How many levels a station has. With two, everything behind the keycard (Shaft 9 included) is down a flight of stairs.
+const GENERATED_LEVEL_PRESETS = {
+  one: { label: 'One level', hasLowerLevel: false },
+  two: { label: 'Two levels', hasLowerLevel: true }
+};
+
 // TWEAK: things scratched on corridor walls in generated stations.
 const CORRIDOR_SCRAWLS = ['IT FEELS THE LIGHT', 'TURN IT OFF', 'DO NOT RUN', 'COUNT THEM AGAIN', 'IT IS LISTENING', 'WE SHOWED IT THE WAY', 'STAND STILL'];
 
@@ -276,6 +282,34 @@ function furnishOldWorkings(random, roomName) {
   addWallSign('NO FURTHER', 2, 0, WALL_NORTH, { width: 2.6, height: 0.5, centerY: 1.4, alongOffset: 0.5, isScrawled: true });
 }
 
+// Stairs down to the lower level: a landing, ten steps, a landing. The top is at the north end.
+// TWEAK: a step is one tile deep, so more or taller steps make a longer or steeper stair.
+// A step taller than MAXIMUM_STEP_HEIGHT (02-world.js) cannot be climbed.
+const STAIR_STEP_COUNT = 10;
+const STAIR_STEP_HEIGHT = 0.3;
+const STAIR_DROP = STAIR_STEP_COUNT * STAIR_STEP_HEIGHT; // how far below the upper level the lower level is
+
+function carveStairwell() {
+  carveRoom(0, 0, 2, STAIR_STEP_COUNT + 2, 2.6, ZONE_GENERATED_ROOM);
+  for (let step = 1; step <= STAIR_STEP_COUNT + 1; step++) {
+    setFloorHeightInRectangle(0, step, 2, step + 1, -STAIR_STEP_HEIGHT * Math.min(step, STAIR_STEP_COUNT));
+  }
+}
+
+function furnishStairwell(random, roomName) {
+  for (let step = 0; step <= STAIR_STEP_COUNT + 1; step++) {
+    const floor = -STAIR_STEP_HEIGHT * Math.min(step, STAIR_STEP_COUNT);
+    // a handrail down each wall, and a metal edge on every step so the scanner picks the steps out
+    addBoxBetween(0.03, floor + 0.92, step, 0.08, floor + 0.97, step + 1, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+    addBoxBetween(1.92, floor + 0.92, step, 1.97, floor + 0.97, step + 1, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+    if (step >= 1 && step <= STAIR_STEP_COUNT) addBoxBetween(0, floor + STAIR_STEP_HEIGHT - 0.03, step - 0.04, 2, floor + STAIR_STEP_HEIGHT, step + 0.02, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+  }
+  addCeilingLamp(1, 0.5, 2.6, false);
+  addWallSign('LOWER LEVEL \u2193', 1, 0, WALL_EAST, { width: 0.96, height: 0.2, centerY: 1.8 });
+  addWallSign('UPPER LEVEL \u2191', 0, STAIR_STEP_COUNT + 1, WALL_WEST, { width: 0.96, height: 0.2, centerY: 1.8 });
+  if (random() < 0.5) addBoxProp(0.5, -STAIR_DROP + 0.05, STAIR_STEP_COUNT + 1.5, 0.2, 0.05, 0.14, { yaw: random() * 3, blocksMovement: false });
+}
+
 // ---------------------------------------------------------------------------
 // The room catalogue
 //   rect     the room's rectangle [startX, startZ, endX, endZ], in the coordinates its carve function uses
@@ -284,6 +318,7 @@ function furnishOldWorkings(random, roomName) {
 //   tiers    which lock tiers the room may be placed in: 0 open, 1 behind mains power, 2 behind the keycard
 //   prefers  a room this one likes to be attached to; with mustAdjoin it is always attached straight to it
 //            (the radio says "Generator 2 is off Pump Hall B", so that has to be true)
+//   socketDrops  only for stairs: how far below the room's own floor each socket's doorway is
 //   itemSpot a table top where the first spool or the keycard may be left instead of its usual room
 // ---------------------------------------------------------------------------
 
@@ -318,6 +353,8 @@ const ROOM_CATALOGUE = {
     sockets: [[32, 23, WALL_SOUTH]], prefers: 'archive' },
   shaftChamber: { name: 'SHAFT 9', rect: [49, 2, 69, 15], ceiling: 9.0, tiers: [2], carve: carveShaftChamber, furnish: furnishShaftChamber,
     sockets: [[59, 15, WALL_SOUTH]] },
+  stairwell: { name: 'STAIRS', rect: [0, 0, 2, STAIR_STEP_COUNT + 2], ceiling: 2.6, tiers: [2], carve: carveStairwell, furnish: furnishStairwell,
+    sockets: [[0, -1, WALL_NORTH], [1, STAIR_STEP_COUNT + 2, WALL_SOUTH]], socketDrops: [0, -STAIR_DROP] },
   // ---- extra rooms ----
   boilerRoom: { name: 'BOILER HOUSE', rect: [0, 0, 8, 7], ceiling: 3.4, tiers: [0, 1], carve: carveSimpleRoom(8, 7, 3.4), furnish: furnishBoilerRoom,
     sockets: [[4, 7, WALL_SOUTH], [-1, 3, WALL_WEST]], itemSpot: [6.8, 0.77, 5.6], isFiller: true },
@@ -376,11 +413,17 @@ function doorKindForTier(tier) {
 }
 
 // Tries to put a catalogue room against a socket, wall to wall, sharing the socket's door. Returns the room or null.
-function tryPlanRoomAtSocket(plan, roomKey, socket, tier) {
+// `onlyOwnSocketIndex` (optional) says which of the room's own doorways must be the one used: stairs use it
+// to choose between being entered at the top (0) and at the bottom (1).
+function tryPlanRoomAtSocket(plan, roomKey, socket, tier, onlyOwnSocketIndex) {
   const definition = ROOM_CATALOGUE[roomKey];
   const facing = (socket.wall + 2) % 4; // the new room's socket must face back toward the socket's owner
-  const candidates = definition.sockets.slice().sort(function () { return plan.random() - 0.5; });
+  let candidates = definition.sockets.slice().sort(function () { return plan.random() - 0.5; });
+  if (onlyOwnSocketIndex !== undefined) candidates = [definition.sockets[onlyOwnSocketIndex]];
+  const drops = definition.socketDrops;
   for (const ownSocket of candidates) {
+    // The room's floor is level with the doorway it is entered by, unless that doorway is the foot of a stair.
+    const floorY = socket.floorY - (drops ? drops[definition.sockets.indexOf(ownSocket)] : 0);
     const turns = (facing - ownSocket[2] + 4) % 4;
     setPlacement(turns, ownSocket[0] + 0.5, ownSocket[1] + 0.5, socket.tileX + 0.5, socket.tileZ + 0.5);
     const cornerA = placePoint(definition.rect[0], definition.rect[1]), cornerB = placePoint(definition.rect[2], definition.rect[3]);
@@ -388,14 +431,16 @@ function tryPlanRoomAtSocket(plan, roomKey, socket, tier) {
       key: roomKey, name: definition.name, tier: tier, isCorridor: false,
       startX: Math.round(Math.min(cornerA[0], cornerB[0])), startZ: Math.round(Math.min(cornerA[1], cornerB[1])),
       endX: Math.round(Math.max(cornerA[0], cornerB[0])), endZ: Math.round(Math.max(cornerA[1], cornerB[1])),
-      turns: turns, offsetX: placement.offsetX, offsetZ: placement.offsetZ, ceiling: definition.ceiling, zone: 0
+      turns: turns, offsetX: placement.offsetX, offsetZ: placement.offsetZ, floorY: floorY, ceiling: definition.ceiling, zone: 0
     };
     if (!isPlanRectangleFree(plan, room)) continue;
     // Accept: record the room, the door, and the room's other sockets.
     plan.rooms.push(room);
-    for (const otherSocket of definition.sockets) {
+    for (let socketIndex = 0; socketIndex < definition.sockets.length; socketIndex++) {
+      const otherSocket = definition.sockets[socketIndex];
       const tile = placeTile(otherSocket[0], otherSocket[1]);
-      plan.sockets.push({ tileX: tile[0], tileZ: tile[1], wall: placeWall(otherSocket[2]), owner: room, isUsed: otherSocket === ownSocket });
+      plan.sockets.push({ tileX: tile[0], tileZ: tile[1], wall: placeWall(otherSocket[2]), owner: room, isUsed: otherSocket === ownSocket,
+        floorY: floorY + (drops ? drops[socketIndex] : 0) });
     }
     socket.isUsed = true;
     plan.doors.push({ tileX: socket.tileX, tileZ: socket.tileZ, kind: doorKindForTier(tier > socket.owner.tier ? tier : 0), roomA: socket.owner, roomB: room });
@@ -419,7 +464,7 @@ function tryPlanCorridorAtSocket(plan, socket, length, tier) {
     key: 'corridor', name: 'CORRIDOR', tier: tier, isCorridor: true, runsAlongX: direction[0] !== 0,
     startX: Math.min(laneAX, laneBX), startZ: Math.min(laneAZ, laneBZ),
     endX: Math.max(laneAX, laneBX) + 1, endZ: Math.max(laneAZ, laneBZ) + 1,
-    ceiling: tier === 2 ? 2.5 : 2.8, zone: 0, isFlooded: tier === 2 && plan.random() < 0.45
+    floorY: socket.floorY, ceiling: tier === 2 ? 2.5 : 2.8, zone: 0, isFlooded: tier === 2 && plan.random() < 0.45
   };
   if (!isPlanRectangleFree(plan, corridor)) return null;
   plan.rooms.push(corridor);
@@ -429,23 +474,25 @@ function tryPlanCorridorAtSocket(plan, socket, length, tier) {
   const endLane = plan.random() < 0.5 ? 0 : 1;
   plan.sockets.push({
     tileX: lastX + direction[0] + sideways[0] * (side + endLane), tileZ: lastZ + direction[1] + sideways[1] * (side + endLane),
-    wall: socket.wall, owner: corridor, isUsed: false, isCorridorEnd: true
+    wall: socket.wall, owner: corridor, isUsed: false, isCorridorEnd: true, floorY: socket.floorY
   });
   for (let along = 1; along < length - 1; along += 3) {
     const baseX = firstX + direction[0] * along, baseZ = firstZ + direction[1] * along;
-    plan.sockets.push({ tileX: baseX + sideways[0] * (side - 1), tileZ: baseZ + sideways[1] * (side - 1), wall: (socket.wall + 3) % 4, owner: corridor, isUsed: false });
-    plan.sockets.push({ tileX: baseX + sideways[0] * (side + 2), tileZ: baseZ + sideways[1] * (side + 2), wall: (socket.wall + 1) % 4, owner: corridor, isUsed: false });
+    plan.sockets.push({ tileX: baseX + sideways[0] * (side - 1), tileZ: baseZ + sideways[1] * (side - 1), wall: (socket.wall + 3) % 4, owner: corridor, isUsed: false, floorY: socket.floorY });
+    plan.sockets.push({ tileX: baseX + sideways[0] * (side + 2), tileZ: baseZ + sideways[1] * (side + 2), wall: (socket.wall + 1) % 4, owner: corridor, isUsed: false, floorY: socket.floorY });
   }
   return corridor;
 }
 
 // Attaches one room somewhere sensible. Returns the room, or null if it fits nowhere.
-function planRoom(plan, roomKey, tier) {
+// `floorY` is the level the room's entrance must be on. `onlyOwnSocketIndex` is passed on to tryPlanRoomAtSocket.
+function planRoom(plan, roomKey, tier, floorY, onlyOwnSocketIndex) {
   const definition = ROOM_CATALOGUE[roomKey];
   const weighted = [];
   for (const socket of plan.sockets) {
     if (socket.isUsed || socket.owner.tier > tier) continue;
     if (socket.owner.key === 'calibrationStore') continue;
+    if (socket.floorY !== floorY) continue;
     if (definition.mustAdjoin && socket.owner.key !== definition.prefers) continue;
     let weight = socket.owner.isCorridor ? 2.5 : 1;
     if (socket.owner.tier === tier) weight *= 1.6;
@@ -462,7 +509,7 @@ function planRoom(plan, roomKey, tier) {
     const wantsCorridorFirst = !(definition.prefers && socket.owner.key === definition.prefers) &&
       plan.random() < (socket.owner.isCorridor ? plan.layout.corridorChance / 3 : plan.layout.corridorChance);
     if (!wantsCorridorFirst) {
-      const room = tryPlanRoomAtSocket(plan, roomKey, socket, tier);
+      const room = tryPlanRoomAtSocket(plan, roomKey, socket, tier, onlyOwnSocketIndex);
       if (room) return room;
       continue;
     }
@@ -476,7 +523,7 @@ function planRoom(plan, roomKey, tier) {
     });
     let placed = null;
     for (const corridorSocket of corridorSockets) {
-      placed = tryPlanRoomAtSocket(plan, roomKey, corridorSocket, tier);
+      placed = tryPlanRoomAtSocket(plan, roomKey, corridorSocket, tier, onlyOwnSocketIndex);
       if (placed) break;
     }
     if (placed) return placed;
@@ -550,16 +597,51 @@ function countDoorsBetweenRooms(plan, fromRoom) {
 // Extra connections, so there is more than one way round (and more than one way to be cut off).
 // Two unused doorways that are close as the crow flies but far apart on foot are joined by a
 // one-tile-wide service duct dug through the rock between them.
-function planLoops(plan, wantedCount) {
-  const MAXIMUM_DUCT_COST = 34; // TWEAK: longest duct, in tiles (each bend counts as three)
-  const blocked = new Uint8Array(TILE_COUNT);
-  const blockRectangle = function (startX, startZ, endX, endZ) {
-    for (let tileZ = Math.max(0, startZ - 1); tileZ < Math.min(GRID_DEPTH, endZ + 1); tileZ++) {
-      for (let tileX = Math.max(0, startX - 1); tileX < Math.min(GRID_WIDTH, endX + 1); tileX++) blocked[tileIndexAt(tileX, tileZ)] = 1;
-    }
-  };
-  for (const room of plan.rooms) blockRectangle(room.startX, room.startZ, room.endX, room.endZ);
+const MAXIMUM_DUCT_COST = 34; // TWEAK: longest service duct, in tiles (each bend counts as three)
 
+// Marks a rectangle of the map, and one tile all round it, as somewhere a duct may not go.
+function blockDuctRectangle(blocked, startX, startZ, endX, endZ) {
+  for (let tileZ = Math.max(0, startZ - 1); tileZ < Math.min(GRID_DEPTH, endZ + 1); tileZ++) {
+    for (let tileX = Math.max(0, startX - 1); tileX < Math.min(GRID_WIDTH, endX + 1); tileX++) blocked[tileIndexAt(tileX, tileZ)] = 1;
+  }
+}
+
+function createDuctBlockGrid(plan) {
+  const blocked = new Uint8Array(TILE_COUNT);
+  for (const room of plan.rooms) blockDuctRectangle(blocked, room.startX, room.startZ, room.endX, room.endZ);
+  return blocked;
+}
+
+// Digs a service duct between two free doorways on the same level, if a way through the rock exists.
+// The door at the end that needs more (power, or the keycard) gets the lock. Returns true if the duct was made.
+function tryPlanDuct(plan, blocked, first, second) {
+  if (first.floorY !== second.floorY) return false;
+  const firstStep = WALL_DIRECTIONS[first.wall], secondStep = WALL_DIRECTIONS[second.wall];
+  const route = routeDuctThroughRock(blocked, first.tileX + firstStep[0], first.tileZ + firstStep[1], first.wall,
+    second.tileX + secondStep[0], second.tileZ + secondStep[1], MAXIMUM_DUCT_COST);
+  if (!route) return false;
+  const lowerTier = Math.min(first.owner.tier, second.owner.tier), higherTier = Math.max(first.owner.tier, second.owner.tier);
+  let startX = GRID_WIDTH, startZ = GRID_DEPTH, endX = 0, endZ = 0;
+  for (const index of route) {
+    const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
+    startX = Math.min(startX, tileX); endX = Math.max(endX, tileX + 1);
+    startZ = Math.min(startZ, tileZ); endZ = Math.max(endZ, tileZ + 1);
+    blockDuctRectangle(blocked, tileX, tileZ, tileX + 1, tileZ + 1);
+  }
+  const duct = {
+    key: 'duct', name: 'SERVICE DUCT', tier: lowerTier, isCorridor: true, isDuct: true, route: route,
+    startX: startX, startZ: startZ, endX: endX, endZ: endZ, floorY: first.floorY, ceiling: 2.4, zone: 0
+  };
+  plan.rooms.push(duct);
+  const lockedKind = doorKindForTier(higherTier);
+  plan.doors.push({ tileX: first.tileX, tileZ: first.tileZ, kind: first.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC, roomA: first.owner, roomB: duct });
+  plan.doors.push({ tileX: second.tileX, tileZ: second.tileZ, kind: second.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC, roomA: duct, roomB: second.owner });
+  first.isUsed = true; second.isUsed = true;
+  return true;
+}
+
+function planLoops(plan, wantedCount) {
+  const blocked = createDuctBlockGrid(plan);
   const isUsable = function (socket) { return !socket.isUsed && socket.owner.key !== 'calibrationStore'; };
   let made = 0;
   for (let round = 0; round < wantedCount * 3 && made < wantedCount; round++) {
@@ -571,7 +653,7 @@ function planLoops(plan, wantedCount) {
       if (!doorsAwayCache.has(first.owner)) doorsAwayCache.set(first.owner, countDoorsBetweenRooms(plan, first.owner));
       const doorsAway = doorsAwayCache.get(first.owner);
       for (const second of plan.sockets) {
-        if (!isUsable(second) || second.owner === first.owner) continue;
+        if (!isUsable(second) || second.owner === first.owner || second.floorY !== first.floorY) continue;
         if (second.tileZ * GRID_WIDTH + second.tileX <= first.tileZ * GRID_WIDTH + first.tileX) continue; // each pair once
         const onFoot = doorsAway.get(second.owner);
         if (onFoot === undefined || onFoot < 3) continue;
@@ -583,43 +665,48 @@ function planLoops(plan, wantedCount) {
     candidates.sort(function (a, b) { return b.score - a.score; });
     let madeThisRound = false;
     for (let attempt = 0; attempt < Math.min(candidates.length, 25) && !madeThisRound; attempt++) {
-      const first = candidates[attempt].first, second = candidates[attempt].second;
-      const firstStep = WALL_DIRECTIONS[first.wall], secondStep = WALL_DIRECTIONS[second.wall];
-      const route = routeDuctThroughRock(blocked, first.tileX + firstStep[0], first.tileZ + firstStep[1], first.wall,
-        second.tileX + secondStep[0], second.tileZ + secondStep[1], MAXIMUM_DUCT_COST);
-      if (!route) continue;
-      const lowerTier = Math.min(first.owner.tier, second.owner.tier), higherTier = Math.max(first.owner.tier, second.owner.tier);
-      let startX = GRID_WIDTH, startZ = GRID_DEPTH, endX = 0, endZ = 0;
-      for (const index of route) {
-        const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
-        startX = Math.min(startX, tileX); endX = Math.max(endX, tileX + 1);
-        startZ = Math.min(startZ, tileZ); endZ = Math.max(endZ, tileZ + 1);
-      }
-      const duct = {
-        key: 'duct', name: 'SERVICE DUCT', tier: lowerTier, isCorridor: true, isDuct: true, route: route,
-        startX: startX, startZ: startZ, endX: endX, endZ: endZ, ceiling: 2.4, zone: 0
-      };
-      plan.rooms.push(duct);
-      for (const index of route) {
-        const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
-        blockRectangle(tileX, tileZ, tileX + 1, tileZ + 1);
-      }
-      const lockedKind = doorKindForTier(higherTier);
-      plan.doors.push({ tileX: first.tileX, tileZ: first.tileZ, kind: first.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC, roomA: first.owner, roomB: duct });
-      plan.doors.push({ tileX: second.tileX, tileZ: second.tileZ, kind: second.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC, roomA: duct, roomB: second.owner });
-      first.isUsed = true; second.isUsed = true;
-      made++;
-      madeThisRound = true;
+      madeThisRound = tryPlanDuct(plan, blocked, candidates[attempt].first, candidates[attempt].second);
     }
     if (!madeThisRound) break;
+    made++;
   }
   return made;
 }
 
-function planStation(seed, sizeKey, layoutKey, attempt) {
+// A second way between the levels, so the lower one is not a dead end with a single way out:
+// a stair built upward from the lower level, joined at its top to the upper level by a service duct.
+// If either half cannot be fitted, nothing is left behind. Returns true if it was built.
+function planSecondStair(plan) {
+  const savedRooms = plan.rooms.length, savedSockets = plan.sockets.length, savedDoors = plan.doors.length;
+  const wasUsed = plan.sockets.map(function (socket) { return socket.isUsed; });
+  const undo = function () {
+    plan.rooms.length = savedRooms; plan.sockets.length = savedSockets; plan.doors.length = savedDoors;
+    for (let socketIndex = 0; socketIndex < savedSockets; socketIndex++) plan.sockets[socketIndex].isUsed = wasUsed[socketIndex];
+    return false;
+  };
+  const stair = planRoom(plan, 'stairwell', 2, plan.deepFloorY, 1); // entered at the foot
+  if (!stair) return undo();
+  const top = plan.sockets.find(function (socket) { return socket.owner === stair && !socket.isUsed; });
+  if (!top) return undo();
+  // Join the top to the nearest free doorway on the upper level that is not part of the keycard area.
+  const blocked = createDuctBlockGrid(plan);
+  const candidates = plan.sockets.filter(function (socket) {
+    return !socket.isUsed && socket.owner !== stair && socket.owner.tier < 2 && socket.floorY === top.floorY && socket.owner.key !== 'calibrationStore';
+  }).sort(function (a, b) {
+    return Math.abs(a.tileX - top.tileX) + Math.abs(a.tileZ - top.tileZ) - Math.abs(b.tileX - top.tileX) - Math.abs(b.tileZ - top.tileZ);
+  });
+  for (let attempt = 0; attempt < Math.min(candidates.length, 12); attempt++) {
+    if (tryPlanDuct(plan, blocked, candidates[attempt], top)) return true;
+  }
+  return undo();
+}
+
+function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   const size = GENERATED_SIZE_PRESETS[sizeKey] || GENERATED_SIZE_PRESETS.medium;
   const plan = createLevelPlan();
   plan.layout = GENERATED_LAYOUT_PRESETS[layoutKey] || GENERATED_LAYOUT_PRESETS.mixed;
+  const hasLowerLevel = (GENERATED_LEVEL_PRESETS[levelsKey] || GENERATED_LEVEL_PRESETS.two).hasLowerLevel;
+  plan.deepFloorY = hasLowerLevel ? -STAIR_DROP : 0; // the level everything behind the keycard is built on
   plan.random = createSeededRandomGenerator((seed * 7919 + attempt * 104729) >>> 0);
   const random = plan.random;
   const shuffle = function (list) { return list.map(function (item) { return [random(), item]; }).sort(function (a, b) { return a[0] - b[0]; }).map(function (pair) { return pair[1]; }); };
@@ -633,12 +720,12 @@ function planStation(seed, sizeKey, layoutKey, attempt) {
     key: 'liftLobby', name: lobby.name, tier: 0, isCorridor: false,
     startX: Math.round(Math.min(cornerA[0], cornerB[0])), startZ: Math.round(Math.min(cornerA[1], cornerB[1])),
     endX: Math.round(Math.max(cornerA[0], cornerB[0])), endZ: Math.round(Math.max(cornerA[1], cornerB[1])),
-    turns: placement.turns, offsetX: placement.offsetX, offsetZ: placement.offsetZ, ceiling: lobby.ceiling, zone: 0
+    turns: placement.turns, offsetX: placement.offsetX, offsetZ: placement.offsetZ, floorY: 0, ceiling: lobby.ceiling, zone: 0
   };
   plan.rooms.push(lobbyRoom);
   for (const socket of lobby.sockets) {
     const tile = placeTile(socket[0], socket[1]);
-    plan.sockets.push({ tileX: tile[0], tileZ: tile[1], wall: placeWall(socket[2]), owner: lobbyRoom, isUsed: false });
+    plan.sockets.push({ tileX: tile[0], tileZ: tile[1], wall: placeWall(socket[2]), owner: lobbyRoom, isUsed: false, floorY: 0 });
   }
   clearPlacement();
 
@@ -672,10 +759,17 @@ function planStation(seed, sizeKey, layoutKey, attempt) {
   ];
   const requiredKeys = ['pumpHall', 'generatorRoom', 'controlRoom', 'archive', 'calibrationStore', 'laboratory', 'shaftChamber'];
   for (let tier = 0; tier < 3; tier++) {
+    // With two levels, the keycard area starts with the stairs down (entered at the top, from the upper level).
+    if (tier === 2 && hasLowerLevel && !planRoom(plan, 'stairwell', 2, 0, 0)) return null;
     for (const roomKey of tiers[tier]) {
-      const room = planRoom(plan, roomKey, tier);
+      const room = planRoom(plan, roomKey, tier, tier === 2 ? plan.deepFloorY : 0);
       if (!room && requiredKeys.indexOf(roomKey) >= 0) return null;
     }
+  }
+  plan.stairCount = hasLowerLevel ? 1 : 0;
+  // Medium and large stations try several times to fit a second stair; a failed try leaves nothing behind.
+  for (let stairAttempt = 0; stairAttempt < 8 && hasLowerLevel && sizeKey !== 'small' && plan.stairCount < 2; stairAttempt++) {
+    if (planSecondStair(plan)) plan.stairCount = 2;
   }
   plan.loopCount = planLoops(plan, size.loops);
   return plan;
@@ -805,11 +899,12 @@ function furnishGeneratedCorridor(corridor, random) {
 }
 
 // Builds a station from a seed. Returns true, or false if no workable plan was found (the map is left empty).
-function buildGeneratedStation(seed, sizeKey, layoutKey) {
+function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   if (!GENERATED_SIZE_PRESETS[sizeKey]) sizeKey = 'medium';
   if (!GENERATED_LAYOUT_PRESETS[layoutKey]) layoutKey = 'mixed';
+  if (!GENERATED_LEVEL_PRESETS[levelsKey]) levelsKey = 'two';
   let plan = null;
-  for (let attempt = 0; attempt < 40 && !plan; attempt++) plan = planStation(seed, sizeKey, layoutKey, attempt);
+  for (let attempt = 0; attempt < 40 && !plan; attempt++) plan = planStation(seed, sizeKey, layoutKey, levelsKey, attempt);
   clearPlacement();
   if (!plan) return false;
   const random = plan.random;
@@ -818,8 +913,10 @@ function buildGeneratedStation(seed, sizeKey, layoutKey) {
   level.seed = seed;
   level.sizeKey = sizeKey;
   level.layoutKey = layoutKey;
+  level.levelsKey = levelsKey;
+  level.stairCount = plan.stairCount;
   level.description = 'Generated · ' + GENERATED_SIZE_PRESETS[sizeKey].label.toLowerCase() + ', ' +
-    GENERATED_LAYOUT_PRESETS[layoutKey].label.toLowerCase() + ' · seed ' + seed;
+    GENERATED_LAYOUT_PRESETS[layoutKey].label.toLowerCase() + ', ' + GENERATED_LEVEL_PRESETS[levelsKey].label.toLowerCase() + ' · seed ' + seed;
   level.storeZone = 0;
   level.stillZones.length = 0;
   level.unlabelledZones.length = 0;
@@ -861,6 +958,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey) {
 
   const placeRoom = function (room) {
     placement.turns = room.turns; placement.offsetX = room.offsetX; placement.offsetZ = room.offsetZ;
+    placement.offsetY = room.floorY;
     placement.zone = room.zone;
     placement.zoneMap = room.key === 'liftLobby' ? { [ZONE_LIFT_CAR]: liftCarZone } : null;
   };
@@ -876,6 +974,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey) {
   for (const room of plan.rooms) {
     if (!room.isCorridor) continue;
     placement.zone = room.zone;
+    placement.offsetY = room.floorY;
     if (room.route) {
       for (const index of room.route) {
         const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
@@ -893,6 +992,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey) {
     if (room.isCorridor) {
       clearPlacement();
       placement.zone = room.zone;
+      placement.offsetY = room.floorY;
       furnishGeneratedCorridor(room, random);
       continue;
     }
@@ -911,6 +1011,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey) {
   for (const room of plan.rooms) {
     if (room.isCorridor || room.key === 'liftLobby') continue;
     const width = room.endX - room.startX, depth = room.endZ - room.startZ;
+    placement.offsetY = room.floorY;
     if (room.ceiling >= 3 && Math.min(width, depth) >= 6) {
       addCeilingBeams(room.startX, room.startZ, room.endX, room.endZ, room.ceiling, room.ceiling > 5 ? 5 : 3.5, width < depth, room.ceiling > 5 ? 0.4 : 0.22);
     }
@@ -925,7 +1026,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey) {
       if (!isTileOpenAt(standX, standZ) || !isTileOpenAt(beyondX, beyondZ)) continue;
       const standIndex = tileIndexAt(standX, standZ);
       if (tileFlags[standIndex] & TILE_FLAG_DOOR) continue;
-      if (tileCeilingHeight[standIndex] < 2.62) continue;
+      if (tileCeilingHeight[standIndex] - tileFloorHeight[standIndex] < 2.62) continue;
       const beyondName = ZONE_NAMES[tileZone[tileIndexAt(beyondX, beyondZ)]];
       if (!beyondName) continue;
       placement.zone = tileZone[standIndex];
@@ -973,11 +1074,11 @@ function pushPhantom(x, z, yaw, triggerZone, onlyBeforePower) {
 }
 
 // Empties the map and builds either the classic station or a generated one.
-function buildStation(kind, seed, sizeKey, layoutKey) {
+function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
   resetWorldForNewLevel();
   stillSpawnPoints.length = 0; lateStillSpawnPoints.length = 0; phantomDefinitions.length = 0;
   liftDoor = null;
-  if (kind === 'generated' && buildGeneratedStation(seed, sizeKey, layoutKey)) return true;
+  if (kind === 'generated' && buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey)) return true;
   if (kind === 'generated') {
     // No plan worked for this seed (rare). Fall back to the classic station so there is always something to play.
     resetWorldForNewLevel();
@@ -987,6 +1088,7 @@ function buildStation(kind, seed, sizeKey, layoutKey) {
   buildFacilityLayout();
   level.roomCount = 0;
   level.loopCount = 0;
+  level.stairCount = 0;
   return kind !== 'generated';
 }
 

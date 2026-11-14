@@ -747,7 +747,7 @@ function updateHollowVoice(x, z, isActive, aggression, shriekLevel, dt, gameTime
     audio.hollowScreechGain.gain.setTargetAtTime(0, now, 0.1);
     return;
   }
-  setPannerPosition(audio.hollowPanner, x, 1.7, z);
+  setPannerPosition(audio.hollowPanner, x, getFloorHeightAt(x, z) + 1.7, z);
   // TWEAK: growl loudness. First number: when it is calm. Second: added when it is hunting.
   audio.hollowGrowlGain.gain.setTargetAtTime(0.2 + aggression * 0.85, now, 0.3);
   // The rattle in its throat runs faster the more aggressive it is.
