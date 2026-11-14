@@ -164,6 +164,7 @@ A few details worth knowing if you change things:
 
 - The station is a 76 × 64 grid of one-metre tiles carved into rooms, plus boxes, cylinders and spheres for everything standing in them. The same data drives the ray caster, collision, path finding and the black geometry that hides points behind walls.
 - Walls, floors and props are drawn into the depth buffer only, never in colour. Creatures are not drawn at all.
+- Sound is synthesised live, mostly from noise shaped by filters. The Hollow's growl is a recorded-in-code rattle of clicks pushed through three resonances, the way a throat and chest shape a voice.
 - Points live in a ring buffer on the graphics card (250,000 to 1,000,000 depending on the quality setting). The oldest points are overwritten first.
 - Points left on a creature carry a lifetime and fade; points on the station are permanent.
 
@@ -190,6 +191,12 @@ npm test
 ```
 
 plays the whole objective chain in a headless browser and checks each step: leaving the lift, the generator, the Hollow's path finding, the beam holding it, both ways to die, checkpoints, powered and keycard doors, the Stills, the lift call, the ending, every debug mode switch, and the turn-your-phone-sideways screen.
+
+```bash
+npm run audio-check
+```
+
+measures every sound, because a test cannot listen: how loud each one is and where its energy sits, and it fails if one is silent or loud enough to distort. It cannot tell you whether a sound is good. Only ears can.
 
 ```bash
 npm run screenshots
