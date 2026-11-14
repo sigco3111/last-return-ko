@@ -26,25 +26,42 @@ function check(description, condition, detail) {
   check('lift door closes behind the player', (await inGame(() => window.noReturnDebug.doors[0].openFraction)) === 0);
 
   // --- voice recordings: a line with a recording is played, one without stays text only ---
+  // Made-up line names are used, so this works whether or not real recordings are in assets/voice.
   const voice = await inGame(async () => {
     const debug = window.noReturnDebug;
     const context = debug.audio.context;
-    const before = { hasRecording: debug.hasVoiceLine('firstSpool') };
+    const before = { hasRecording: debug.hasVoiceLine('lineOnlyThisTestKnows') };
     if (!context) return { skipped: true };
     // Stand in for a real recording with half a second of tone.
     const buffer = context.createBuffer(1, Math.floor(context.sampleRate / 2), context.sampleRate);
     const samples = buffer.getChannelData(0);
     for (let index = 0; index < samples.length; index++) samples[index] = Math.sin(index * 0.06) * 0.3;
-    debug.voiceState.decodedBuffers.firstSpool = buffer;
+    debug.voiceState.decodedBuffers.lineOnlyThisTestKnows = buffer;
     let reportedSeconds = 0;
-    const started = debug.playVoiceLine('firstSpool', 'radio', 0, (seconds) => { reportedSeconds = seconds; });
+    const started = debug.playVoiceLine('lineOnlyThisTestKnows', 'radio', 0, (seconds) => { reportedSeconds = seconds; });
     await new Promise((resolve) => setTimeout(resolve, 150));
-    const withoutRecording = debug.playVoiceLine('allSpools', 'radio', 0, null);
-    delete debug.voiceState.decodedBuffers.firstSpool;
+    const withoutRecording = debug.playVoiceLine('lineNobodyRecorded', 'radio', 0, null);
+    delete debug.voiceState.decodedBuffers.lineOnlyThisTestKnows;
     return { before: before, started: started, reportedSeconds: reportedSeconds, withoutRecording: withoutRecording };
   });
   check('a radio line with a recording plays it and reports its length; one without stays text only',
     voice.skipped || (voice.before.hasRecording === false && voice.started === true && Math.abs(voice.reportedSeconds - 0.5) < 0.01 && voice.withoutRecording === false), voice);
+
+  // --- the real recordings in assets/voice, if there are any: each must be a sound file the browser can play ---
+  const recordings = await inGame(async () => {
+    const debug = window.noReturnDebug;
+    if (!debug.audio.context) return { skipped: true };
+    const lengths = {}, broken = [];
+    for (const key of debug.radioLineKeys.concat(['spool1', 'spool2', 'spool3'])) {
+      if (!debug.hasVoiceLine(key)) continue;
+      const buffer = await debug.loadVoiceLine(key);
+      if (buffer && buffer.duration > 0.3) lengths[key] = Math.round(buffer.duration * 10) / 10;
+      else broken.push(key);
+    }
+    return { lengths: lengths, broken: broken };
+  });
+  check('every recording in assets/voice can be played (' + (recordings.skipped ? 'no audio here' : Object.keys(recordings.lengths).length + ' found') + ')',
+    recordings.skipped || recordings.broken.length === 0, recordings);
 
   // --- nothing is ever drawn for a figure that has not been scanned ---
   const figureTrace = await inGame(() => {
