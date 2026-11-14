@@ -17,7 +17,7 @@ const FIGURE_PROPORTIONS_HOLLOW = {
   neckLength: 0.2, headLength: 0.17, headRadius: 0.095, jawLength: 0.11,
   upperArm: 0.56, foreArm: 0.68, handLength: 0.11,
   fingerLengths: [0.24, 0.3, 0.26],   // outer, middle, inner finger
-  torsoRadius: 0.1, limbRadius: 0.038, legRadius: 0.052, fingerRadius: 0.013
+  torsoRadius: 0.3, limbRadius: 0.038, legRadius: 0.052, fingerRadius: 0.013
 };
 
 // The calibration dummy: an ordinary jointed shop mannequin, about 1.75 m tall.

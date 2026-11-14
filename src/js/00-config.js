@@ -211,10 +211,10 @@ const RADIO_MESSAGES = {
   generatorStarted: 'We see the load up here. Powered doors should answer now.',
   generatorFollowUp: 'Odd. The motion sensor in the shaft chamber just tripped. Probably the mains coming back.',
   keycardTaken: 'That card opens the keycard doors. Shaft 9 is behind one of them.',
-  secondSpool: 'Two. Do not stay in that room.',
+  secondSpool: 'That is two. Do not stay in that room.',
   allSpools: 'That is all three. Go back to the lift lobby and upload them.',
   uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',
-  liftArrived: 'The car is at your level. Get in.'
+  liftArrived: 'The car is at your level. Get in quick.'
 };
 
 // Everything you can read: the three spools and the four notes.
