@@ -30,7 +30,7 @@ const game = {
   attract: { yaw: -0.9, pitch: 0, timer: 0, sweepTimer: 4, sweepProgress: -1, rayBudget: 0, centerRange: -1 }
 };
 
-const ATTRACT_CAMERA = { x: 16.9, y: 1.5, z: 50.3 };
+const ATTRACT_CAMERA = level.attractCamera; // set by whichever lift lobby is loaded
 const renderCamera = { x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, fieldOfViewDegrees: 72 };
 const frameState = {
   time: 0, realTime: 0, interference: 0, danger: 0, fade: 1, powerOn: false, hasKeycard: false, palette: 0,
@@ -108,6 +108,31 @@ function resetWorldState() {
   setLiftMachinerySound(0);
 }
 
+// Builds a station and hands it to everything that keeps its own picture of the world.
+// kind is 'classic' or 'generated'; the rest only matter for generated stations.
+// Returns false if a generated station could not be planned (the classic one is loaded instead).
+function loadStation(kind, seed, sizeKey, layoutKey) {
+  const wasBuiltAsAsked = buildStation(kind, seed, sizeKey, layoutKey);
+  uploadWorldOccluderMesh(buildWorldOccluderVertices());
+  rebuildDebugZoneList();
+  moveMachinerySoundsToLevel();
+  return wasBuiltAsAsked;
+}
+
+// Turns whatever is in the seed box into a station number. Empty: a new one every time.
+// Digits are used as they are; anything else (a word, a name) is boiled down to a number.
+function chooseSeedFromText(text) {
+  text = String(text || '').trim();
+  if (text === '') return 1 + Math.floor(Math.random() * 999999);
+  if (/^[0-9]{1,9}$/.test(text)) return Math.max(1, Number(text));
+  let hash = 2166136261;
+  for (let position = 0; position < text.length; position++) {
+    hash ^= text.charCodeAt(position);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return 1 + hash % 999999999;
+}
+
 function beginNewGame() {
   initializeAudioEngine();
   setMasterVolume(settings.volume);
@@ -115,6 +140,8 @@ function beginNewGame() {
   game.difficulty = DIFFICULTY_PRESETS[settings.difficulty];
   const quality = QUALITY_PRESETS[settings.quality];
   if (pointCloud.capacity !== quality.maximumPoints) allocatePointCloud(quality.maximumPoints);
+  if (settings.station === 'generated') loadStation('generated', chooseSeedFromText(settings.seedText), settings.stationSize, settings.stationLayout);
+  else if (level.kind !== 'classic') loadStation('classic', 0);
   resetWorldState();
   requestPointerLockOnCanvas();
   requestLandscapeOnPhone();
@@ -127,7 +154,9 @@ function beginNewGame() {
   container.textContent = '';
   for (const timer of interfaceState.introTimers) window.clearTimeout(timer);
   interfaceState.introTimers.length = 0;
-  INTRO_LINES.forEach(function (line, lineIndex) {
+  const introLines = INTRO_LINES.slice();
+  if (level.kind === 'generated') introLines.push('No drawings survive for this annex. Survey reference ' + level.seed + '.');
+  introLines.forEach(function (line, lineIndex) {
     interfaceState.introTimers.push(window.setTimeout(function () {
       if (game.mode !== 'intro') return;
       const paragraph = document.createElement('p');
@@ -135,7 +164,7 @@ function beginNewGame() {
       container.appendChild(paragraph);
     }, 300 + lineIndex * 1500));
   });
-  interfaceState.introTimers.push(window.setTimeout(function () { finishIntro(); }, 300 + INTRO_LINES.length * 1500 + 1600));
+  interfaceState.introTimers.push(window.setTimeout(function () { finishIntro(); }, 300 + introLines.length * 1500 + 1600));
 }
 
 function playLiftIntroSound() {
@@ -225,6 +254,7 @@ function pauseGame() {
   setScannerSound(0);
   closeMapOverlay();
   interfaceState.elements['pause-objective'].textContent = game.objectiveText;
+  interfaceState.elements['pause-station'].textContent = 'Station: ' + level.description;
   interfaceState.refreshSettingControls();
   showOnlyScreen('screen-pause');
   if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();
@@ -253,6 +283,7 @@ function returnToTitle() {
   setHudVisible(false);
   closeMapOverlay();
   showOnlyScreen('screen-title');
+  interfaceState.refreshStationControls();
 }
 
 // ---------------------------------------------------------------------------
@@ -342,7 +373,7 @@ function startGenerator(interactable) {
     scheduleEvent(TUNING.hollowWakeDelaySeconds, function () {
       activateHollow(HOLLOW_SPAWN_POSITION.x, HOLLOW_SPAWN_POSITION.z, 3);
       hollow.state = HOLLOW_STATE_INVESTIGATE;
-      hollow.targetX = 68.5; hollow.targetZ = 47.5;
+      hollow.targetX = level.generatorApproachX; hollow.targetZ = level.generatorApproachZ;
     });
   }
 }
@@ -468,7 +499,8 @@ function updateGameProgress(dt) {
     }
   }
 
-  if (!flags.hasLeftLift && player.x > 9.7) {
+  // Out of the car and a good step past its door.
+  if (!flags.hasLeftLift && distanceOutsideLiftCar(player.x, player.z) > 1.7) {
     flags.hasLeftLift = true;
     liftDoor.forcedState = false;
     saveCheckpoint();
@@ -483,7 +515,9 @@ function updateGameProgress(dt) {
     if (game.liftCountdown <= 0) completeLiftArrival();
   }
 
-  if (flags.liftArrived && player.x < 7.7 && player.z > LIFT_CAR_BOUNDS.minimumZ && player.z < LIFT_CAR_BOUNDS.maximumZ) {
+  const isWellInsideLiftCar = player.x > LIFT_CAR_BOUNDS.minimumX + 0.3 && player.x < LIFT_CAR_BOUNDS.maximumX - 0.3 &&
+    player.z > LIFT_CAR_BOUNDS.minimumZ + 0.3 && player.z < LIFT_CAR_BOUNDS.maximumZ - 0.3;
+  if (flags.liftArrived && isWellInsideLiftCar) {
     game.mode = 'ascending';
     game.ascentTimer = 0;
     liftDoor.forcedState = false;
@@ -564,7 +598,9 @@ function updateAscending(dt) {
       game.statistics.bestTime = null; // a run with debug mode does not count
     } else {
       try {
-        const storageKey = 'no-return-best-' + game.difficulty.key;
+        // Best times are kept per threat level, and per station: a generated station only competes with itself.
+        let storageKey = 'no-return-best-' + game.difficulty.key;
+        if (level.kind === 'generated') storageKey += '-' + level.sizeKey + '-' + level.layoutKey + '-' + level.seed;
         const previousBest = Number(window.localStorage.getItem(storageKey));
         if (!previousBest || game.statistics.elapsed < previousBest) window.localStorage.setItem(storageKey, String(game.statistics.elapsed));
         game.statistics.bestTime = previousBest && previousBest < game.statistics.elapsed ? previousBest : game.statistics.elapsed;
@@ -580,7 +616,7 @@ function updateAttractMode(dt) {
   game.time += dt;
   currentPointTime = game.time;
   attract.timer += dt;
-  const viewYaw = -1.95 + Math.sin(attract.timer * 0.11) * 0.5;
+  const viewYaw = ATTRACT_CAMERA.yaw + Math.sin(attract.timer * 0.11) * 0.5;
   const viewPitch = 0.04 + Math.sin(attract.timer * 0.07) * 0.05;
   renderCamera.x = ATTRACT_CAMERA.x; renderCamera.y = ATTRACT_CAMERA.y; renderCamera.z = ATTRACT_CAMERA.z;
   renderCamera.yaw = viewYaw; renderCamera.pitch = viewPitch;
@@ -678,7 +714,7 @@ function startApplication() {
   if (!isRendererReady) { showFatalError(null); return; }
 
   if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches && settings.quality === 'high') settings.quality = 'medium';
-  buildFacilityLayout();
+  buildStation('classic', 0);
   uploadWorldOccluderMesh(buildWorldOccluderVertices());
   allocatePointCloud(QUALITY_PRESETS[settings.quality].maximumPoints);
   createStills();
@@ -696,6 +732,35 @@ function startApplication() {
     game: game, player: player, hollow: hollow, renderer: renderer, renderCamera: renderCamera, audio: audio,
     playStinger: playStinger, playSweepSound: playSweepSound, playInterfaceBlip: playInterfaceBlip, playRadioBlip: playRadioBlip, playDeniedSound: playDeniedSound, stills: stills, doors: doors, pointCloud: pointCloud, settings: settings,
     auditLayout: auditFacilityLayout,
+    auditProgression: auditLevelProgression,
+    level: level, interactables: interactables, zoneNames: ZONE_NAMES,
+    loadStation: function (kind, seed, sizeKey, layoutKey) { const result = loadStation(kind, seed, sizeKey, layoutKey); resetWorldState(); return result; },
+    chooseSeedFromText: chooseSeedFromText,
+    getLiftDoor: function () { return liftDoor; },
+    findSigns: function (textPart) {
+      // Every tile that carries wall lettering containing the given text.
+      const found = [];
+      for (let index = 0; index < TILE_COUNT; index++) {
+        for (const sign of tileSignLists[index] || []) {
+          if (sign.text.indexOf(textPart) >= 0) found.push({ tileX: index % GRID_WIDTH, tileZ: Math.floor(index / GRID_WIDTH), wall: sign.wall, text: sign.text });
+        }
+      }
+      return found;
+    },
+    getStationFingerprint: function () {
+      // A short text that is the same for two stations only if they are built the same.
+      const parts = [worldProps.length, interactables.length];
+      for (const door of doors) parts.push(door.tileX + '.' + door.tileZ + '.' + door.kind);
+      for (const interactable of interactables) parts.push(interactable.objectId + ':' + interactable.x.toFixed(2) + ':' + interactable.z.toFixed(2));
+      return parts.join(',');
+    },
+    findInteractable: findInteractableByObjectId,
+    lift: LIFT_POSITION, generator: GENERATOR_POSITION, shaft: SHAFT_POSITION, playerStart: PLAYER_START,
+    getZoneAt: getZoneAtPosition,
+    findWalkableSpotNear: function (x, z) {
+      const index = findNearestWalkableTileIndex(x, z);
+      return index < 0 ? null : { x: index % GRID_WIDTH + 0.5, z: Math.floor(index / GRID_WIDTH) + 0.5 };
+    },
     teleport: function (x, z, yaw) { player.x = x; player.z = z; if (yaw !== undefined) player.yaw = yaw; },
     grantPower: function () { game.flags.powerOn = true; refreshObjective(); },
     grantKeycard: function () { game.flags.hasKeycard = true; },

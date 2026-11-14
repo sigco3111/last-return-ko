@@ -186,6 +186,21 @@ const desktopShots = {
   await browser.close();
   if (problems.length > 0) console.log('Problems reported by the page:', problems);
 
+  // ---- a generated station, drawn in full with debug mode's "Reveal the whole map" ----
+  if (wants('uncharted-map')) {
+    const uncharted = await openGame({ deviceScaleFactor: 1.5 });
+    await uncharted.page.evaluate(() => document.getElementById('station-generated').click());
+    await uncharted.page.selectOption('#title-station-size', 'medium');
+    await uncharted.page.selectOption('#title-station-layout', 'mixed');
+    await uncharted.page.fill('#title-seed', '1987');
+    await startGame(uncharted.page, false);
+    await uncharted.page.evaluate(() => document.getElementById('debug-action-map').click());
+    await uncharted.page.keyboard.press('KeyM');
+    await capture(uncharted.page, 'uncharted-map');
+    await uncharted.browser.close();
+    if (uncharted.problems.length > 0) console.log('Problems reported by the page:', uncharted.problems);
+  }
+
   // ---- phone ----
   if (wants('phone')) {
     const phone = await openGame({ width: 844, height: 390, deviceScaleFactor: 2, isPhone: true }); // held sideways

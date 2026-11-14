@@ -4,8 +4,9 @@
 // The same data drives ray casting, collision, navigation and the occluder mesh.
 // ---------------------------------------------------------------------------
 
-const GRID_WIDTH = 76;
-const GRID_DEPTH = 64;
+// The whole map, in one-metre tiles. The classic station uses the top-left 76 x 64; generated stations may use it all.
+const GRID_WIDTH = 128;
+const GRID_DEPTH = 112;
 const TILE_COUNT = GRID_WIDTH * GRID_DEPTH;
 
 const tileIsOpen = new Uint8Array(TILE_COUNT);
@@ -81,6 +82,80 @@ const doors = [];
 const interactables = [];
 const roamingWaypoints = [];
 
+// ---------------------------------------------------------------------------
+// Placement: lets a room be described once and then put anywhere, turned any of four ways.
+// While a placement is active, every carve, prop, sign and pickup below is moved and turned by it.
+// The classic station is built with no placement (everything exactly where the numbers say).
+// ---------------------------------------------------------------------------
+
+const placement = {
+  turns: 0,          // quarter turns clockwise seen from above (0 to 3)
+  offsetX: 0, offsetZ: 0,
+  isGenerating: false,
+  zone: 0,           // zone given to tiles carved by the room being placed
+  zoneMap: null      // optional: classic zone number -> zone number in this station
+};
+
+function clearPlacement() {
+  placement.turns = 0; placement.offsetX = 0; placement.offsetZ = 0;
+  placement.zone = 0; placement.zoneMap = null;
+}
+
+function rotatePointByTurns(x, z, turns) {
+  for (let turn = 0; turn < turns; turn++) { const rotatedX = -z; z = x; x = rotatedX; }
+  return [x, z];
+}
+
+// Sets the placement so that the point (pivotX, pivotZ) of the room lands on (targetX, targetZ) after turning.
+function setPlacement(turns, pivotX, pivotZ, targetX, targetZ) {
+  const rotated = rotatePointByTurns(pivotX, pivotZ, turns);
+  placement.turns = turns;
+  placement.offsetX = targetX - rotated[0];
+  placement.offsetZ = targetZ - rotated[1];
+}
+
+function placePoint(x, z) {
+  const rotated = rotatePointByTurns(x, z, placement.turns);
+  return [rotated[0] + placement.offsetX, rotated[1] + placement.offsetZ];
+}
+
+function placeTile(tileX, tileZ) {
+  const center = placePoint(tileX + 0.5, tileZ + 0.5);
+  return [Math.floor(center[0]), Math.floor(center[1])];
+}
+
+function placeYaw(yaw) {
+  return yaw + placement.turns * Math.PI / 2;
+}
+
+function placeWall(wall) {
+  return (wall + placement.turns) % 4;
+}
+
+function resolveZone(zone) {
+  if (!placement.isGenerating) return zone;
+  if (placement.zoneMap && placement.zoneMap[zone] !== undefined) return placement.zoneMap[zone];
+  return placement.zone;
+}
+
+// Facts about the station that is currently loaded. Rooms fill these in as they are built.
+const level = {
+  kind: 'classic',        // 'classic' or 'generated'
+  seed: 0,
+  sizeKey: 'medium',
+  layoutKey: 'mixed',
+  keycardRoomText: 'the laboratory', // filled into the security office note
+  loopCount: 0,
+  storeZone: 0,           // the calibration store: the Hollow will not enter it
+  stillZones: [],         // zones the Stills may walk in
+  unlabelledZones: [],    // zones whose name is left off the big map (generated corridors and ducts: too many, too small)
+  generatorApproachX: 68.5, generatorApproachZ: 47.5, // where the Hollow goes when the generator starts
+  attractCamera: { x: 16.9, y: 1.5, z: 50.3, yaw: -1.95 },
+  boundsMinimumX: 0, boundsMinimumZ: 0, boundsMaximumX: GRID_WIDTH, boundsMaximumZ: GRID_DEPTH,
+  roomCount: 0,
+  description: 'Kessel-9 (classic)'
+};
+
 function tileIndexAt(tileX, tileZ) {
   return tileZ * GRID_WIDTH + tileX;
 }
@@ -107,13 +182,15 @@ function getTileFlagsAtPosition(x, z) {
 
 // Carves the rectangle [startX, endX) x [startZ, endZ) out of solid rock.
 function carveRoom(startX, startZ, endX, endZ, ceilingHeight, zone) {
+  const resolvedZone = resolveZone(zone);
   for (let tileZ = startZ; tileZ < endZ; tileZ++) {
     for (let tileX = startX; tileX < endX; tileX++) {
-      const index = tileIndexAt(tileX, tileZ);
+      const placed = placeTile(tileX, tileZ);
+      const index = tileIndexAt(placed[0], placed[1]);
       tileIsOpen[index] = 1;
       tileFloorHeight[index] = 0;
       tileCeilingHeight[index] = ceilingHeight;
-      tileZone[index] = zone;
+      tileZone[index] = resolvedZone;
     }
   }
 }
@@ -121,9 +198,42 @@ function carveRoom(startX, startZ, endX, endZ, ceilingHeight, zone) {
 function setTileFlagInRectangle(startX, startZ, endX, endZ, flag) {
   for (let tileZ = startZ; tileZ < endZ; tileZ++) {
     for (let tileX = startX; tileX < endX; tileX++) {
-      if (isTileOpenAt(tileX, tileZ)) tileFlags[tileIndexAt(tileX, tileZ)] |= flag;
+      const placed = placeTile(tileX, tileZ);
+      if (isTileOpenAt(placed[0], placed[1])) tileFlags[tileIndexAt(placed[0], placed[1])] |= flag;
     }
   }
+}
+
+// Turns one tile into bottomless pit (or grated floor over it). Used by the shaft.
+function setPitTile(tileX, tileZ, isPit) {
+  const placed = placeTile(tileX, tileZ);
+  const index = tileIndexAt(placed[0], placed[1]);
+  if (isPit) { tileFlags[index] |= TILE_FLAG_PIT; tileFloorHeight[index] = PIT_FLOOR_HEIGHT; }
+  else tileFlags[index] |= TILE_FLAG_GRATE;
+}
+
+// Empties the whole map so another station can be built.
+function resetWorldForNewLevel() {
+  tileIsOpen.fill(0); tileFloorHeight.fill(0); tileCeilingHeight.fill(0); tileFlags.fill(0); tileZone.fill(0);
+  tileIsWalkable.fill(0);
+  tilePropLists.fill(null); tileSignLists.fill(null);
+  worldProps.length = 0; dynamicBoxProps.length = 0; doors.length = 0; interactables.length = 0;
+  roamingWaypoints.length = 0;
+  clearPlacement();
+  placement.isGenerating = false;
+}
+
+function computeLevelBounds() {
+  let minimumX = GRID_WIDTH, minimumZ = GRID_DEPTH, maximumX = 0, maximumZ = 0;
+  for (let tileZ = 0; tileZ < GRID_DEPTH; tileZ++) {
+    for (let tileX = 0; tileX < GRID_WIDTH; tileX++) {
+      if (!tileIsOpen[tileIndexAt(tileX, tileZ)]) continue;
+      minimumX = Math.min(minimumX, tileX); maximumX = Math.max(maximumX, tileX + 1);
+      minimumZ = Math.min(minimumZ, tileZ); maximumZ = Math.max(maximumZ, tileZ + 1);
+    }
+  }
+  level.boundsMinimumX = Math.max(0, minimumX - 3); level.boundsMinimumZ = Math.max(0, minimumZ - 3);
+  level.boundsMaximumX = Math.min(GRID_WIDTH, maximumX + 3); level.boundsMaximumZ = Math.min(GRID_DEPTH, maximumZ + 3);
 }
 
 // ---------------------------------------------------------------------------
@@ -182,7 +292,9 @@ function finishProp(prop, options) {
 
 function addBoxProp(centerX, centerY, centerZ, halfX, halfY, halfZ, options) {
   const prop = createEmptyProp(PROP_KIND_BOX);
-  const yaw = options && options.yaw ? options.yaw : 0;
+  const yaw = placeYaw(options && options.yaw ? options.yaw : 0);
+  const placedCenter = placePoint(centerX, centerZ);
+  centerX = placedCenter[0]; centerZ = placedCenter[1];
   prop.centerX = centerX; prop.centerY = centerY; prop.centerZ = centerZ;
   prop.halfX = halfX; prop.halfY = halfY; prop.halfZ = halfZ;
   prop.cosineYaw = Math.cos(yaw); prop.sineYaw = Math.sin(yaw);
@@ -200,6 +312,9 @@ function addBoxBetween(minimumX, minimumY, minimumZ, maximumX, maximumY, maximum
 
 function addCylinderProp(axis, centerX, centerY, centerZ, radius, halfLength, options) {
   const prop = createEmptyProp(PROP_KIND_CYLINDER);
+  if (placement.turns % 2 === 1 && axis !== AXIS_Y) axis = axis === AXIS_X ? AXIS_Z : AXIS_X;
+  const placedCenter = placePoint(centerX, centerZ);
+  centerX = placedCenter[0]; centerZ = placedCenter[1];
   prop.axis = axis;
   prop.centerX = centerX; prop.centerY = centerY; prop.centerZ = centerZ;
   prop.radius = radius; prop.halfLength = halfLength;
@@ -213,6 +328,8 @@ function addCylinderProp(axis, centerX, centerY, centerZ, radius, halfLength, op
 
 function addSphereProp(centerX, centerY, centerZ, radius, options) {
   const prop = createEmptyProp(PROP_KIND_SPHERE);
+  const placedCenter = placePoint(centerX, centerZ);
+  centerX = placedCenter[0]; centerZ = placedCenter[1];
   prop.centerX = centerX; prop.centerY = centerY; prop.centerZ = centerZ;
   prop.radius = radius;
   prop.halfX = radius; prop.halfY = radius; prop.halfZ = radius;
@@ -515,10 +632,23 @@ function renderSignBitmap(text, widthMetres, heightMetres, isScrawled) {
 // Places lettering on one wall of a tile. `wall` says which side of the tile the wall is on.
 function addWallSign(text, tileX, tileZ, wall, options) {
   const width = options.width, height = options.height;
+  // Move and turn the sign with the room it belongs to.
+  let alongOffset = options.alongOffset || 0;
+  if (placement.turns !== 0 || placement.offsetX !== 0 || placement.offsetZ !== 0) {
+    const localRunsAlongX = wall === WALL_NORTH || wall === WALL_SOUTH;
+    const direction = rotatePointByTurns(localRunsAlongX ? 1 : 0, localRunsAlongX ? 0 : 1, placement.turns);
+    alongOffset *= (direction[0] + direction[1]);
+    const placed = placeTile(tileX, tileZ);
+    tileX = placed[0]; tileZ = placed[1];
+    wall = placeWall(wall);
+  }
+  // In a generated station a room may only letter its own walls.
+  if (placement.isGenerating && (!isTileOpenAt(tileX, tileZ) || tileZone[tileIndexAt(tileX, tileZ)] !== placement.zone)) return;
   const runsAlongX = wall === WALL_NORTH || wall === WALL_SOUTH;
-  const alongCenter = (runsAlongX ? tileX + 0.5 : tileZ + 0.5) + (options.alongOffset || 0);
+  const alongCenter = (runsAlongX ? tileX + 0.5 : tileZ + 0.5) + alongOffset;
   const rendered = renderSignBitmap(text, width, height, options.isScrawled === true);
   const sign = {
+    text: text, // kept only so tests and debugging can find a sign by what it says
     wall: wall,
     alongMinimum: alongCenter - width / 2,
     alongMaximum: alongCenter + width / 2,
@@ -568,6 +698,11 @@ const DOOR_TRAVEL_HEIGHT = 2.28;
 const DOOR_OPENING_HEIGHT = 2.3;
 
 function addDoor(tileX, tileZ, kind) {
+  const placedTile = placeTile(tileX, tileZ);
+  tileX = placedTile[0]; tileZ = placedTile[1];
+  // The slab and frame below are given in final map coordinates, so placement is set aside while they are built.
+  const savedPlacement = { turns: placement.turns, offsetX: placement.offsetX, offsetZ: placement.offsetZ };
+  placement.turns = 0; placement.offsetX = 0; placement.offsetZ = 0;
   const index = tileIndexAt(tileX, tileZ);
   tileIsOpen[index] = 1;
   tileFloorHeight[index] = 0;
@@ -575,6 +710,7 @@ function addDoor(tileX, tileZ, kind) {
   tileFlags[index] |= TILE_FLAG_DOOR;
   const passageRunsAlongX = isTileOpenAt(tileX - 1, tileZ) && isTileOpenAt(tileX + 1, tileZ);
   tileZone[index] = passageRunsAlongX ? tileZone[tileIndexAt(tileX - 1, tileZ)] : tileZone[tileIndexAt(tileX, tileZ + 1)];
+  if (!tileZone[index]) tileZone[index] = passageRunsAlongX ? tileZone[tileIndexAt(tileX + 1, tileZ)] : tileZone[tileIndexAt(tileX, tileZ - 1)];
   let surfaceClass = SURFACE_DOOR_AUTOMATIC;
   if (kind === DOOR_KIND_POWERED) surfaceClass = SURFACE_DOOR_POWERED;
   if (kind === DOOR_KIND_KEYCARD) surfaceClass = SURFACE_DOOR_KEYCARD;
@@ -611,10 +747,13 @@ function addDoor(tileX, tileZ, kind) {
     forcedState: null
   };
   doors.push(door);
+  placement.turns = savedPlacement.turns; placement.offsetX = savedPlacement.offsetX; placement.offsetZ = savedPlacement.offsetZ;
   return door;
 }
 
 function registerInteractable(objectId, x, y, z, prompt, props, options) {
+  const placedPosition = placePoint(x, z);
+  x = placedPosition[0]; z = placedPosition[1];
   const interactable = {
     objectId: objectId,
     x: x, y: y, z: z,

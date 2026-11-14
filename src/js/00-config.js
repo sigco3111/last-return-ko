@@ -167,8 +167,9 @@ const TUNING = {
   liftArrivalSecondsWithoutHollow: 12 // the same wait on "Survey only", where nothing is coming
 };
 
-// Names shown under the minimap and on the full map. The order must match the ZONE_ numbers in 02-world.js.
-const ZONE_NAMES = [
+// Names shown under the minimap and on the full map, for the classic station.
+// The order must match the ZONE_ numbers in 02-world.js. A generated station writes its own list into ZONE_NAMES.
+const CLASSIC_ZONE_NAMES = [
   'UNSURVEYED',
   'LIFT CAR',
   'LIFT LOBBY',
@@ -191,6 +192,8 @@ const ZONE_NAMES = [
   'SHAFT 9'
 ];
 
+const ZONE_NAMES = CLASSIC_ZONE_NAMES.slice();
+
 // The lines that appear one by one on the black screen after "Begin descent".
 const INTRO_LINES = [
   'KESSEL-9 PUMPING ANNEX',
@@ -201,11 +204,13 @@ const INTRO_LINES = [
 
 // What dispatch says over the radio. When each one plays is decided in 11-game.js.
 const RADIO_MESSAGES = {
-  leftLift: 'The car goes back up on its own when it is empty. Mains is dead on your level. The generator is in Pump Hall B, east end of the main corridor.',
+  // These lines are also read aloud if recorded (docs/voice-lines.md), so they must be true in every station,
+  // classic or generated: name rooms, never directions.
+  leftLift: 'The car goes back up on its own when it is empty. Mains is dead on your level. Find Generator 2 and get it running. It is off Pump Hall B.',
   firstSpool: 'That is one. Crew 2 logged two more: one in the calibration store, one at the shaft.',
   generatorStarted: 'We see the load up here. Powered doors should answer now.',
   generatorFollowUp: 'Odd. The motion sensor in the shaft chamber just tripped. Probably the mains coming back.',
-  keycardTaken: 'That card opens the deep corridor. East side of the archive.',
+  keycardTaken: 'That card opens the keycard doors. Shaft 9 is behind one of them.',
   secondSpool: 'Two. Do not stay in that room.',
   allSpools: 'That is all three. Go back to the lift lobby and upload them.',
   uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',
@@ -247,7 +252,8 @@ const LOG_ENTRIES = {
     source: 'R. Halloran, site security · 14 November 1987',
     paragraphs: [
       'Night pump crew reports knocking from Shaft 9 again. I told them it is the water table.',
-      'They have asked for the deep corridor door to be kept on the keycard. Fine. The card stays in the laboratory with Dr. Vance.',
+      // {keycardRoom} becomes the room the card is really in ("the laboratory" in the classic station).
+      'They have asked for the deep doors to be kept on the keycard. Fine. The card stays in {keycardRoom}, where Dr. Vance can keep an eye on it.',
       'They have also asked for the calibration dummies in C4 to be covered with sheets. I did not ask why.'
     ]
   },
@@ -283,7 +289,7 @@ const LOG_ENTRIES = {
 // The one-line goal shown top left.
 const OBJECTIVE_TEXT = {
   leaveLift: 'Step out of the lift car.',
-  findGenerator: 'Restore mains power. Generator: Pump Hall B, east.',
+  findGenerator: 'Restore mains power. Generator 2 is off Pump Hall B.',
   collectSpools: 'Recover the three survey spools left by Crew 2.',
   returnToLift: 'Return to the lift lobby and upload the spools at the terminal.',
   surviveLift: 'The lift is coming. Stay alive until it arrives.',

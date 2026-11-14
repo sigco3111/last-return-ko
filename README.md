@@ -34,6 +34,28 @@ then open http://localhost:8080.
 
 Use headphones. Sound is how you find out where it is.
 
+## Stations
+
+The title screen offers two places to go down into.
+
+**Kessel-9** is the annex as it was built by hand. It is the same every time, and it is the best first descent.
+
+**Uncharted annex** is built fresh for every descent, so knowing the last one does not help you. The lift lobby, the pump hall, the generator, the archive, the calibration store and the shaft are always there, but where they are, what lies between them and which doors need power or the keycard change each time. Fourteen further kinds of room (boiler house, workshop, crew quarters, infirmary, drying room, battery room, sump, old workings and more) fill it out.
+
+![One generated station, drawn in full with debug mode](docs/screenshots/uncharted-map.jpg)
+
+- **Size** is small, medium or large: roughly 24, 32 or 41 rooms and corridors. Kessel-9 has 19.
+- **Layout** is tight (rooms open straight into rooms), mixed, or sprawling (long corridors).
+- **Seed** decides the station. Leave it empty for a different one every descent. Type a number or a word to get the same station again, or to give a friend the one you played. The seed of the station you are in is shown on the pause and ending screens.
+
+What stays true in every station, so the radio and the notes never lie:
+
+- Generator 2 is always in a room off Pump Hall B, and can be reached without power.
+- The keycard is always behind a powered door, and Shaft 9 is always behind a keycard door.
+- Doors carry the name of the room behind them above the frame, and long corridors have arrows to the lift and to the pump hall or the shaft.
+- The first spool and the keycard are sometimes left in a different room. The note in the security office says where the card is kept.
+- Service ducts, one person wide, link parts of the station that are far apart on foot. They are a way out, and a way to be cut off.
+
 ## Screenshots
 
 | | |
@@ -133,6 +155,8 @@ For looks and feel that live elsewhere (point colours and size, glow, mouse sens
 
 To change rooms, objects or wall lettering, see the short guide at the top of `buildFacilityLayout` in `src/js/03-layout.js`.
 
+Generated stations are tuned at the top of `src/js/03-levelgen.js`: `GENERATED_SIZE_PRESETS` sets how many extra rooms and ducts each size gets, and `GENERATED_LAYOUT_PRESETS` sets how often rooms get corridors and how far from the lift they spread. To add a kind of room, write a `furnish...` function for it there (the room's north-west corner is at 0, 0) and add one entry to `ROOM_CATALOGUE` with its size, the places a door may go, and which lock tiers it may sit behind. Keep the floor just inside each door clear. Then run `npm test`: it builds 120 stations and reports any that cannot be walked or finished.
+
 After any change:
 
 ```bash
@@ -152,7 +176,8 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/00-config.js` | Every tuning value (each one explained), difficulty presets and all story text |
 | `src/js/01-math.js` | Small math helpers and 4×4 matrices |
 | `src/js/02-world.js` | Tile grid, props, signs, doors, collision, navigation, occluder mesh |
-| `src/js/03-layout.js` | The station itself: every room, prop, sign and pickup |
+| `src/js/03-layout.js` | Every hand-built room with its props, signs and pickups, and how Kessel-9 puts them together |
+| `src/js/03-levelgen.js` | Generated stations: the extra rooms, the room catalogue, the planner, locks, ducts and signs |
 | `src/js/04-figures.js` | The capsule bodies used for everything that stands upright |
 | `src/js/05-raycast.js` | What one laser pulse hits, and how far away |
 | `src/js/06-renderer.js` | Point cloud, depth-only world, scanner model, post-processing |
@@ -166,7 +191,9 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 
 A few details worth knowing if you change things:
 
-- The station is a 76 × 64 grid of one-metre tiles carved into rooms, plus boxes, cylinders and spheres for everything standing in them. The same data drives the ray caster, collision, path finding and the black geometry that hides points behind walls.
+- A station is a grid of one-metre tiles carved into rooms (128 × 112 at most; Kessel-9 uses 76 × 64 of it), plus boxes, cylinders and spheres for everything standing in them. The same data drives the ray caster, collision, path finding and the black geometry that hides points behind walls.
+- Each room is described once, at its place in Kessel-9. A generated station moves and turns the same descriptions, so a room is the same room wherever it ends up.
+- A generated station is planned as rectangles first: rooms are attached to free doorways of rooms already placed, either wall to wall or at the end of a new corridor. Rooms that need power are only ever attached to what can be reached without it or to each other, and likewise for the keycard, so the locks always come in an order that can be finished. Only then is anything built.
 - Walls, floors and props are drawn into the depth buffer only, never in colour. Creatures are not drawn at all.
 - Creatures are built from capsules (rods with rounded ends): 25 for the Hollow, down to three long fingers on each hand, and 24 for a dummy. The Hollow's pose follows its mood: hunched when wandering, reaching when it hunts, drawn up to its full height when it stops to listen.
 - Sound is synthesised live, mostly from noise shaped by filters. The Hollow's growl is a recorded-in-code rattle of clicks pushed through three resonances, the way a throat and chest shape a voice.
@@ -197,6 +224,8 @@ npm test
 
 plays the whole objective chain in a headless browser and checks each step: leaving the lift, the generator, the Hollow's path finding, the beam holding it, both ways to die, checkpoints, powered and keycard doors, the Stills, the lift call, the ending, every debug mode switch, and the turn-your-phone-sideways screen.
 
+It then builds 120 generated stations (40 of each size, across the three layouts) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, the keycard with power only, and the shaft only with the card. It checks that a seed always gives the same station, and plays one generated station from lift to lift. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
+
 ```bash
 npm run audio-check
 ```
@@ -218,3 +247,5 @@ regenerates the pictures in `docs/screenshots/`. It renders in software and take
 ## Status
 
 The rules are covered by the scripted test above. The test teleports between objectives, so it shows that the game can be finished, not that the chases are fair or the pacing is right. Balance values in `src/js/00-config.js` were chosen by reasoning and have had little real play. Expect to tune them.
+
+Generated stations are proven finishable, not proven good. Nobody has yet walked one from end to end with the Hollow hunting. They have more doors than Kessel-9, and every door you open makes noise, so they may play harder. Everything is on one level; stairs and lower floors are not built yet.

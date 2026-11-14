@@ -54,7 +54,11 @@ const settings = {
   volume: 0.8,
   quality: 'medium',
   palette: 0,
-  difficulty: 'standard'
+  difficulty: 'standard',
+  station: 'classic',       // 'classic' (Kessel-9 as built) or 'generated' (a different station every descent)
+  stationSize: 'medium',    // a key of GENERATED_SIZE_PRESETS
+  stationLayout: 'mixed',   // a key of GENERATED_LAYOUT_PRESETS
+  seedText: ''              // what is typed in the seed box; empty means a new random station each descent
 };
 
 function loadSettings() {
@@ -66,6 +70,10 @@ function loadSettings() {
       if (QUALITY_PRESETS[stored.quality]) settings.quality = stored.quality;
       if (stored.palette === 0 || stored.palette === 1 || stored.palette === 2) settings.palette = stored.palette;
       if (DIFFICULTY_PRESETS[stored.difficulty]) settings.difficulty = stored.difficulty;
+      if (stored.station === 'classic' || stored.station === 'generated') settings.station = stored.station;
+      if (GENERATED_SIZE_PRESETS[stored.stationSize]) settings.stationSize = stored.stationSize;
+      if (GENERATED_LAYOUT_PRESETS[stored.stationLayout]) settings.stationLayout = stored.stationLayout;
+      if (typeof stored.seedText === 'string') settings.seedText = stored.seedText.slice(0, 24);
     }
   } catch (error) { /* storage is optional */ }
 }

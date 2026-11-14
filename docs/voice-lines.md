@@ -19,11 +19,11 @@ A night-shift controller at the surface, talking to you over a poor radio link. 
 
 | File | Line | How to say it |
 |---|---|---|
-| `leftLift.mp3` | The car goes back up on its own when it is empty. Mains is dead on your level. The generator is in Pump Hall B, east end of the main corridor. | Routine. Reading a checklist for the hundredth time. |
+| `leftLift.mp3` | The car goes back up on its own when it is empty. Mains is dead on your level. Find Generator 2 and get it running. It is off Pump Hall B. | Routine. Reading a checklist for the hundredth time. |
 | `firstSpool.mp3` | That is one. Crew 2 logged two more: one in the calibration store, one at the shaft. | Flat, mildly pleased. Already looking at the next item. |
 | `generatorStarted.mp3` | We see the load up here. Powered doors should answer now. | Matter-of-fact, eyes on a gauge. |
 | `generatorFollowUp.mp3` | Odd. The motion sensor in the shaft chamber just tripped. Probably the mains coming back. | Mild curiosity on "Odd." Then talks himself out of it. Not worried. |
-| `keycardTaken.mp3` | That card opens the deep corridor. East side of the archive. | Helpful, brief. |
+| `keycardTaken.mp3` | That card opens the keycard doors. Shaft 9 is behind one of them. | Helpful, brief. |
 | `secondSpool.mp3` | Two. Do not stay in that room. | First sentence normal. Second sentence a little too quick. |
 | `allSpools.mp3` | That is all three. Go back to the lift lobby and upload them. | Relief he is trying not to show. |
 | `uploadStarted.mp3` | Upload received. The car is on its way down. Forty seconds. It is not a quiet machine. | Businesslike. The last sentence is a dry understatement. |
