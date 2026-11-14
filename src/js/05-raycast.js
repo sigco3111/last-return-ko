@@ -269,7 +269,7 @@ function castScannerRay(originX, originY, originZ, directionX, directionY, direc
     if (projection < -figure.boundsRadius || projection - figure.boundsRadius > bestDistance) continue;
     const perpendicularSquared = toCenterX * toCenterX + toCenterY * toCenterY + toCenterZ * toCenterZ - projection * projection;
     if (perpendicularSquared > figure.boundsRadius * figure.boundsRadius) continue;
-    for (let capsuleIndex = 0; capsuleIndex < FIGURE_CAPSULE_COUNT; capsuleIndex++) {
+    for (let capsuleIndex = 0; capsuleIndex < figure.capsuleCount; capsuleIndex++) {
       const distance = intersectRayWithCapsule(figure.capsules, capsuleIndex * FIGURE_CAPSULE_STRIDE,
         originX, originY, originZ, directionX, directionY, directionZ);
       if (distance > 0.05 && distance < bestDistance) { bestDistance = distance; bestFigure = figure; }

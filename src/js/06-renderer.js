@@ -665,7 +665,7 @@ function drawDebugOverlays(debug) {
         const entry = debug.figures[entryIndex];
         const capsules = entry.figure.capsules;
         gl.uniform3f(renderer.solidUniforms.uTint, entry.red * brightness, entry.green * brightness, entry.blue * brightness);
-        for (let capsuleIndex = 0; capsuleIndex < FIGURE_CAPSULE_COUNT; capsuleIndex++) {
+        for (let capsuleIndex = 0; capsuleIndex < entry.figure.capsuleCount; capsuleIndex++) {
           const offset = capsuleIndex * FIGURE_CAPSULE_STRIDE;
           const radius = capsules[offset + 6];
           writeSegmentMatrix(renderer.modelMatrix, capsules[offset], capsules[offset + 1], capsules[offset + 2],

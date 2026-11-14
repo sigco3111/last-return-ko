@@ -461,7 +461,15 @@ function updateHollow(dt) {
   hollow.armRaise = approachValue(hollow.armRaise, isHunting ? 1.0 : 0.06, dt * 1.4);
   pose.armRaise = hollow.armRaise;
   pose.elbowBend = 0.15 + hollow.armRaise * 0.25;
-  pose.lean = (isListening ? 0.06 : 0.2) + hollow.armRaise * 0.22;
+  pose.lean = (isListening ? 0.0 : 0.06) + hollow.armRaise * 0.25;
+  // Listening, it draws itself up to its full height (as far as the ceiling allows) and spreads its fingers.
+  // Hunting, it reaches. Otherwise it goes hunched, hands hanging by its knees.
+  const ceilingHere = isInsideGrid(Math.floor(figure.x), Math.floor(figure.z))
+    ? tileCeilingHeight[tileIndexAt(Math.floor(figure.x), Math.floor(figure.z))] : 2.3;
+  const tallestStretch = clampNumber((ceilingHere - 2.25) / 0.32, 0, 1);
+  const wantedStretch = isListening ? 1 : (isHunting ? 0.3 : 0);
+  pose.stretch = approachValue(pose.stretch, Math.min(wantedStretch, tallestStretch), dt * 0.7);
+  pose.fingerSplay = approachValue(pose.fingerSplay, (isHunting || hollow.heldAmount > 0.3) ? 1 : (isListening ? 0.75 : 0.2), dt * 2.5);
   pose.headTilt = 0.28 + Math.sin(game.time * (isListening ? 0.35 : 0.8)) * (isListening ? 0.45 : 0.2) +
     (hollow.heldAmount > 0.3 ? (Math.random() - 0.5) * 0.9 : 0);
   if (hollow.heldAmount > 0.3) {
@@ -662,7 +670,7 @@ function createPhantoms() {
   for (const definition of phantomDefinitions) {
     const figure = createFigure(FIGURE_PROPORTIONS_HOLLOW, SURFACE_PROP, 'phantomImprintSeconds');
     figure.x = definition.x; figure.z = definition.z; figure.yaw = definition.yaw;
-    figure.pose.lean = 0.12; figure.pose.headTilt = 0.35; figure.pose.armRaise = 0.03;
+    figure.pose.lean = 0.05; figure.pose.headTilt = 0.4; figure.pose.armRaise = 0.03; figure.pose.stretch = 0.35; figure.pose.fingerSplay = 0.5;
     updateFigureCapsules(figure);
     phantoms.push({ figure: figure, definition: definition, state: 0, firstHitTime: -1 });
   }
