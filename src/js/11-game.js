@@ -691,7 +691,8 @@ function startApplication() {
   showOnlyScreen('screen-title');
 
   window.noReturnDebug = {
-    game: game, player: player, hollow: hollow, renderer: renderer, renderCamera: renderCamera, stills: stills, doors: doors, pointCloud: pointCloud, settings: settings,
+    game: game, player: player, hollow: hollow, renderer: renderer, renderCamera: renderCamera, audio: audio,
+    playStinger: playStinger, playSweepSound: playSweepSound, playInterfaceBlip: playInterfaceBlip, playRadioBlip: playRadioBlip, playDeniedSound: playDeniedSound, stills: stills, doors: doors, pointCloud: pointCloud, settings: settings,
     auditLayout: auditFacilityLayout,
     teleport: function (x, z, yaw) { player.x = x; player.z = z; if (yaw !== undefined) player.yaw = yaw; },
     grantPower: function () { game.flags.powerOn = true; refreshObjective(); },
