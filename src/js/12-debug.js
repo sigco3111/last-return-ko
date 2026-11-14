@@ -113,6 +113,7 @@ function landAfterFlying() {
     player.z = Math.floor(index / GRID_WIDTH) + 0.5;
   }
   player.eyeHeight = TUNING.eyeHeightStanding;
+  player.floorY = getFloorHeightAt(player.x, player.z);
 }
 
 // ---------------------------------------------------------------------------
@@ -312,7 +313,7 @@ function pushDebugHollowRoute() {
       if (candidateValue < bestValue) { bestValue = candidateValue; nextX = candidateX; nextZ = candidateZ; }
     }
     if (nextX === tileX && nextZ === tileZ) break;
-    pushDebugLine(previousX, 0.06, previousZ, nextX + 0.5, 0.06, nextZ + 0.5, 1.0, 0.85, 0.2);
+    pushDebugLine(previousX, getFloorHeightAt(previousX, previousZ) + 0.06, previousZ, nextX + 0.5, getFloorHeightAt(nextX + 0.5, nextZ + 0.5) + 0.06, nextZ + 0.5, 1.0, 0.85, 0.2);
     previousX = nextX + 0.5; previousZ = nextZ + 0.5;
     tileX = nextX; tileZ = nextZ;
   }
@@ -348,23 +349,23 @@ function buildDebugFrameData() {
 
   if (options.showSenses) {
     // Cyan ring: how close the Hollow must be to notice you as you are right now.
-    pushDebugCircle(player.x, 0.05, player.z, Math.max(0.05, player.audibleRadius * game.difficulty.hearingFactor), 0.2, 0.9, 1.0);
+    pushDebugCircle(player.x, player.floorY + 0.05, player.z, Math.max(0.05, player.audibleRadius * game.difficulty.hearingFactor), 0.2, 0.9, 1.0);
     // Fading magenta rings: noises as they happen.
     for (const event of debugState.noiseEvents) {
       const age = game.time - event.time;
       if (age < 0 || age > DEBUG_NOISE_RING_SECONDS) continue;
       const strength = 1 - age / DEBUG_NOISE_RING_SECONDS;
-      pushDebugCircle(event.x, 0.08, event.z, Math.min(event.radius, 60), strength, 0.2 * strength, 0.9 * strength);
+      pushDebugCircle(event.x, getFloorHeightAt(event.x, event.z) + 0.08, event.z, Math.min(event.radius, 60), strength, 0.2 * strength, 0.9 * strength);
     }
     if (hollow.isActive) {
       // Red ring: its reach. Yellow: the route it is walking and where it is going. Orange: where it last sensed you.
-      pushDebugCircle(hollow.figure.x, 0.05, hollow.figure.z, TUNING.hollowKillDistance, 1.0, 0.1, 0.1);
+      pushDebugCircle(hollow.figure.x, hollow.figure.y + 0.05, hollow.figure.z, TUNING.hollowKillDistance, 1.0, 0.1, 0.1);
       pushDebugHollowRoute();
-      pushDebugCross(hollow.targetX, 0.05, hollow.targetZ, 0.35, 1.0, 0.85, 0.2);
-      if (hollow.state === HOLLOW_STATE_HUNT) pushDebugCross(hollow.lastKnownPlayerX, 0.05, hollow.lastKnownPlayerZ, 0.25, 1.0, 0.45, 0.1);
+      pushDebugCross(hollow.targetX, getFloorHeightAt(hollow.targetX, hollow.targetZ) + 0.05, hollow.targetZ, 0.35, 1.0, 0.85, 0.2);
+      if (hollow.state === HOLLOW_STATE_HUNT) pushDebugCross(hollow.lastKnownPlayerX, getFloorHeightAt(hollow.lastKnownPlayerX, hollow.lastKnownPlayerZ) + 0.05, hollow.lastKnownPlayerZ, 0.25, 1.0, 0.45, 0.1);
     }
     for (const still of stills) {
-      if (still.isPresent) pushDebugCircle(still.figure.x, 0.05, still.figure.z, TUNING.stillKillDistance, 1.0, 0.7, 0.2);
+      if (still.isPresent) pushDebugCircle(still.figure.x, still.figure.y + 0.05, still.figure.z, TUNING.stillKillDistance, 1.0, 0.7, 0.2);
     }
   }
   return data;
@@ -411,7 +412,7 @@ function buildDebugReadout() {
   let heading = Math.round(player.yaw / DEGREES_TO_RADIANS) % 360;
   if (heading < 0) heading += 360;
   lines.push('frames/s    ' + debugState.framesPerSecond.toFixed(0));
-  lines.push('position    x ' + player.x.toFixed(1) + '  z ' + player.z.toFixed(1) + '  eye ' + player.eyeHeight.toFixed(2));
+  lines.push('position    x ' + player.x.toFixed(1) + '  z ' + player.z.toFixed(1) + '  eye ' + player.eyeHeight.toFixed(2) + '  floor ' + player.floorY.toFixed(1));
   lines.push('heading     ' + heading + ' deg   zone ' + getZoneAtPosition(player.x, player.z));
   lines.push('points      ' + formatWithThousandsSeparators(pointCloud.storedCount) + ' of ' + formatWithThousandsSeparators(pointCloud.capacity));
   lines.push('heard from  ' + (player.audibleRadius * game.difficulty.hearingFactor).toFixed(1) + ' m');

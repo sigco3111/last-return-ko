@@ -25,7 +25,8 @@ const input = {
 const player = {
   x: PLAYER_START.x, z: PLAYER_START.z,
   yaw: PLAYER_START.yaw, pitch: 0,
-  eyeHeight: TUNING.eyeHeightStanding,
+  eyeHeight: TUNING.eyeHeightStanding, // eyes above the floor you stand on
+  floorY: 0,                           // height of that floor: 0 on the lift's level, negative further down
   velocityX: 0, velocityZ: 0,
   stamina: 1,
   isStaminaLocked: false,
@@ -58,6 +59,7 @@ const settings = {
   station: 'classic',       // 'classic' (Kessel-9 as built) or 'generated' (a different station every descent)
   stationSize: 'medium',    // a key of GENERATED_SIZE_PRESETS
   stationLayout: 'mixed',   // a key of GENERATED_LAYOUT_PRESETS
+  stationLevels: 'two',     // a key of GENERATED_LEVEL_PRESETS
   seedText: ''              // what is typed in the seed box; empty means a new random station each descent
 };
 
@@ -73,6 +75,7 @@ function loadSettings() {
       if (stored.station === 'classic' || stored.station === 'generated') settings.station = stored.station;
       if (GENERATED_SIZE_PRESETS[stored.stationSize]) settings.stationSize = stored.stationSize;
       if (GENERATED_LAYOUT_PRESETS[stored.stationLayout]) settings.stationLayout = stored.stationLayout;
+      if (GENERATED_LEVEL_PRESETS[stored.stationLevels]) settings.stationLevels = stored.stationLevels;
       if (typeof stored.seedText === 'string') settings.seedText = stored.seedText.slice(0, 24);
     }
   } catch (error) { /* storage is optional */ }
@@ -80,6 +83,11 @@ function loadSettings() {
 
 function saveSettings() {
   try { window.localStorage.setItem('no-return-settings', JSON.stringify(settings)); } catch (error) { /* storage is optional */ }
+}
+
+// Where the eyes (and so the camera and the scanner) are, measured from the lift's floor level.
+function getPlayerEyeY() {
+  return player.floorY + player.eyeHeight;
 }
 
 function resetPlayerToStart() {
@@ -90,6 +98,7 @@ function resetPlayerToStart() {
   player.heat = 0; player.isOverheated = false;
   player.sweepTimeRemaining = 0;
   player.eyeHeight = TUNING.eyeHeightStanding;
+  player.floorY = getFloorHeightAt(player.x, player.z);
   player.focusedInteractable = null;
 }
 
@@ -376,8 +385,13 @@ function updatePlayerMovement(dt) {
 
   const previousX = player.x, previousZ = player.z;
   const resolved = resolveBodyCollision(player.x + player.velocityX * dt, player.z + player.velocityZ * dt,
-    TUNING.playerRadius, player.isCrouching ? 1.0 : 1.7);
+    TUNING.playerRadius, player.isCrouching ? 1.0 : 1.7, getFloorHeightAt(player.x, player.z));
   player.x = resolved.x; player.z = resolved.z;
+  // Follow the floor. Stairs are taken smoothly; anything bigger (a teleport, a checkpoint) lands at once.
+  // TWEAK: 2.5 = how fast the view rises and falls on stairs, in metres per second. Lower feels floatier.
+  const floorHere = getFloorHeightAt(player.x, player.z);
+  if (Math.abs(floorHere - player.floorY) > 1) player.floorY = floorHere;
+  else player.floorY = approachValue(player.floorY, floorHere, dt * 2.5);
   const movedDistance = distanceBetweenPoints(previousX, previousZ, player.x, player.z);
   player.isMoving = movedDistance > dt * 0.3;
   game.statistics.distanceWalked += movedDistance;

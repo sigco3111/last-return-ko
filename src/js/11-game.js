@@ -88,8 +88,8 @@ function resetWorldState() {
   }
   for (const door of doors) {
     door.openFraction = 0; door.closeDelay = 0; door.forcedState = null; door.deniedMessageCooldown = 0;
-    door.slab.centerY = 1.15; door.slab.isRemoved = false;
-    door.slab.minimumY = 0; door.slab.maximumY = 2.3;
+    door.slab.centerY = door.baseY + 1.15; door.slab.isRemoved = false;
+    door.slab.minimumY = door.baseY; door.slab.maximumY = door.baseY + 2.3;
   }
   liftDoor.forcedState = true;
   liftDoor.openFraction = 1;
@@ -111,8 +111,8 @@ function resetWorldState() {
 // Builds a station and hands it to everything that keeps its own picture of the world.
 // kind is 'classic' or 'generated'; the rest only matter for generated stations.
 // Returns false if a generated station could not be planned (the classic one is loaded instead).
-function loadStation(kind, seed, sizeKey, layoutKey) {
-  const wasBuiltAsAsked = buildStation(kind, seed, sizeKey, layoutKey);
+function loadStation(kind, seed, sizeKey, layoutKey, levelsKey) {
+  const wasBuiltAsAsked = buildStation(kind, seed, sizeKey, layoutKey, levelsKey);
   uploadWorldOccluderMesh(buildWorldOccluderVertices());
   rebuildDebugZoneList();
   moveMachinerySoundsToLevel();
@@ -140,7 +140,7 @@ function beginNewGame() {
   game.difficulty = DIFFICULTY_PRESETS[settings.difficulty];
   const quality = QUALITY_PRESETS[settings.quality];
   if (pointCloud.capacity !== quality.maximumPoints) allocatePointCloud(quality.maximumPoints);
-  if (settings.station === 'generated') loadStation('generated', chooseSeedFromText(settings.seedText), settings.stationSize, settings.stationLayout);
+  if (settings.station === 'generated') loadStation('generated', chooseSeedFromText(settings.seedText), settings.stationSize, settings.stationLayout, settings.stationLevels);
   else if (level.kind !== 'classic') loadStation('classic', 0);
   resetWorldState();
   requestPointerLockOnCanvas();
@@ -428,7 +428,7 @@ function updateDying(dt) {
   // It is right in front of the emitter now, and for once the scanner sees all of it.
   const towardFigure = Math.atan2(figure.x - player.x, -(figure.z - player.z));
   player.yaw += clampNumber(wrapAngleToPi(towardFigure - player.yaw), -dt * 9, dt * 9);
-  const eyeHeight = player.eyeHeight;
+  const eyeHeight = getPlayerEyeY();
   const distance = Math.max(0.3, distanceBetweenPoints(figure.x, figure.z, player.x, player.z));
   const targetPitch = Math.atan2(getFigureHeadHeight(figure) - eyeHeight, distance);
   player.pitch = approachValue(player.pitch, targetPitch, dt * 4);
@@ -549,7 +549,7 @@ function updateAtmosphere(dt) {
   game.danger = approachValue(game.danger, isCloseHunt ? clampNumber(1 - hollowDistance / 7, 0, 1) : 0, dt * 1.5);
   if (game.fade < 1) game.fade = Math.min(1, game.fade + dt * 0.9);
 
-  updateAudioListener(player.x, player.eyeHeight, player.z, player.yaw);
+  updateAudioListener(player.x, getPlayerEyeY(), player.z, player.yaw);
   setInterferenceSound(game.interference);
   updateHeartbeat(pressure, game.time);
   updateHollowVoice(hollow.figure.x, hollow.figure.z, hollow.isActive, getHollowAggression(),
@@ -563,7 +563,7 @@ function updatePlaying(dt) {
   currentPointTime = game.time;
   updatePlayerMovement(dt);
   const bobHeight = Math.sin(player.bobPhase) * 0.028;
-  const eyeY = player.eyeHeight + bobHeight;
+  const eyeY = getPlayerEyeY() + bobHeight;
   updateScanner(dt, player.x, eyeY, player.z);
   updateInteractionFocus(player.x, eyeY, player.z);
   updateDoors(dt);
@@ -600,7 +600,7 @@ function updateAscending(dt) {
       try {
         // Best times are kept per threat level, and per station: a generated station only competes with itself.
         let storageKey = 'no-return-best-' + game.difficulty.key;
-        if (level.kind === 'generated') storageKey += '-' + level.sizeKey + '-' + level.layoutKey + '-' + level.seed;
+        if (level.kind === 'generated') storageKey += '-' + level.sizeKey + '-' + level.layoutKey + '-' + level.levelsKey + '-' + level.seed;
         const previousBest = Number(window.localStorage.getItem(storageKey));
         if (!previousBest || game.statistics.elapsed < previousBest) window.localStorage.setItem(storageKey, String(game.statistics.elapsed));
         game.statistics.bestTime = previousBest && previousBest < game.statistics.elapsed ? previousBest : game.statistics.elapsed;
@@ -674,7 +674,7 @@ function runFrame(timestamp) {
     else resetBeamLines(0, 0, 0);
     const isScanning = player.isPainting || player.sweepTimeRemaining > 0;
     renderCamera.x = player.x;
-    renderCamera.y = player.eyeHeight + Math.sin(player.bobPhase) * 0.028;
+    renderCamera.y = getPlayerEyeY() + Math.sin(player.bobPhase) * 0.028;
     renderCamera.z = player.z;
     renderCamera.yaw = player.yaw;
     renderCamera.pitch = player.pitch;
@@ -734,7 +734,8 @@ function startApplication() {
     auditLayout: auditFacilityLayout,
     auditProgression: auditLevelProgression,
     level: level, interactables: interactables, zoneNames: ZONE_NAMES,
-    loadStation: function (kind, seed, sizeKey, layoutKey) { const result = loadStation(kind, seed, sizeKey, layoutKey); resetWorldState(); return result; },
+    loadStation: function (kind, seed, sizeKey, layoutKey, levelsKey) { const result = loadStation(kind, seed, sizeKey, layoutKey, levelsKey); resetWorldState(); return result; },
+    getFloorHeightAt: getFloorHeightAt,
     chooseSeedFromText: chooseSeedFromText,
     getLiftDoor: function () { return liftDoor; },
     findSigns: function (textPart) {
