@@ -8,7 +8,11 @@
   "useInStations": true,
   "doors": [
     { "wall": "south", "at": 3 },
-    { "wall": "north", "at": 0 }
+    { "wall": "north", "at": 0 },
+    { "wall": "east", "at": 4 },
+    { "wall": "west", "at": 16 },
+    { "wall": "east", "at": 14 },
+    { "wall": "west", "at": 1 }
   ],
   "itemSpot": { "x": 4.5, "y": 0.67, "z": 11.55 },
   "items": [

@@ -21,7 +21,7 @@ const GENERATED_SIZE_PRESETS = {
   small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, spineLength: [10, 14] },
   medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, spineLength: [13, 18] },
   large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [3, 5, 6], loops: 7, vents: 5, spineLength: [18, 26] },
+  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 5, spineLength: [18, 26] },
 };
 
 // TWEAK: how spread out a station is.
@@ -31,7 +31,8 @@ const GENERATED_SIZE_PRESETS = {
 const GENERATED_LAYOUT_PRESETS = {
   tight: { label: 'Tight', corridorChance: 0.3, corridorLength: [3, 6], spread: 14 },
   mixed: { label: 'Mixed', corridorChance: 0.55, corridorLength: [3, 9], spread: 24 },
-  sprawling: { label: 'Sprawling', corridorChance: 0.8, corridorLength: [5, 12], spread: 60 }
+  sprawling: { label: 'Sprawling', corridorChance: 0.7, corridorLength: [5, 12], spread: 60 },
+  sparse: { label: 'Sparse', corridorChance: 0.9, corridorLength: [7, 16], spread: 70 },
 };
 
 // How many levels a station has. With two, everything behind the keycard (Shaft 9 included) is down a flight of stairs.
@@ -41,7 +42,7 @@ const GENERATED_LEVEL_PRESETS = {
 };
 
 // TWEAK: things scratched on corridor walls in generated stations.
-const CORRIDOR_SCRAWLS = ['IT FEELS THE LIGHT', 'TURN IT OFF', 'DO NOT RUN', 'COUNT THEM AGAIN', 'IT IS LISTENING', 'WE SHOWED IT THE WAY', 'STAND STILL'];
+const CORRIDOR_SCRAWLS = ['IT FEELS THE LIGHT', 'TURN IT OFF', 'DO NOT RUN', 'COUNT THEM AGAIN', 'IT IS LISTENING', 'WE SHOWED IT THE WAY', 'STAND STILL', 'WE WOKE IT', 'DO NOT R', 'IT IS OUR FAULT'];
 
 const WALL_DIRECTIONS = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // north, east, south, west as [x, z] steps
 
@@ -284,32 +285,49 @@ function furnishOldWorkings(random, roomName) {
   addWallSign('NO FURTHER', 2, 0, WALL_NORTH, { width: 2.6, height: 0.5, centerY: 1.4, alongOffset: 0.5, isScrawled: true });
 }
 
-// Stairs down to the lower level: a landing, ten steps, a landing. The top is at the north end.
+// Stairs down to the lower level: a landing, some steps, a landing. The top is at the north end.
+// Every station gets its own flight, picked from its seed (so a seed still always builds the same station).
 // TWEAK: a step is one tile deep, so more or taller steps make a longer or steeper stair.
 // A step taller than MAXIMUM_STEP_HEIGHT (02-world.js) cannot be climbed.
-const STAIR_STEP_COUNT = 10;
-const STAIR_STEP_HEIGHT = 0.3;
-const STAIR_DROP = STAIR_STEP_COUNT * STAIR_STEP_HEIGHT; // how far below the upper level the lower level is
+const STAIR_STEP_COUNT_RANGE = [5, 15];       // whole steps, both ends included
+const STAIR_STEP_HEIGHT_RANGE = [0.30, 0.45]; // metres
+let stairStepCount = 10, stairStepHeight = 0.3;
+let stairDrop = stairStepCount * stairStepHeight; // how far below the upper level the lower level is
+
+// Picks the station's stair and resizes the stairwell in the room catalogue to match. The step count must be
+// a whole number: the stairwell is that many tiles long, and its bottom doorway sits on the tile after the last one.
+function chooseStairShape(seed) {
+  const random = createSeededRandomGenerator((seed * 40503 + 977) >>> 0);
+  const countRange = STAIR_STEP_COUNT_RANGE, heightRange = STAIR_STEP_HEIGHT_RANGE;
+  stairStepCount = countRange[0] + Math.floor(random() * (countRange[1] - countRange[0] + 1));
+  // Kept a centimetre under the limit: floor heights are stored as 32-bit floats, and a step of exactly the limit can round to just over it.
+  stairStepHeight = Math.min(heightRange[0] + random() * (heightRange[1] - heightRange[0]), MAXIMUM_STEP_HEIGHT - 0.01);
+  stairDrop = stairStepCount * stairStepHeight;
+  const stairwell = ROOM_CATALOGUE.stairwell;
+  stairwell.rect = [0, 0, 2, stairStepCount + 2];
+  stairwell.sockets = [[0, -1, WALL_NORTH], [1, stairStepCount + 2, WALL_SOUTH]];
+  stairwell.socketDrops = [0, -stairDrop];
+}
 
 function carveStairwell() {
-  carveRoom(0, 0, 2, STAIR_STEP_COUNT + 2, 2.6, ZONE_GENERATED_ROOM);
-  for (let step = 1; step <= STAIR_STEP_COUNT + 1; step++) {
-    setFloorHeightInRectangle(0, step, 2, step + 1, -STAIR_STEP_HEIGHT * Math.min(step, STAIR_STEP_COUNT));
+  carveRoom(0, 0, 2, stairStepCount + 2, 2.6, ZONE_GENERATED_ROOM);
+  for (let step = 1; step <= stairStepCount + 1; step++) {
+    setFloorHeightInRectangle(0, step, 2, step + 1, -stairStepHeight * Math.min(step, stairStepCount));
   }
 }
 
 function furnishStairwell(random, roomName) {
-  for (let step = 0; step <= STAIR_STEP_COUNT + 1; step++) {
-    const floor = -STAIR_STEP_HEIGHT * Math.min(step, STAIR_STEP_COUNT);
+  for (let step = 0; step <= stairStepCount + 1; step++) {
+    const floor = -stairStepHeight * Math.min(step, stairStepCount);
     // a handrail down each wall, and a metal edge on every step so the scanner picks the steps out
     addBoxBetween(0.03, floor + 0.92, step, 0.08, floor + 0.97, step + 1, { surfaceClass: SURFACE_METAL, blocksMovement: false });
     addBoxBetween(1.92, floor + 0.92, step, 1.97, floor + 0.97, step + 1, { surfaceClass: SURFACE_METAL, blocksMovement: false });
-    if (step >= 1 && step <= STAIR_STEP_COUNT) addBoxBetween(0, floor + STAIR_STEP_HEIGHT - 0.03, step - 0.04, 2, floor + STAIR_STEP_HEIGHT, step + 0.02, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+    if (step >= 1 && step <= stairStepCount) addBoxBetween(0, floor + stairStepHeight - 0.03, step - 0.04, 2, floor + stairStepHeight, step + 0.02, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   }
   addCeilingLamp(1, 0.5, 2.6, false);
   addWallSign('LOWER LEVEL \u2193', 1, 0, WALL_EAST, { width: 0.96, height: 0.2, centerY: 1.8 });
-  addWallSign('UPPER LEVEL \u2191', 0, STAIR_STEP_COUNT + 1, WALL_WEST, { width: 0.96, height: 0.2, centerY: 1.8 });
-  if (random() < 0.5) addBoxProp(0.5, -STAIR_DROP + 0.05, STAIR_STEP_COUNT + 1.5, 0.2, 0.05, 0.14, { yaw: random() * 3, blocksMovement: false });
+  addWallSign('UPPER LEVEL \u2191', 0, stairStepCount + 1, WALL_WEST, { width: 0.96, height: 0.2, centerY: 1.8 });
+  if (random() < 0.5) addBoxProp(0.5, -stairDrop + 0.05, stairStepCount + 1.5, 0.2, 0.05, 0.14, { yaw: random() * 3, blocksMovement: false });
 }
 
 // ---------------------------------------------------------------------------
@@ -355,8 +373,8 @@ const ROOM_CATALOGUE = {
     sockets: [[32, 23, WALL_SOUTH]], prefers: 'archive' },
   shaftChamber: { name: 'SHAFT 9', rect: [49, 2, 69, 15], ceiling: 9.0, tiers: [2], carve: carveShaftChamber, furnish: furnishShaftChamber,
     sockets: [[59, 15, WALL_SOUTH]] },
-  stairwell: { name: 'STAIRS', rect: [0, 0, 2, STAIR_STEP_COUNT + 2], ceiling: 2.6, tiers: [2], carve: carveStairwell, furnish: furnishStairwell,
-    sockets: [[0, -1, WALL_NORTH], [1, STAIR_STEP_COUNT + 2, WALL_SOUTH]], socketDrops: [0, -STAIR_DROP] },
+  stairwell: { name: 'STAIRS', rect: [0, 0, 2, stairStepCount + 2], ceiling: 2.6, tiers: [2], carve: carveStairwell, furnish: furnishStairwell,
+    sockets: [[0, -1, WALL_NORTH], [1, stairStepCount + 2, WALL_SOUTH]], socketDrops: [0, -stairDrop] },
   // ---- extra rooms ----
   boilerRoom: { name: 'BOILER HOUSE', rect: [0, 0, 8, 7], ceiling: 3.4, tiers: [0, 1], carve: carveSimpleRoom(8, 7, 3.4), furnish: furnishBoilerRoom,
     sockets: [[4, 7, WALL_SOUTH], [-1, 3, WALL_WEST]], itemSpot: [6.8, 0.77, 5.6], isFiller: true },
@@ -723,7 +741,8 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   const plan = createLevelPlan();
   plan.layout = GENERATED_LAYOUT_PRESETS[layoutKey] || GENERATED_LAYOUT_PRESETS.mixed;
   const hasLowerLevel = (GENERATED_LEVEL_PRESETS[levelsKey] || GENERATED_LEVEL_PRESETS.two).hasLowerLevel;
-  plan.deepFloorY = hasLowerLevel ? -STAIR_DROP : 0; // the level everything behind the keycard is built on
+  chooseStairShape(seed);
+  plan.deepFloorY = hasLowerLevel ? -stairDrop : 0; // the level everything behind the keycard is built on
   plan.random = createSeededRandomGenerator((seed * 7919 + attempt * 104729) >>> 0);
   const random = plan.random;
   const shuffle = function (list) { return list.map(function (item) { return [random(), item]; }).sort(function (a, b) { return a[0] - b[0]; }).map(function (pair) { return pair[1]; }); };
@@ -971,7 +990,9 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   if (!GENERATED_LAYOUT_PRESETS[layoutKey]) layoutKey = 'mixed';
   if (!GENERATED_LEVEL_PRESETS[levelsKey]) levelsKey = 'two';
   let plan = null;
-  for (let attempt = 0; attempt < 40 && !plan; attempt++) plan = planStation(seed, sizeKey, layoutKey, levelsKey, attempt);
+  // A short stair leaves the lower level little room beside the upper one, so Shaft 9 can take many tries to fit:
+  // large stations with a one-step stair have needed over 50. Most stations are planned within ten.
+  for (let attempt = 0; attempt < 200 && !plan; attempt++) plan = planStation(seed, sizeKey, layoutKey, levelsKey, attempt);
   clearPlacement();
   if (!plan) return false;
   const random = plan.random;

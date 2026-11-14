@@ -133,7 +133,7 @@ function initializeAudioEngine() {
   const reverb = context.createConvolver();
   reverb.buffer = createReverbImpulse(context, 3.4);
   const reverbReturn = context.createGain();
-  reverbReturn.gain.value = 0.55; // TWEAK: how echoey the station sounds (0 = dry)
+  reverbReturn.gain.value = 0.65; // TWEAK: how echoey the station sounds (0 = dry)
   reverb.connect(reverbReturn);
   reverbReturn.connect(audio.masterGain);
   audio.reverbInput = reverb;
@@ -207,7 +207,7 @@ function initializeAudioEngine() {
   // ---- the Hollow: a positional voice that follows it around ----
   audio.hollowPanner = createPannerNode(0, 1.6, 0, 2.2, 1.3);
   audio.hollowGrowlGain = context.createGain();
-  audio.hollowGrowlGain.gain.value = 0;
+  audio.hollowGrowlGain.gain.value = 0.4;
   audio.hollowGrowlGain.connect(audio.hollowPanner);
   // 1. The throat rattle, rounded off and pushed through three "formants": the resonances of a mouth and chest.
   audio.hollowThroatSource = context.createBufferSource();
@@ -219,7 +219,7 @@ function initializeAudioEngine() {
   audio.hollowThroatSource.connect(throatSoftener);
   // TWEAK: each line is one resonance: [centre frequency in Hz, sharpness, loudness, how far it wanders, wander speed].
   // Lower frequencies make it sound larger. The first one carries most of the "growl".
-  const formants = [[230, 5, 1.0, 50, 0.11], [640, 7, 0.65, 150, 0.17], [1900, 9, 0.36, 300, 0.23]];
+  const formants = [[230, 5, 2, 50, 0.11], [640, 7, 1.2, 150, 0.17], [1900, 9, 0.8, 300, 0.23]];
   for (const formant of formants) {
     const filter = context.createBiquadFilter();
     filter.type = 'bandpass';
@@ -244,7 +244,7 @@ function initializeAudioEngine() {
   chestFilter.type = 'lowpass';
   chestFilter.frequency.value = 95;
   const chestLevel = context.createGain();
-  chestLevel.gain.value = 1.6;
+  chestLevel.gain.value = 2.8;
   chestRumble.connect(chestFilter); chestFilter.connect(chestLevel); chestLevel.connect(audio.hollowGrowlGain);
   chestRumble.start();
   // 3. Breath: a slow swell of air between the rattles.
@@ -256,7 +256,7 @@ function initializeAudioEngine() {
   breathFilter.frequency.value = 1100;
   breathFilter.Q.value = 0.8;
   const breathLevel = context.createGain();
-  breathLevel.gain.value = 0.05;
+  breathLevel.gain.value = 0.15;
   const breathSwell = context.createOscillator();
   breathSwell.frequency.value = 0.27; // one breath roughly every four seconds
   const breathSwellDepth = context.createGain();
@@ -283,7 +283,7 @@ function initializeAudioEngine() {
   audio.hollowScreechFilterHigh.frequency.value = 2900;
   audio.hollowScreechFilterHigh.Q.value = 9;
   const screechRasp = context.createGain();
-  screechRasp.gain.value = 0.6;
+  screechRasp.gain.value = 1.6;
   const screechRaspOscillator = context.createOscillator();
   screechRaspOscillator.frequency.value = 58;
   const screechRaspDepth = context.createGain();
@@ -318,7 +318,7 @@ function initializeAudioEngine() {
   generatorRattle.loop = true;
   const generatorRattleFilter = context.createBiquadFilter();
   generatorRattleFilter.type = 'lowpass';
-  generatorRattleFilter.frequency.value = 520;
+  generatorRattleFilter.frequency.value = 420;
   const generatorRattleGain = context.createGain();
   generatorRattleGain.gain.value = 0.7;
   const generatorChug = context.createOscillator();

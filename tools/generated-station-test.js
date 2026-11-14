@@ -30,7 +30,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
         const found = wasBuilt ? debug.auditLayout().concat(debug.auditProgression()) : ['no plan could be made'];
         // A two-level station must have its shaft a flight of stairs down; a one-level station must be flat.
         const shaftFloor = debug.getFloorHeightAt(debug.findInteractable(5).x, debug.findInteractable(5).z);
-        if (wasBuilt && levels === 'two' && !(shaftFloor < -2 && debug.level.stairCount >= 1)) found.push('two levels were asked for but the shaft is at ' + shaftFloor);
+        if (wasBuilt && levels === 'two' && !(shaftFloor < 0 && debug.level.stairCount >= 1)) found.push('two levels were asked for but the shaft is at ' + shaftFloor);
         if (wasBuilt && levels === 'one' && (shaftFloor !== 0 || debug.level.stairCount !== 0)) found.push('one level was asked for but the shaft is at ' + shaftFloor);
         if (found.length > 0) bad.push({ seed: seed, layout: layout, levels: levels, problems: found.slice(0, 4) });
         roomTotal += debug.level.roomCount; loopTotal += debug.level.loopCount;
@@ -117,9 +117,11 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   await drawFrames(page, 1);
   const cameraAtFoot = await inGame(() => window.noReturnDebug.renderCamera.y);
   const neverJumps = descent.heights.every((height, index) => index === 0 || Math.abs(height - descent.heights[index - 1]) < 1);
-  check('walking down the stairs lowers the floor under you smoothly, three metres in all',
-    stairs.floorAtTop === 0 && stairs.bottom.floor < -2.9 && Math.abs(descent.heights[descent.heights.length - 1] - stairs.bottom.floor) < 0.05 && neverJumps, { stairs: stairs, descent: descent });
-  check('the view follows the floor down', cameraAtFoot < -1 && cameraAtFoot > -1.6, cameraAtFoot);
+  // How far down the stairs go differs from station to station, so everything is measured against the foot of this one.
+  check('walking down the stairs lowers the floor under you smoothly, all the way to the foot',
+    stairs.floorAtTop === 0 && stairs.bottom.floor < -0.2 && Math.abs(descent.heights[descent.heights.length - 1] - stairs.bottom.floor) < 0.05 && neverJumps, { stairs: stairs, descent: descent });
+  const eyeAboveFoot = cameraAtFoot - stairs.bottom.floor;
+  check('the view follows the floor down', eyeAboveFoot > 1.4 && eyeAboveFoot < 2, { cameraAtFoot: cameraAtFoot, foot: stairs.bottom.floor });
   await inGame(() => { const debug = window.noReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
 
   // --- vents: you only fit crouched, it is loud in there, and the Hollow crawls through ---
@@ -152,10 +154,16 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     }, [mouth]);
     if (holdCrouch) await page.keyboard.down('KeyC');
     await page.keyboard.down('KeyW');
-    await inGame(() => window.noReturnDebug.simulate(2.5));
     const state = await inGame(() => {
       const debug = window.noReturnDebug;
-      return { inVent: debug.isVentAt(debug.player.x, debug.player.z), crouching: debug.player.isCrouching, audible: debug.player.audibleRadius, eye: Math.round(debug.player.eyeHeight * 100) / 100 };
+      // Two and a half seconds forward. How audible the player is gets noted while they are moving inside the
+      // vent, because a vent can bend, and a player stopped against the bend is quiet again.
+      let loudestInVent = 0;
+      for (let step = 0; step < 25; step++) {
+        debug.simulate(0.1);
+        if (debug.isVentAt(debug.player.x, debug.player.z) && debug.player.isMoving) loudestInVent = Math.max(loudestInVent, debug.player.audibleRadius);
+      }
+      return { inVent: debug.isVentAt(debug.player.x, debug.player.z), crouching: debug.player.isCrouching, audible: loudestInVent, eye: Math.round(debug.player.eyeHeight * 100) / 100 };
     });
     if (holdCrouch) {
       // Let go of crouch and keep crawling: there is no room to stand up.
