@@ -14,6 +14,8 @@
 
 - multiplayer? (mostly for item collection, like extraction looters)
 
+- less long-lived scanner dots on mobile things (doors already seem to remove the dots, figures don't)
+
 ### Implemented
 ~~- Slower detection of beam pointed at monster, so a tap doesn't immediately end in death but raises the monsters 'anger' level.~~
 - ~~Better sounds, better monster growl, less 16bit-like audio~~
