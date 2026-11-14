@@ -98,7 +98,7 @@ function initializeAudioEngine() {
   const reverb = context.createConvolver();
   reverb.buffer = createReverbImpulse(context, 3.4);
   const reverbReturn = context.createGain();
-  reverbReturn.gain.value = 0.55;
+  reverbReturn.gain.value = 0.55; // TWEAK: how echoey the station sounds (0 = dry)
   reverb.connect(reverbReturn);
   reverbReturn.connect(audio.masterGain);
   audio.reverbInput = reverb;
@@ -250,7 +250,7 @@ function initializeAudioEngine() {
   liftRattle.connect(audio.liftGain);
   liftRattle.start();
 
-  audio.ambienceGain.gain.setTargetAtTime(0.9, context.currentTime, 2.5);
+  audio.ambienceGain.gain.setTargetAtTime(0.9, context.currentTime, 2.5); // TWEAK: 0.9 = loudness of the constant room tone
 }
 
 function setMasterVolume(volume) {
@@ -385,7 +385,7 @@ function playFootstepSound(isInWater, isOnGrate, loudness) {
 function setScannerSound(paintLevel) {
   if (!isAudioReady()) return;
   const now = audio.context.currentTime;
-  audio.scannerGain.gain.setTargetAtTime(paintLevel * 0.16, now, 0.03);
+  audio.scannerGain.gain.setTargetAtTime(paintLevel * 0.16, now, 0.03); // TWEAK: 0.16 = loudness of the scanner ticking
   audio.scannerWhineGain.gain.setTargetAtTime(paintLevel * 0.012, now, 0.05);
 }
 

@@ -98,6 +98,37 @@ function multiplyMatrices(out, left, right) {
   return out;
 }
 
+// Model matrix that maps a unit cylinder (radius 1, Y from 0 to 1) onto the segment from start to end.
+// Used by debug mode to draw creature bodies.
+function writeSegmentMatrix(out, startX, startY, startZ, endX, endY, endZ, radius) {
+  const axisX = endX - startX, axisY = endY - startY, axisZ = endZ - startZ;
+  const length = Math.sqrt(axisX * axisX + axisY * axisY + axisZ * axisZ) || 0.0001;
+  const directionX = axisX / length, directionY = axisY / length, directionZ = axisZ / length;
+  let helperX = 0, helperY = 1;
+  const helperZ = 0;
+  if (Math.abs(directionY) > 0.98) { helperX = 1; helperY = 0; }
+  let sideX = helperY * directionZ - helperZ * directionY;
+  let sideY = helperZ * directionX - helperX * directionZ;
+  let sideZ = helperX * directionY - helperY * directionX;
+  const sideLength = Math.sqrt(sideX * sideX + sideY * sideY + sideZ * sideZ) || 1;
+  sideX /= sideLength; sideY /= sideLength; sideZ /= sideLength;
+  const otherX = directionY * sideZ - directionZ * sideY;
+  const otherY = directionZ * sideX - directionX * sideZ;
+  const otherZ = directionX * sideY - directionY * sideX;
+  out[0] = sideX * radius; out[1] = sideY * radius; out[2] = sideZ * radius; out[3] = 0;
+  out[4] = axisX; out[5] = axisY; out[6] = axisZ; out[7] = 0;
+  out[8] = otherX * radius; out[9] = otherY * radius; out[10] = otherZ * radius; out[11] = 0;
+  out[12] = startX; out[13] = startY; out[14] = startZ; out[15] = 1;
+  return out;
+}
+
+function writeTranslationScaleMatrix(out, x, y, z, scaleX, scaleY, scaleZ) {
+  out.fill(0);
+  out[0] = scaleX; out[5] = scaleY; out[10] = scaleZ; out[15] = 1;
+  out[12] = x; out[13] = y; out[14] = z;
+  return out;
+}
+
 function formatClockTime(totalSeconds) {
   const wholeSeconds = Math.max(0, Math.floor(totalSeconds));
   const minutes = Math.floor(wholeSeconds / 60);

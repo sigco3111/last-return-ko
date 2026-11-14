@@ -34,14 +34,15 @@ const ATTRACT_CAMERA = { x: 16.9, y: 1.5, z: 50.3 };
 const renderCamera = { x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, fieldOfViewDegrees: 72 };
 const frameState = {
   time: 0, realTime: 0, interference: 0, danger: 0, fade: 1, powerOn: false, hasKeycard: false, palette: 0,
-  showViewmodel: false, viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0, scannerActivity: 0, scannerHeat: 0
+  showViewmodel: false, viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0, scannerActivity: 0, scannerHeat: 0,
+  debug: null
 };
 let lastFrameTimestamp = 0;
 
 function getPlayFieldOfViewDegrees() {
   const canvas = renderer.canvas;
   const aspectRatio = canvas.clientWidth / Math.max(1, canvas.clientHeight);
-  return aspectRatio < 1 ? 92 : 72;
+  return aspectRatio < 1 ? 92 : 72; // TWEAK: field of view in degrees (upright phone : everything else)
 }
 
 function scheduleEvent(delaySeconds, action) {
@@ -102,6 +103,7 @@ function resetWorldState() {
   clearAllPoints();
   clearMap();
   clearMessages();
+  resetDebugForNewRun();
   setGeneratorSoundRunning(false);
   setLiftMachinerySound(0);
 }
@@ -241,6 +243,8 @@ function resumeGame() {
 
 function returnToTitle() {
   suspendAudio(false);
+  debugState.isPanelOpen = false;
+  debugState.panelElement.hidden = true;
   if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();
   resetWorldState();
   game.mode = 'title';
@@ -334,7 +338,7 @@ function startGenerator(interactable) {
   scheduleEvent(4.5, function () { showRadioMessage(RADIO_MESSAGES.generatorStarted); });
   if (game.difficulty.hollowEnabled) {
     scheduleEvent(11, function () { showRadioMessage(RADIO_MESSAGES.generatorFollowUp); });
-    scheduleEvent(6, function () {
+    scheduleEvent(TUNING.hollowWakeDelaySeconds, function () {
       activateHollow(HOLLOW_SPAWN_POSITION.x, HOLLOW_SPAWN_POSITION.z, 3);
       hollow.state = HOLLOW_STATE_INVESTIGATE;
       hollow.targetX = 68.5; hollow.targetZ = 47.5;
@@ -345,7 +349,7 @@ function startGenerator(interactable) {
 function startLiftCall() {
   const flags = game.flags;
   flags.uploadStarted = true;
-  game.liftCountdown = game.difficulty.hollowEnabled ? TUNING.liftArrivalSeconds : 12;
+  game.liftCountdown = game.difficulty.hollowEnabled ? TUNING.liftArrivalSeconds : TUNING.liftArrivalSecondsWithoutHollow;
   saveCheckpoint();
   refreshObjective();
   playPickupSound();
@@ -374,6 +378,7 @@ function completeLiftArrival() {
 
 function triggerPlayerDeath(kind, figure) {
   if (game.mode !== 'playing') return;
+  if (debugState.options.invulnerable || debugState.options.flyMode) return;
   game.mode = 'dying';
   game.statistics.deaths++;
   game.deathSequence = { kind: kind, figure: figure, timer: 0 };
@@ -526,8 +531,12 @@ function updatePlaying(dt) {
   updateScanner(dt, player.x, eyeY, player.z);
   updateInteractionFocus(player.x, eyeY, player.z);
   updateDoors(dt);
-  updateHollow(dt);
-  updateStills(dt);
+  if (debugState.options.freezeCreatures) {
+    hollow.figure.hitsThisFrame = 0;
+  } else {
+    updateHollow(dt);
+    updateStills(dt);
+  }
   updatePhantoms();
   if (game.mode === 'playing') updateGameProgress(dt);
   updateAtmosphere(dt);
@@ -549,12 +558,16 @@ function updateAscending(dt) {
     setLiftMachinerySound(0);
     setGeneratorSoundRunning(false);
     if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();
-    try {
-      const storageKey = 'no-return-best-' + game.difficulty.key;
-      const previousBest = Number(window.localStorage.getItem(storageKey));
-      if (!previousBest || game.statistics.elapsed < previousBest) window.localStorage.setItem(storageKey, String(game.statistics.elapsed));
-      game.statistics.bestTime = previousBest && previousBest < game.statistics.elapsed ? previousBest : game.statistics.elapsed;
-    } catch (error) { game.statistics.bestTime = null; }
+    if (debugState.hasBeenUsedThisRun) {
+      game.statistics.bestTime = null; // a run with debug mode does not count
+    } else {
+      try {
+        const storageKey = 'no-return-best-' + game.difficulty.key;
+        const previousBest = Number(window.localStorage.getItem(storageKey));
+        if (!previousBest || game.statistics.elapsed < previousBest) window.localStorage.setItem(storageKey, String(game.statistics.elapsed));
+        game.statistics.bestTime = previousBest && previousBest < game.statistics.elapsed ? previousBest : game.statistics.elapsed;
+      } catch (error) { game.statistics.bestTime = null; }
+    }
     showEndingScreen();
   }
 }
@@ -644,8 +657,10 @@ function runFrame(timestamp) {
   frameState.palette = settings.palette;
   frameState.scannerActivity = player.scannerActivity;
   frameState.scannerHeat = player.heat;
+  frameState.debug = game.mode === 'title' ? null : buildDebugFrameData();
   renderFrame(renderCamera, frameState);
   updateHud(realDt);
+  updateDebugMode(realDt);
 }
 
 // ---------------------------------------------------------------------------
@@ -668,6 +683,7 @@ function startApplication() {
   createPhantoms();
   initializeInput();
   initializeInterface();
+  initializeDebugMode();
   liftDoor.forcedState = true;
   liftDoor.openFraction = 1;
   liftDoor.slab.isRemoved = true;
@@ -691,7 +707,10 @@ function startApplication() {
     awakenStills: awakenStills,
     emitNoise: emitNoise,
     setScanHeld: function (isHeld) { input.isScanHeld = isHeld; },
-    setScannerSpread: setScannerSpread
+    setScannerSpread: setScannerSpread,
+    debugState: debugState,
+    setDebugOption: setDebugOption,
+    tuning: TUNING
   };
 
   window.requestAnimationFrame(function (timestamp) {
@@ -699,5 +718,3 @@ function startApplication() {
     runFrame(timestamp);
   });
 }
-
-startApplication();

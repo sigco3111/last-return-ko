@@ -38,6 +38,17 @@ function addSurveySpool(objectId, x, y, z, label) {
   registerInteractable(objectId, x, y + 0.08, z, 'Take survey spool', [reelCore, reelBase, reelCap], { removeWhenUsed: true, mapLabel: label });
 }
 
+// HOW TO CHANGE THE STATION
+//   A room:    carveRoom(startX, startZ, endX, endZ, ceilingHeight, ZONE_...) hollows out a rectangle of tiles.
+//              Rooms must be separated by at least one solid tile, and joined by a door or an open gap.
+//   A door:    addDoor(tileX, tileZ, DOOR_KIND_...) on the solid tile between two rooms.
+//              AUTOMATIC always opens, POWERED needs the generator, KEYCARD needs power and the card.
+//   An object: addBoxBetween(minX, minY, minZ, maxX, maxY, maxZ) for a box,
+//              or one of the furniture helpers in 02-world.js (addTable, addBarrel, addShelfRackAlongZ, ...).
+//              Pass { blocksMovement: false } (or CLUTTER) for things you should be able to walk through.
+//   Lettering: addWallSign('TEXT', tileX, tileZ, WALL_NORTH, { width, height, centerY }) on a wall of that tile.
+//              Add isScrawled: true for hand-scratched writing.
+// After a change, run `npm test`: its first check reports anything a creature can no longer reach.
 function buildFacilityLayout() {
   const random = createSeededRandomGenerator(90210);
 

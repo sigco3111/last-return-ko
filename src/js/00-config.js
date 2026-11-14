@@ -1,16 +1,29 @@
 // ---------------------------------------------------------------------------
 // NO RETURN - configuration, tuning values and all story text
+//
+// This is the file to open when you want the game to FEEL different.
+// Change a number, run `npm run build`, reload index.html.
+// Most numbers in TUNING can also be changed while the game is running:
+// press the ` key (top left of the keyboard) to open debug mode, then "Live tuning".
+//
+// Units used everywhere: distances in metres, speeds in metres per second,
+// times in seconds, angles in degrees. One floor tile is one metre.
 // ---------------------------------------------------------------------------
 
+// The three threat levels on the title screen.
+// Each "Factor" is a multiplier applied on top of the matching numbers in TUNING:
+// 1.0 means "exactly as written in TUNING", 1.3 means 30 % more, 0.7 means 30 % less.
 const DIFFICULTY_PRESETS = {
   survey: {
-    key: 'survey',
-    label: 'Survey only',
-    hollowEnabled: false,
-    stillsEnabled: false,
-    hollowSpeedFactor: 1.0,
-    hearingFactor: 1.0,
-    heatFactor: 0.7
+    key: 'survey',              // internal name, also used to store the best time
+    label: 'Survey only',       // shown on the ending screen
+    hollowEnabled: false,       // false: the Hollow never appears, not even after the generator starts
+    stillsEnabled: false,       // false: the calibration dummies stay ordinary statues
+    hollowSpeedFactor: 1.0,     // multiplies every Hollow speed (roam, investigate, hunt, enraged)
+    hearingFactor: 1.0,         // multiplies every noise radius and how close it must be to hear you
+    heatFactor: 0.7             // multiplies how fast the scanner heats up (painting and sweeps).
+                                // Below 1 you can scan for longer before overheating, above 1 for less long.
+                                // It does not change how fast the scanner cools down.
   },
   standard: {
     key: 'standard',
@@ -18,7 +31,7 @@ const DIFFICULTY_PRESETS = {
     hollowEnabled: true,
     stillsEnabled: true,
     hollowSpeedFactor: 1.0,
-    hearingFactor: 0.8,
+    hearingFactor: 0.8,         // it hears 20 % less far than the numbers in TUNING: a sprint step carries 11.2 m, not 14 m
     heatFactor: 1.0
   },
   nightmare: {
@@ -26,69 +39,111 @@ const DIFFICULTY_PRESETS = {
     label: 'Nightmare',
     hollowEnabled: true,
     stillsEnabled: true,
-    hollowSpeedFactor: 1.14,
-    hearingFactor: 1.15,
-    heatFactor: 1.3
+    hollowSpeedFactor: 1.14,    // 14 % faster: its hunt speed goes from 3.5 to about 4.0 (you sprint at 4.6)
+    hearingFactor: 1.15,        // hears 15 % further than TUNING says: a sprint step carries 16.1 m (11.2 m on Standard)
+    heatFactor: 1.3             // about 7.7 s of continuous painting before overheating instead of 10 s
   }
 };
 
+// The "Point budget" choice on the title screen. These only affect looks and performance.
 const QUALITY_PRESETS = {
+  // maximumPoints: how many points are remembered. When full, the oldest are overwritten,
+  //                so a low number means rooms you scanned long ago fade from view sooner.
+  // raysPerSecond: pulses fired per second while painting. Higher fills surfaces in faster.
+  // sweepRays:     pulses fired by one full sweep.
+  // renderScale:   1.0 draws at full screen resolution, 0.75 draws smaller and stretches (faster, softer).
   low: { key: 'low', maximumPoints: 250000, raysPerSecond: 5000, sweepRays: 14000, renderScale: 0.75 },
   medium: { key: 'medium', maximumPoints: 500000, raysPerSecond: 8000, sweepRays: 26000, renderScale: 1.0 },
   high: { key: 'high', maximumPoints: 1000000, raysPerSecond: 11000, sweepRays: 40000, renderScale: 1.0 }
 };
 
 const TUNING = {
-  playerRadius: 0.3,
-  eyeHeightStanding: 1.62,
-  eyeHeightCrouching: 0.95,
+  // ---- The player's body ---------------------------------------------------
+  playerRadius: 0.3,            // how wide you are for bumping into walls. Smaller squeezes through tighter gaps.
+  eyeHeightStanding: 1.62,      // camera height when standing
+  eyeHeightCrouching: 0.95,     // camera height when crouched
   walkSpeed: 2.5,
-  sprintSpeed: 4.6,
+  sprintSpeed: 4.6,             // must stay above hollowHuntSpeed or sprinting cannot open a gap
   crouchSpeed: 1.3,
-  waterSpeedFactor: 0.72,
-  playerAcceleration: 16,
-  staminaSeconds: 6.5,
-  staminaRecoverySeconds: 10,
-  interactionReach: 2.0,
+  waterSpeedFactor: 0.72,       // speed multiplier while wading through flooded floor (1 = no slowdown)
+  playerAcceleration: 16,       // how quickly you reach full speed. Low feels like ice, high feels snappy.
+  staminaSeconds: 6.5,          // how long you can sprint on a full bar
+  staminaRecoverySeconds: 10,   // how long an empty bar takes to refill
+  interactionReach: 2.0,        // how close you must be to use a terminal, note or pickup
 
-  scannerMaximumRange: 60,
-  scannerSpreadMinimumDegrees: 3,
-  scannerSpreadMaximumDegrees: 26,
+  // ---- The scanner ---------------------------------------------------------
+  scannerMaximumRange: 60,      // pulses that travel further than this report NO RETURN
+  scannerSpreadMinimumDegrees: 3,   // narrowest beam (mouse wheel down). Half-angle of the cone.
+  scannerSpreadMaximumDegrees: 26,  // widest beam (mouse wheel up)
   scannerSpreadDefaultDegrees: 11,
-  heatPerSecondWhilePainting: 0.1,
-  heatCoolingPerSecond: 0.2,
-  overheatRecoveryLevel: 0.4,
-  sweepDurationSeconds: 2.4,
-  sweepHeatCost: 0.28,
-  sweepHalfWidthDegrees: 52,
-  sweepHalfHeightDegrees: 36,
+  // Heat runs from 0 (cold) to 1 (overheated). The HUD bar shows it.
+  heatPerSecondWhilePainting: 0.1,  // 0.1 = ten seconds of continuous painting from cold to overheated
+  heatCoolingPerSecond: 0.2,        // 0.2 = five seconds from overheated back to cold when not scanning
+  overheatRecoveryLevel: 0.4,       // after overheating, the scanner stays locked until heat drops to this
+  sweepDurationSeconds: 2.4,        // how long one full sweep takes. You walk at half speed during it.
+  sweepHeatCost: 0.28,              // heat added by one sweep. Sweeps are refused above 0.78 heat.
+  sweepHalfWidthDegrees: 52,        // how far left and right of centre a sweep reaches
+  sweepHalfHeightDegrees: 36,       // how far above and below centre a sweep reaches
 
+  // ---- Noise you make ------------------------------------------------------
+  // Each of these is a one-off sound. If the Hollow is within this many metres it hears it
+  // and walks over to investigate. If it is within 30 % of the distance it starts hunting at once.
+  // Bigger numbers make the Hollow find you more often. All are multiplied by hearingFactor.
   noiseRadiusWalkStep: 4,
   noiseRadiusSprintStep: 14,
   noiseRadiusCrouchStep: 1.2,
-  noiseRadiusScannerHum: 4,
+  noiseRadiusScannerHum: 4,     // emitted twice a second while painting
   noiseRadiusSweep: 22,
-  noiseRadiusDoor: 8,
+  noiseRadiusDoor: 8,           // a door you open (doors the Hollow opens do not count)
   noiseRadiusPickup: 4,
+  waterStepNoiseFactor: 1.5,    // footsteps in water carry this much further
 
-  hollowRoamSpeed: 1.3,
-  hollowInvestigateSpeed: 2.5,
-  hollowHuntSpeed: 3.5,
-  hollowEnragedSpeed: 5.3,
-  hollowHeldSpeedFactor: 0.1,
-  hollowKillDistance: 0.4,
-  hollowRageLimitSeconds: 4.2,
-  hollowEnragedDurationSeconds: 4.0,
-  hollowMemorySeconds: 5.0,
-  hollowSearchSeconds: 8.0,
+  // ---- How close the Hollow must be to notice you without any sound event --
+  // Think of it as the sound of your breathing and clothes. It also needs a clear straight
+  // walking line to you (or to be within 1.6 m). Also multiplied by hearingFactor.
+  audibleRadiusSprinting: 7.5,
+  audibleRadiusWalking: 4.2,
+  audibleRadiusStanding: 2.6,
+  audibleRadiusCrouchWalking: 2.0,
+  audibleRadiusCrouchedStill: 1.15, // the "hold your breath" distance. Below hollowKillDistance would make hiding perfect.
+  waterAudibleFactor: 1.3,          // moving through water makes all of the above this much larger
 
-  stillSpeed: 1.8,
-  stillObservedHoldSeconds: 1.1,
+  // ---- The Hollow ----------------------------------------------------------
+  hollowRoamSpeed: 1.3,             // wandering between rooms, not aware of you
+  hollowInvestigateSpeed: 2.5,      // walking to a noise it heard
+  hollowHuntSpeed: 3.5,             // it knows where you are. Faster than your walk, slower than your sprint.
+  hollowEnragedSpeed: 5.3,          // after being held in the beam too long. Faster than your sprint on purpose.
+  hollowSpeedBonusWithAllSpools: 1.1, // speed multiplier once you carry all three spools (the walk back is harder)
+  hollowHeldSpeedFactor: 0.1,       // speed multiplier while the beam is on it. 0 freezes it, 1 means the beam does nothing.
+  hollowBeamHitsToNotice: 2,        // pulses that must land on it in one frame before it counts as "in the beam"
+  hollowKillDistance: 0.4,          // closer than this and it has you
+  hollowRageLimitSeconds: 4.2,      // seconds in the beam before it becomes enraged. Higher makes the beam a stronger tool.
+  hollowRageCoolingPerSecond: 0.45, // how fast that timer runs back down while the beam is off it
+  hollowEnragedDurationSeconds: 4.0, // how long it stays enraged (ignores the beam, uses hollowEnragedSpeed)
+  hollowMemorySeconds: 5.0,         // after losing track of you it keeps heading for where it last sensed you this long
+  hollowSearchSeconds: 8.0,         // then it pokes around that area this long before giving up
+  hollowPressureAfterSeconds: 55,   // if it has not hunted you for this long, its wandering drifts toward you.
+                                    // Lower means fewer quiet stretches. Very high means you may rarely meet it.
+  hollowWakeDelaySeconds: 6,        // seconds between starting the generator and the Hollow appearing at the shaft
+  hollowImprintSeconds: 5.5,        // how long the red points a scan leaves on it stay visible (maximum 63)
+
+  // ---- The Stills (calibration dummies) ------------------------------------
+  stillSpeed: 1.8,                  // walking speed while nothing is scanning them. Your walk is 2.5.
+  stillObservedHoldSeconds: 1.1,    // a dummy stays frozen this long after the last pulse that touched it.
+                                    // Higher lets you look away for longer.
   stillKillDistance: 0.65,
+  stillImprintSeconds: 22,          // how long the points a scan leaves on a dummy stay visible (maximum 63).
+                                    // Long imprints mean old outlines linger and the room looks more crowded than it is.
 
-  liftArrivalSeconds: 40
+  // ---- Apparitions ---------------------------------------------------------
+  phantomImprintSeconds: 7.5,       // how long the points of a figure that "was never there" stay visible
+
+  // ---- The lift ------------------------------------------------------------
+  liftArrivalSeconds: 40,           // how long you must survive after uploading the spools
+  liftArrivalSecondsWithoutHollow: 12 // the same wait on "Survey only", where nothing is coming
 };
 
+// Names shown under the minimap and on the full map. The order must match the ZONE_ numbers in 02-world.js.
 const ZONE_NAMES = [
   'UNSURVEYED',
   'LIFT CAR',
@@ -112,6 +167,7 @@ const ZONE_NAMES = [
   'SHAFT 9'
 ];
 
+// The lines that appear one by one on the black screen after "Begin descent".
 const INTRO_LINES = [
   'KESSEL-9 PUMPING ANNEX',
   '212 m below grade. Sealed 1987.',
@@ -119,6 +175,7 @@ const INTRO_LINES = [
   'There is no lighting. The scanner is the only way to see.'
 ];
 
+// What dispatch says over the radio. When each one plays is decided in 11-game.js.
 const RADIO_MESSAGES = {
   leftLift: 'The car goes back up on its own when it is empty. Mains is dead on your level. The generator is in Pump Hall B, east end of the main corridor.',
   firstSpool: 'That is one. Crew 2 logged two more: one in the calibration store, one at the shaft.',
@@ -131,6 +188,8 @@ const RADIO_MESSAGES = {
   liftArrived: 'The car is at your level. Get in.'
 };
 
+// Everything you can read: the three spools and the four notes.
+// Each paragraph is one entry in the list; add or remove paragraphs freely.
 const LOG_ENTRIES = {
   spool1: {
     heading: 'Survey spool 1 of 3',
@@ -197,6 +256,7 @@ const LOG_ENTRIES = {
   }
 };
 
+// The one-line goal shown top left.
 const OBJECTIVE_TEXT = {
   leaveLift: 'Step out of the lift car.',
   findGenerator: 'Restore mains power. Generator: Pump Hall B, east.',
@@ -206,6 +266,7 @@ const OBJECTIVE_TEXT = {
   boardLift: 'Board the lift.'
 };
 
+// The "SIGNAL LOST" screen, one version per thing that can catch you.
 const DEATH_TEXT = {
   hollow: {
     title: 'SIGNAL LOST',

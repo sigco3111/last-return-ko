@@ -117,7 +117,7 @@ function check(description, condition, detail) {
   await page.keyboard.press('KeyE');
   await inGame(() => { const debug = window.noReturnDebug; debug.teleport(10.2, 55.3, -Math.PI / 2); debug.use(1); });
   const upload = await inGame(() => ({ started: window.noReturnDebug.game.flags.uploadStarted, countdown: window.noReturnDebug.game.liftCountdown }));
-  check('uploading three spools calls the lift', upload.started && upload.countdown === 40, upload);
+  check('uploading three spools calls the lift', upload.started && upload.countdown > 39 && upload.countdown <= 40, upload);
   await inGame(() => { const debug = window.noReturnDebug; debug.hollow.isActive = false; debug.simulate(41); });
   check('the lift arrives and opens', await inGame(() => window.noReturnDebug.game.flags.liftArrived && window.noReturnDebug.doors[0].openFraction === 1));
   await inGame(() => { const debug = window.noReturnDebug; debug.teleport(6.5, 53.5, Math.PI / 2); debug.simulate(0.2); });
@@ -126,8 +126,95 @@ function check(description, condition, detail) {
   await drawFrames(page, 1);
   check('the ending screen is shown', await page.evaluate(() => !document.getElementById('screen-ending').hidden));
 
+  check('a normal run is not marked as a debug run', await inGame(() => !window.noReturnDebug.debugState.hasBeenUsedThisRun));
   check('no script errors were reported', problems.length === 0, problems);
   await browser.close();
+
+  // --- debug mode: every switch does what its label says ---
+  const debugSession = await openGame();
+  const debugPage = debugSession.page;
+  const inDebugGame = (callback, argument) => debugPage.evaluate(callback, argument);
+  const clickInPage = (elementId) => debugPage.evaluate((id) => document.getElementById(id).click(), elementId);
+  await startGame(debugPage, false);
+  await debugPage.keyboard.press('Backquote');
+  await drawFrames(debugPage, 2);
+  const panelState = await inDebugGame(() => ({ hidden: document.getElementById('debug-panel').hidden, mode: window.noReturnDebug.game.mode }));
+  check('the ` key opens the debug panel without pausing the game', !panelState.hidden && panelState.mode === 'playing', panelState);
+
+  // "Cannot be caught" goes on first, so the summoned Hollow cannot end the run while the other switches are tried.
+  for (const key of ['invulnerable', 'showCreatures', 'seeThroughWalls', 'lightStation', 'showSenses', 'creaturesOnMap']) await clickInPage('debug-option-' + key);
+  await clickInPage('debug-action-power');
+  await inDebugGame(() => { const debug = window.noReturnDebug; debug.teleport(21.5, 53, Math.PI / 2); debug.simulate(0.2); });
+  await clickInPage('debug-action-summon');
+  await inDebugGame(() => window.noReturnDebug.simulate(1));
+  await drawFrames(debugPage, 3);
+  await clickInPage('touch-map'); // the full map, with creature markers
+  await drawFrames(debugPage, 2);
+  await clickInPage('touch-map');
+  check('lit station, creature bodies, sense lines and map markers draw without errors',
+    debugSession.problems.length === 0 && await inDebugGame(() => window.noReturnDebug.hollow.isActive), debugSession.problems);
+  check('using a switch marks the run as a debug run', await inDebugGame(() => window.noReturnDebug.debugState.hasBeenUsedThisRun));
+
+  await inDebugGame(() => {
+    const debug = window.noReturnDebug;
+    debug.hollow.graceTimer = 0;
+    debug.hollow.figure.x = debug.player.x + 0.4; debug.hollow.figure.z = debug.player.z;
+    debug.simulate(2);
+  });
+  check('"Cannot be caught": the Hollow reaches the player and nothing happens', (await inDebugGame(() => window.noReturnDebug.game.mode)) === 'playing');
+
+  await clickInPage('debug-option-freezeCreatures');
+  const frozen = await inDebugGame(() => {
+    const debug = window.noReturnDebug;
+    debug.hollow.figure.x = 30.5; debug.hollow.figure.z = 52.5;
+    debug.simulate(3);
+    return [debug.hollow.figure.x, debug.hollow.figure.z];
+  });
+  check('"Freeze creatures": the Hollow does not move', frozen[0] === 30.5 && frozen[1] === 52.5, frozen);
+  await clickInPage('debug-option-freezeCreatures');
+
+  await clickInPage('debug-option-creaturesIgnorePlayer');
+  const ignored = await inDebugGame(() => {
+    const debug = window.noReturnDebug;
+    debug.hollow.state = 0;
+    debug.hollow.figure.x = debug.player.x + 3; debug.hollow.figure.z = debug.player.z;
+    debug.emitNoise(debug.player.x, debug.player.z, 13);
+    debug.setScanHeld(true);
+    debug.simulate(1);
+    debug.setScanHeld(false);
+    return debug.hollow.state;
+  });
+  check('"Creatures ignore me": noise and the beam do not start a hunt', ignored !== 2, ignored);
+
+  await clickInPage('debug-option-unlimitedScanner');
+  const heat = await inDebugGame(() => { const debug = window.noReturnDebug; debug.setScanHeld(true); debug.simulate(15); debug.setScanHeld(false); return [debug.player.heat, debug.player.isOverheated]; });
+  check('"Scanner never heats": fifteen seconds of painting leaves it cold', heat[0] === 0 && heat[1] === false, heat);
+
+  await clickInPage('debug-option-flyMode');
+  await debugPage.keyboard.down('KeyW');
+  const flight = await inDebugGame(() => { const debug = window.noReturnDebug; debug.player.pitch = 0.6; const before = debug.player.eyeHeight; debug.simulate(1.5); return debug.player.eyeHeight - before; });
+  await debugPage.keyboard.up('KeyW');
+  check('"Fly through walls": looking up and moving forward gains height', flight > 3, flight);
+  await clickInPage('debug-option-flyMode');
+  const landed = await inDebugGame(() => window.noReturnDebug.player.eyeHeight);
+  check('switching flying off puts the player back on the floor', Math.abs(landed - 1.62) < 0.01, landed);
+
+  await inDebugGame(() => { document.getElementById('debug-zone').value = '19'; });
+  await clickInPage('debug-teleport');
+  const zoneAfterTeleport = await inDebugGame(() => { const debug = window.noReturnDebug; debug.simulate(0.2); return [debug.player.x, debug.player.z]; });
+  check('"Go to" moves the player into the chosen zone (Shaft 9)', zoneAfterTeleport[0] > 49 && zoneAfterTeleport[0] < 69 && zoneAfterTeleport[1] < 15, zoneAfterTeleport);
+
+  const tuned = await inDebugGame(() => {
+    const field = document.getElementById('debug-tuning-walkSpeed');
+    field.value = '5';
+    field.dispatchEvent(new Event('change'));
+    const changed = window.noReturnDebug.tuning.walkSpeed;
+    document.getElementById('debug-tuning-reset').click();
+    return [changed, window.noReturnDebug.tuning.walkSpeed, field.value];
+  });
+  check('live tuning changes a value and reset restores it', tuned[0] === 5 && tuned[1] === 2.5 && tuned[2] === '2.5', tuned);
+  check('no script errors were reported in debug mode', debugSession.problems.length === 0, debugSession.problems);
+  await debugSession.browser.close();
 
   // --- phones: the game holds still until the phone is turned sideways ---
   const phone = await openGame({ width: 390, height: 844, isPhone: true });

@@ -7,6 +7,9 @@
 const FIGURE_CAPSULE_COUNT = 12;
 const FIGURE_CAPSULE_STRIDE = 7; // startX, startY, startZ, endX, endY, endZ, radius
 
+// TWEAK: body shapes, in metres. Lengths are bone lengths, radii are how thick each part is.
+// The Hollow is tall with arms that reach its knees; the dummy has ordinary proportions.
+// Height comes out as roughly thigh + shin + torsoLength + neckLength + head.
 const FIGURE_PROPORTIONS_HOLLOW = {
   torsoLength: 0.76, neckLength: 0.15, headRadius: 0.112, headLength: 0.11,
   shoulderWidth: 0.44, hipWidth: 0.2, upperArm: 0.58, foreArm: 0.7,
@@ -21,7 +24,13 @@ const FIGURE_PROPORTIONS_DUMMY = {
 
 const raycastableFigures = [];
 
-function createFigure(proportions, surfaceClass, pointLifeCode) {
+// Points store their lifetime in one byte, in quarter seconds: 1 = 0.25 s, 255 = 63.75 s. 0 means "forever".
+function convertSecondsToPointLifeCode(seconds) {
+  return clampNumber(Math.round(seconds / 0.25), 1, 255);
+}
+
+// `imprintTuningKey` names the TUNING value that says how long points left on this figure stay visible.
+function createFigure(proportions, surfaceClass, imprintTuningKey) {
   return {
     x: 0, z: 0, yaw: 0,
     proportions: proportions,
@@ -30,7 +39,7 @@ function createFigure(proportions, surfaceClass, pointLifeCode) {
     boundsCenterY: 1,
     boundsRadius: 1.5,
     surfaceClass: surfaceClass,
-    pointLifeCode: pointLifeCode,
+    imprintTuningKey: imprintTuningKey,
     hitsThisFrame: 0,
     totalHits: 0,
     lastScannedTime: -999

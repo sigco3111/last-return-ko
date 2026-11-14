@@ -6,6 +6,7 @@ const input = {
   keysDown: new Set(),
   isPointerLocked: false,
   hasPointerLockEverWorked: false,
+  ignoreLookUntil: 0,
   useDragLook: false,
   isTouchDevice: false,
   isScanHeld: false,
@@ -113,10 +114,11 @@ function initializeInput() {
   const canvas = renderer.canvas;
 
   window.addEventListener('keydown', function (event) {
-    if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT')) return;
+    if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'SELECT') && event.code !== 'Backquote' && event.code !== 'F2') return;
     const code = event.code;
     if (code === 'Tab' || code === 'Space' || code.indexOf('Arrow') === 0) event.preventDefault();
     if (event.repeat) return;
+    if (code === 'Backquote' || code === 'F2') { event.preventDefault(); toggleDebugPanel(); return; }
     input.keysDown.add(code);
     if (game.mode === 'playing') {
       if (code === 'KeyE') input.wantsInteract = true;
@@ -158,6 +160,7 @@ function initializeInput() {
   });
   window.addEventListener('mousemove', function (event) {
     if (game.mode !== 'playing') return;
+    if (performance.now() < input.ignoreLookUntil) return;
     if (input.isPointerLocked || (input.useDragLook && (input.isScanHeld || input.isLookDragging))) {
       input.lookDeltaX += event.movementX || 0;
       input.lookDeltaY += event.movementY || 0;
@@ -172,10 +175,15 @@ function initializeInput() {
 
   document.addEventListener('pointerlockchange', function () {
     input.isPointerLocked = document.pointerLockElement === canvas;
-    if (input.isPointerLocked) input.hasPointerLockEverWorked = true;
+    if (input.isPointerLocked) {
+      input.hasPointerLockEverWorked = true;
+      // Some browsers report one huge mouse jump right after capture. Skip the first moments.
+      input.ignoreLookUntil = performance.now() + 150;
+    }
     if (!input.isPointerLocked) {
       input.isScanHeld = false;
-      if (game.mode === 'playing' && !input.useDragLook && !input.isTouchDevice) pauseGame();
+      // Losing the mouse normally means the player pressed Escape. With the debug panel up it means they want the cursor.
+      if (game.mode === 'playing' && !input.useDragLook && !input.isTouchDevice && !debugState.isPanelOpen) pauseGame();
     }
   });
   document.addEventListener('pointerlockerror', enableDragLookFallback);
@@ -307,6 +315,7 @@ function initializeTouchControls() {
 
 function updatePlayerMovement(dt) {
   const keys = input.keysDown;
+  // TWEAK: base mouse sensitivity, in radians turned per pixel moved. The "Look speed" slider multiplies it.
   const lookScale = 0.0021 * settings.sensitivity;
   player.yaw += input.lookDeltaX * lookScale;
   player.pitch -= input.lookDeltaY * lookScale;
@@ -324,6 +333,8 @@ function updatePlayerMovement(dt) {
   if (inputLength > 1) { forwardInput /= inputLength; strafeInput /= inputLength; }
   const hasMoveInput = inputLength > 0.08;
 
+  if (debugState.options.flyMode) { updateDebugFlight(dt, forwardInput, strafeInput); return; }
+
   player.isCrouching = keys.has('KeyC') || input.touchCrouch;
   const wantsSprint = (keys.has('ShiftLeft') || keys.has('ShiftRight') || input.touchSprint) && !player.isCrouching;
   player.isSprinting = wantsSprint && hasMoveInput && forwardInput > 0.2 && !player.isStaminaLocked && player.sweepTimeRemaining <= 0;
@@ -337,6 +348,7 @@ function updatePlayerMovement(dt) {
     if (player.timeSinceSprint > 0.9) player.stamina = Math.min(1, player.stamina + dt / TUNING.staminaRecoverySeconds);
     if (player.isStaminaLocked && player.stamina > 0.3) player.isStaminaLocked = false;
   }
+  if (debugState.options.unlimitedStamina) { player.stamina = 1; player.isStaminaLocked = false; }
 
   let speed = TUNING.walkSpeed;
   if (player.isCrouching) speed = TUNING.crouchSpeed;
@@ -367,19 +379,26 @@ function updatePlayerMovement(dt) {
 
   // Footsteps are what the Hollow listens for.
   player.strideDistance += movedDistance;
+  // TWEAK: metres between footsteps (sprinting, crouching, walking). Each footstep is one noise the Hollow can hear,
+  // so shorter strides mean more chances to be heard.
   const strideLength = player.isSprinting ? 1.15 : (player.isCrouching ? 0.62 : 0.8);
   if (player.strideDistance >= strideLength) {
     player.strideDistance = 0;
     const loudness = player.isSprinting ? 1.0 : (player.isCrouching ? 0.25 : 0.55);
     playFootstepSound(isInWater, (flags & TILE_FLAG_GRATE) !== 0, loudness);
     let radius = player.isSprinting ? TUNING.noiseRadiusSprintStep : (player.isCrouching ? TUNING.noiseRadiusCrouchStep : TUNING.noiseRadiusWalkStep);
-    if (isInWater) radius *= 1.5;
+    if (isInWater) radius *= TUNING.waterStepNoiseFactor;
     emitNoise(player.x, player.z, radius);
   }
 
-  if (player.isMoving) player.audibleRadius = player.isSprinting ? 7.5 : (player.isCrouching ? 2.0 : 4.2);
-  else player.audibleRadius = player.isCrouching ? 1.15 : 2.6;
-  if (isInWater && player.isMoving) player.audibleRadius *= 1.3;
+  // How close the Hollow has to be to notice you right now, without any particular noise.
+  if (player.isMoving) {
+    player.audibleRadius = player.isSprinting ? TUNING.audibleRadiusSprinting
+      : (player.isCrouching ? TUNING.audibleRadiusCrouchWalking : TUNING.audibleRadiusWalking);
+  } else {
+    player.audibleRadius = player.isCrouching ? TUNING.audibleRadiusCrouchedStill : TUNING.audibleRadiusStanding;
+  }
+  if (isInWater && player.isMoving) player.audibleRadius *= TUNING.waterAudibleFactor;
 }
 
 // ---------------------------------------------------------------------------
@@ -419,7 +438,7 @@ function fireScannerPulse(originX, originY, originZ, horizontalTangent, vertical
     figure.hitsThisFrame++;
     figure.totalHits++;
     figure.lastScannedTime = game.time;
-    lifeCode = figure.pointLifeCode;
+    lifeCode = convertSecondsToPointLifeCode(TUNING[figure.imprintTuningKey]);
   }
   addScanPoint(rayHit.x, rayHit.y, rayHit.z, rayHit.intensity, rayHit.surfaceClass, lifeCode);
   if (rayHit.objectId !== 0) markInteractableDiscovered(rayHit.objectId);
@@ -460,8 +479,9 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
     const rayCount = Math.min(700, Math.floor(player.rayBudget));
     player.rayBudget -= rayCount;
     const spreadTangent = Math.tan(player.spreadDegrees * DEGREES_TO_RADIANS);
-    const beamEvery = Math.max(1, Math.floor(rayCount / 26));
+    const beamEvery = Math.max(1, Math.floor(rayCount / 26)); // TWEAK: about 26 visible laser lines per frame
     for (let rayIndex = 0; rayIndex < rayCount; rayIndex++) {
+      // TWEAK: 0.5 spreads pulses evenly over the cone, lower values crowd them toward the centre.
       const radius = Math.pow(Math.random(), 0.62) * spreadTangent;
       const angle = Math.random() * TWO_PI;
       fireScannerPulse(eyeX, eyeY, eyeZ, Math.cos(angle) * radius, Math.sin(angle) * radius, rayIndex % beamEvery === 0);
@@ -498,6 +518,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
     showMessage('Scanner overheated. Cooling.', 2.5, 'warning');
   }
   if (player.isOverheated && player.heat <= TUNING.overheatRecoveryLevel) player.isOverheated = false;
+  if (debugState.options.unlimitedScanner) { player.heat = 0; player.isOverheated = false; }
 
   setScannerSound(wantsPaint ? 1 : (isSweeping ? 0.7 : 0));
   player.scannerActivity = approachValue(player.scannerActivity, wantsPaint || isSweeping ? 1 : 0, dt * 9);

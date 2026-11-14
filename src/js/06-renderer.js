@@ -14,8 +14,10 @@ const renderer = {
   isReady: false,
   pixelRatio: 1,
   width: 1, height: 1,
-  pointProgram: null, solidProgram: null, beamProgram: null, postProgram: null,
-  pointUniforms: null, solidUniforms: null, beamUniforms: null, postUniforms: null,
+  pointProgram: null, solidProgram: null, beamProgram: null, postProgram: null, debugWorldProgram: null,
+  pointUniforms: null, solidUniforms: null, beamUniforms: null, postUniforms: null, debugWorldUniforms: null,
+  debugCylinderVertexArray: null, debugCylinderVertexCount: 0, debugSphereVertexArray: null, debugSphereVertexCount: 0,
+  debugLineVertexArray: null, debugLineBuffer: null, identityMatrix: writeIdentityMatrix(new Float32Array(16)),
   pointVertexArray: null, pointBuffer: null,
   worldVertexArray: null, worldVertexCount: 0,
   unitCubeVertexArray: null,
@@ -109,6 +111,8 @@ void main() {
     rangeColor = mix(vec3(0.2, 0.35, 1.0), vec3(0.2, 1.0, 0.55), smoothstep(0.0, 0.45, heightBand));
     rangeColor = mix(rangeColor, vec3(1.0, 0.9, 0.3), smoothstep(0.45, 1.0, heightBand));
   } else {
+    // TWEAK: the default "ice" colours as red, green, blue from 0 to 1.
+    // First colour: points right next to you. Second: about 10 m away. Third (next line): 26 m and beyond.
     rangeColor = mix(vec3(0.78, 0.9, 1.0), vec3(0.14, 0.58, 0.9), smoothstep(0.0, 0.4, range));
     rangeColor = mix(rangeColor, vec3(0.24, 0.17, 0.66), smoothstep(0.4, 1.0, range));
   }
@@ -127,7 +131,9 @@ void main() {
   else if (surfaceClass == 9) color = vec3(0.08, 0.3, 0.95);
   else if (surfaceClass == 10) color = vec3(1.0, 0.03, 0.02);
   else if (surfaceClass == 12) color = vec3(0.85, 0.66, 0.1);
+  // TWEAK: 0.03 is how quickly points dim with distance. 0 = no dimming, 0.1 = far rooms nearly black.
   float brightness = (0.22 + 0.78 * intensity) / (1.0 + distanceToCamera * 0.03) * (0.72 + 0.28 * smoothstep(0.4, 4.0, distanceToCamera));
+  // TWEAK: fresh points flash white. 2.6 is how fast the flash dies (higher = shorter flash).
   float flash = exp(-age * 2.6);
   vec3 flashColor = surfaceClass == 10 ? vec3(0.9, 0.05, 0.03) : vec3(0.85, 1.0, 1.0);
   if (surfaceClass == 10) brightness = max(brightness, 0.55);
@@ -213,22 +219,59 @@ void main() {
   float rowNoise = hash(vec2(row, tick));
   float tear = step(1.0 - uInterference * 0.45, hash(vec2(row * 0.37, tick * 1.7)));
   coordinate.x += (rowNoise - 0.5) * 0.08 * uInterference * tear;
+  // TWEAK: colour fringing. First number: always on. Second: extra when a creature is near.
   float split = 0.0012 + uInterference * 0.0045;
   vec3 color;
   color.r = texture(uScene, coordinate + vec2(split, 0.0)).r;
   color.g = texture(uScene, coordinate).g;
   color.b = texture(uScene, coordinate - vec2(split, 0.0)).b;
   vec3 glow = textureLod(uScene, coordinate, 2.5).rgb * 0.45 + textureLod(uScene, coordinate, 4.5).rgb * 0.55;
-  color += glow * 0.42;
+  color += glow * 0.42; // TWEAK: strength of the soft glow around bright points (0 = none)
   float grain = hash(coordinate * uResolution + vec2(tick * 3.1, tick * 7.7)) - 0.5;
-  color += grain * (0.035 + uInterference * 0.12);
+  color += grain * (0.035 + uInterference * 0.12); // TWEAK: film grain, at rest and extra under interference
   color *= 0.95 + 0.05 * sin(gl_FragCoord.y * 1.9);
   vec2 fromCenter = coordinate - 0.5;
+  // TWEAK: darkening toward the screen corners. Raise 0.92 to push the dark edge further out.
   float vignette = smoothstep(0.92, 0.25, length(fromCenter * vec2(1.0, 1.15)));
   color *= mix(0.5, 1.0, vignette);
   color.r += uDanger * (1.0 - vignette) * 0.55;
   color.gb *= 1.0 - uDanger * 0.35;
   color = max(color, vec3(0.0)) * uFade;
+  outColor = vec4(color, 1.0);
+}`;
+
+// Debug mode only: draws the station itself, shaded by which way each surface faces,
+// with a line every metre so sizes and distances can be read off.
+const DEBUG_WORLD_VERTEX_SHADER = `#version 300 es
+precision highp float;
+layout(location = 0) in vec3 aPosition;
+uniform mat4 uViewProjection;
+uniform mat4 uModel;
+out vec3 vWorldPosition;
+void main() {
+  vec4 worldPosition = uModel * vec4(aPosition, 1.0);
+  vWorldPosition = worldPosition.xyz;
+  gl_Position = uViewProjection * worldPosition;
+}`;
+
+const DEBUG_WORLD_FRAGMENT_SHADER = `#version 300 es
+precision highp float;
+in vec3 vWorldPosition;
+uniform vec3 uCameraPosition;
+uniform vec3 uColor;
+out vec4 outColor;
+void main() {
+  vec3 normal = normalize(cross(dFdx(vWorldPosition), dFdy(vWorldPosition)));
+  // Seen from above (flying), ceilings are left out so you can look down into the rooms.
+  if (abs(normal.y) > 0.9 && vWorldPosition.y > 2.2 && uCameraPosition.y > vWorldPosition.y) discard;
+  float light = 0.4 + 0.6 * abs(dot(normal, normalize(vec3(0.35, 0.8, 0.45))));
+  // Distance to the nearest whole metre along each axis; skip the axis the surface faces.
+  vec3 toGridLine = abs(fract(vWorldPosition + 0.5) - 0.5);
+  vec3 onLine = (1.0 - step(0.014, toGridLine)) * (1.0 - step(0.9, abs(normal)));
+  float gridLine = max(onLine.x, max(onLine.y, onLine.z));
+  float distanceToCamera = length(vWorldPosition - uCameraPosition);
+  // TWEAK: the last number is how quickly the lit station fades with distance (0 = no fade).
+  vec3 color = uColor * light * (1.0 + gridLine * 1.3) / (1.0 + distanceToCamera * 0.035);
   outColor = vec4(color, 1.0);
 }`;
 
@@ -275,6 +318,49 @@ function buildUnitCubeVertices() {
   const vertices = [];
   pushBoxTriangles(vertices, { centerX: 0, centerY: 0, centerZ: 0, halfX: 1, halfY: 1, halfZ: 1, cosineYaw: 1, sineYaw: 0 });
   return new Float32Array(vertices);
+}
+
+// Unit shapes with a baked light-to-dark shade, for drawing creature bodies in debug mode.
+// Each vertex is x, y, z followed by a grey level repeated three times.
+function buildShadedUnitCylinderVertices() {
+  const vertices = [];
+  const segmentCount = 10;
+  for (let segment = 0; segment < segmentCount; segment++) {
+    const angleA = segment / segmentCount * TWO_PI, angleB = (segment + 1) / segmentCount * TWO_PI;
+    const shade = 0.62 + 0.38 * Math.cos((angleA + angleB) / 2 - 0.8);
+    const corners = [
+      [Math.cos(angleA), 0, Math.sin(angleA)], [Math.cos(angleB), 0, Math.sin(angleB)],
+      [Math.cos(angleB), 1, Math.sin(angleB)], [Math.cos(angleA), 1, Math.sin(angleA)]];
+    for (const cornerIndex of [0, 1, 2, 0, 2, 3]) {
+      vertices.push(corners[cornerIndex][0], corners[cornerIndex][1], corners[cornerIndex][2], shade, shade, shade);
+    }
+  }
+  return new Float32Array(vertices);
+}
+
+function buildShadedUnitSphereVertices() {
+  const positions = [];
+  pushSphereTriangles(positions, { centerX: 0, centerY: 0, centerZ: 0, radius: 1 / 0.97 });
+  const vertices = [];
+  for (let offset = 0; offset < positions.length; offset += 3) {
+    const shade = 0.62 + 0.38 * (positions[offset] * 0.35 + positions[offset + 1] * 0.8 + positions[offset + 2] * 0.45);
+    vertices.push(positions[offset], positions[offset + 1], positions[offset + 2], shade, shade, shade);
+  }
+  return new Float32Array(vertices);
+}
+
+function createPositionAndColorVertexArray(gl, vertices, usage) {
+  const vertexArray = gl.createVertexArray();
+  gl.bindVertexArray(vertexArray);
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, usage);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 24, 0);
+  gl.enableVertexAttribArray(1);
+  gl.vertexAttribPointer(1, 3, gl.FLOAT, false, 24, 12);
+  gl.bindVertexArray(null);
+  return { vertexArray: vertexArray, buffer: buffer };
 }
 
 // The handheld scanner in the corner of the view. Unlit, so it reads as a dark shape
@@ -343,6 +429,19 @@ function initializeRenderer(canvas) {
   renderer.postProgram = compileShaderProgram(gl, POST_VERTEX_SHADER, POST_FRAGMENT_SHADER, 'post');
   renderer.postUniforms = collectUniformLocations(gl, renderer.postProgram,
     ['uScene', 'uResolution', 'uTime', 'uInterference', 'uDanger', 'uFade']);
+
+  // debug mode
+  renderer.debugWorldProgram = compileShaderProgram(gl, DEBUG_WORLD_VERTEX_SHADER, DEBUG_WORLD_FRAGMENT_SHADER, 'debug world');
+  renderer.debugWorldUniforms = collectUniformLocations(gl, renderer.debugWorldProgram, ['uViewProjection', 'uModel', 'uCameraPosition', 'uColor']);
+  const shadedCylinder = buildShadedUnitCylinderVertices();
+  renderer.debugCylinderVertexArray = createPositionAndColorVertexArray(gl, shadedCylinder, gl.STATIC_DRAW).vertexArray;
+  renderer.debugCylinderVertexCount = shadedCylinder.length / 6;
+  const shadedSphere = buildShadedUnitSphereVertices();
+  renderer.debugSphereVertexArray = createPositionAndColorVertexArray(gl, shadedSphere, gl.STATIC_DRAW).vertexArray;
+  renderer.debugSphereVertexCount = shadedSphere.length / 6;
+  const debugLines = createPositionAndColorVertexArray(gl, new Float32Array(DEBUG_MAXIMUM_LINE_VERTICES * 6), gl.DYNAMIC_DRAW);
+  renderer.debugLineVertexArray = debugLines.vertexArray;
+  renderer.debugLineBuffer = debugLines.buffer;
 
   // point cloud
   renderer.pointVertexArray = gl.createVertexArray();
@@ -542,11 +641,73 @@ function writeViewmodelMatrix(out, x, y, z, yaw, pitch) {
 // Frame
 // ---------------------------------------------------------------------------
 
+// Debug mode only. Creatures are normally never drawn; this draws their capsule bodies in flat colours,
+// and the coloured lines that show what they can sense and where they are going.
+function drawDebugOverlays(debug) {
+  const gl = renderer.gl;
+  gl.useProgram(renderer.solidProgram);
+  if (debug.figures.length > 0) {
+    // First pass (optional): faint and ignoring walls, so a creature in the next room shows as a ghost.
+    // Second pass: solid, hidden by walls like any real object.
+    for (let pass = debug.seeThroughWalls ? 0 : 1; pass < 2; pass++) {
+      let brightness = 1;
+      if (pass === 0) {
+        gl.disable(gl.DEPTH_TEST);
+        gl.enable(gl.BLEND);
+        gl.blendFunc(gl.ONE, gl.ONE);
+        brightness = 0.22; // TWEAK: how strongly creatures show through walls
+      } else {
+        gl.enable(gl.DEPTH_TEST);
+        gl.disable(gl.BLEND);
+        gl.depthMask(true);
+      }
+      for (let entryIndex = 0; entryIndex < debug.figures.length; entryIndex++) {
+        const entry = debug.figures[entryIndex];
+        const capsules = entry.figure.capsules;
+        gl.uniform3f(renderer.solidUniforms.uTint, entry.red * brightness, entry.green * brightness, entry.blue * brightness);
+        for (let capsuleIndex = 0; capsuleIndex < FIGURE_CAPSULE_COUNT; capsuleIndex++) {
+          const offset = capsuleIndex * FIGURE_CAPSULE_STRIDE;
+          const radius = capsules[offset + 6];
+          writeSegmentMatrix(renderer.modelMatrix, capsules[offset], capsules[offset + 1], capsules[offset + 2],
+            capsules[offset + 3], capsules[offset + 4], capsules[offset + 5], radius);
+          multiplyMatrices(renderer.scratchMatrix, renderer.viewProjectionMatrix, renderer.modelMatrix);
+          gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.scratchMatrix);
+          gl.bindVertexArray(renderer.debugCylinderVertexArray);
+          gl.drawArrays(gl.TRIANGLES, 0, renderer.debugCylinderVertexCount);
+          gl.bindVertexArray(renderer.debugSphereVertexArray);
+          for (let endIndex = 0; endIndex < 2; endIndex++) {
+            writeTranslationScaleMatrix(renderer.modelMatrix, capsules[offset + endIndex * 3], capsules[offset + endIndex * 3 + 1],
+              capsules[offset + endIndex * 3 + 2], radius, radius, radius);
+            multiplyMatrices(renderer.scratchMatrix, renderer.viewProjectionMatrix, renderer.modelMatrix);
+            gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.scratchMatrix);
+            gl.drawArrays(gl.TRIANGLES, 0, renderer.debugSphereVertexCount);
+          }
+        }
+      }
+    }
+  }
+  if (debug.lineVertexCount > 0) {
+    // Lines are drawn over everything, walls included.
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.uniform3f(renderer.solidUniforms.uTint, 1, 1, 1);
+    gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.viewProjectionMatrix);
+    gl.bindVertexArray(renderer.debugLineVertexArray);
+    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.debugLineBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, debug.lineVertices, 0, debug.lineVertexCount * 6);
+    gl.drawArrays(gl.LINES, 0, debug.lineVertexCount);
+  }
+  gl.enable(gl.DEPTH_TEST);
+  gl.disable(gl.BLEND);
+  gl.depthMask(true);
+}
+
 function renderFrame(camera, frameState) {
   const gl = renderer.gl;
   if (!renderer.isReady || !renderer.sceneFramebuffer) return;
   const aspectRatio = renderer.width / renderer.height;
   const fieldOfView = camera.fieldOfViewDegrees * DEGREES_TO_RADIANS;
+  // 0.06 and 160 are the nearest and farthest distances (in metres) that can be drawn.
   writePerspectiveMatrix(renderer.projectionMatrix, fieldOfView, aspectRatio, 0.06, 160);
   // A hair of offset keeps the eye from ever sitting exactly on a tile edge while looking exactly
   // along an axis; some drivers mishandle depth offset for polygons with a vertex at zero depth.
@@ -567,15 +728,29 @@ function renderFrame(camera, frameState) {
   gl.clearDepth(1);
   gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-  // 1. Occluders: depth only.
-  gl.useProgram(renderer.solidProgram);
-  gl.uniform3f(renderer.solidUniforms.uTint, 0, 0, 0);
-  gl.colorMask(false, false, false, false);
+  // 1. Occluders. Normally depth only: the station is never visible, it just hides points behind it.
+  //    With "Light the station" on in debug mode it is drawn in colour instead.
+  const debug = frameState.debug;
+  const isStationLit = debug !== null && debug.lightStation;
   gl.enable(gl.POLYGON_OFFSET_FILL);
   gl.polygonOffset(2.5, 4.0);
-  gl.vertexAttrib3f(1, 0, 0, 0);
+  if (isStationLit) {
+    gl.useProgram(renderer.debugWorldProgram);
+    gl.uniformMatrix4fv(renderer.debugWorldUniforms.uViewProjection, false, renderer.viewProjectionMatrix);
+    gl.uniform3f(renderer.debugWorldUniforms.uCameraPosition, camera.x, camera.y, camera.z);
+  } else {
+    gl.useProgram(renderer.solidProgram);
+    gl.uniform3f(renderer.solidUniforms.uTint, 0, 0, 0);
+    gl.colorMask(false, false, false, false);
+    gl.vertexAttrib3f(1, 0, 0, 0);
+  }
   if (renderer.worldVertexArray) {
-    gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.viewProjectionMatrix);
+    if (isStationLit) {
+      gl.uniformMatrix4fv(renderer.debugWorldUniforms.uModel, false, renderer.identityMatrix);
+      gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.2, 0.25, 0.32); // TWEAK: colour of the lit station
+    } else {
+      gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.viewProjectionMatrix);
+    }
     gl.bindVertexArray(renderer.worldVertexArray);
     gl.drawArrays(gl.TRIANGLES, 0, renderer.worldVertexCount);
   }
@@ -584,8 +759,19 @@ function renderFrame(camera, frameState) {
     const prop = dynamicBoxProps[propIndex];
     if (prop.isRemoved) continue;
     writeBoxPropMatrix(renderer.modelMatrix, prop);
-    multiplyMatrices(renderer.scratchMatrix, renderer.viewProjectionMatrix, renderer.modelMatrix);
-    gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.scratchMatrix);
+    if (isStationLit) {
+      // Doors and pickups get their scan colours so they are easy to find.
+      gl.uniformMatrix4fv(renderer.debugWorldUniforms.uModel, false, renderer.modelMatrix);
+      let canOpen = true;
+      if (prop.surfaceClass === SURFACE_DOOR_POWERED) canOpen = frameState.powerOn;
+      if (prop.surfaceClass === SURFACE_DOOR_KEYCARD) canOpen = frameState.powerOn && frameState.hasKeycard;
+      if (prop.surfaceClass === SURFACE_INTERACTIVE) gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.9, 0.6, 0.12);
+      else if (canOpen) gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.12, 0.5, 0.28);
+      else gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.55, 0.14, 0.08);
+    } else {
+      multiplyMatrices(renderer.scratchMatrix, renderer.viewProjectionMatrix, renderer.modelMatrix);
+      gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.scratchMatrix);
+    }
     gl.drawArrays(gl.TRIANGLES, 0, 36);
   }
   gl.disable(gl.POLYGON_OFFSET_FILL);
@@ -601,6 +787,8 @@ function renderFrame(camera, frameState) {
     gl.uniform3f(uniforms.uCameraPosition, camera.x, camera.y, camera.z);
     gl.uniform1f(uniforms.uTime, frameState.time);
     const focalLengthPixels = renderer.height / (2 * Math.tan(fieldOfView / 2));
+    // TWEAK: 0.03 is the size of one point in metres. The next line clamps it on screen:
+    // never smaller than 1.7 pixels (far away) and never larger than 3.8 pixels (close up).
     gl.uniform1f(uniforms.uPointScale, 0.03 * focalLengthPixels);
     gl.uniform2f(uniforms.uPointSizeLimits, 1.7 * renderer.pixelRatio, 3.8 * renderer.pixelRatio);
     gl.uniform1f(uniforms.uInterference, frameState.interference);
@@ -626,6 +814,9 @@ function renderFrame(camera, frameState) {
   }
   gl.disable(gl.BLEND);
   gl.depthMask(true);
+
+  // 3b. Debug mode overlays: creature bodies, then sense rings and routes.
+  if (debug !== null) drawDebugOverlays(debug);
 
   // 4. The scanner in the player's hand.
   if (frameState.showViewmodel) {
