@@ -1,0 +1,39 @@
+{
+  "name": "BIG STORAGE D",
+  "width": 8,
+  "depth": 24,
+  "ceiling": 3.1,
+  "tiers": [0,1,2],
+  "isFlooded": false,
+  "useInStations": true,
+  "doors": [
+    { "wall": "south", "at": 3 },
+    { "wall": "north", "at": 0 }
+  ],
+  "itemSpot": { "x": 4.5, "y": 0.67, "z": 11.55 },
+  "items": [
+    { "type": "ceilingLamp", "x": 4, "z": 3.5, "angle": 0 },
+    { "type": "sign", "text": "{name}", "wall": "north", "along": 1.2, "centerY": 2.65, "width": 2, "height": 0.26, "isScrawled": false },
+    { "type": "ceilingLamp", "x": 4, "z": 7, "angle": 0 },
+    { "type": "ceilingLamp", "x": 4, "z": 10.5, "angle": 0 },
+    { "type": "ceilingLamp", "x": 4, "z": 14, "angle": 0 },
+    { "type": "ceilingLamp", "x": 4, "z": 17.5, "angle": 0 },
+    { "type": "ceilingLamp", "x": 4, "z": 21, "angle": 0 },
+    { "type": "shelfRack", "x": 6.05, "z": 23.6, "angle": 90, "length": 3.3, "height": 2.3, "fillAmount": 0.6 },
+    { "type": "shelfRack", "x": 6.6, "z": 21.5, "angle": 90, "length": 2.5, "height": 2.3, "fillAmount": 0.6 },
+    { "type": "shelfRack", "x": 2.5, "z": 19.5, "angle": 90, "length": 4.4, "height": 2.3, "fillAmount": 0.6 },
+    { "type": "shelfRack", "x": 6.6, "z": 17.5, "angle": 90, "length": 2.5, "height": 2.3, "fillAmount": 0.6 },
+    { "type": "shelfRack", "x": 2.4, "z": 14.45, "angle": 90, "length": 4.7, "height": 2.3, "fillAmount": 0.6 },
+    { "type": "shelfRack", "x": 4.5, "z": 9.6, "angle": 180, "length": 4.7, "height": 2.3, "fillAmount": 0.35 },
+    { "type": "shelfRack", "x": 2.5, "z": 9.6, "angle": 180, "length": 4.7, "height": 2.3, "fillAmount": 0.35 },
+    { "type": "shelfRack", "x": 0.3, "z": 9.6, "angle": 180, "length": 4.7, "height": 2.3, "fillAmount": 0.35 },
+    { "type": "shelfRack", "x": 7.5, "z": 9.6, "angle": 180, "length": 4.7, "height": 2.3, "fillAmount": 0.35 },
+    { "type": "tank", "x": 4.65, "z": 1.1, "angle": 0, "radius": 0.95, "height": 2.2 },
+    { "type": "tank", "x": 6.9, "z": 1.1, "angle": 0, "radius": 0.95, "height": 2.2 },
+    { "type": "verticalPipe", "x": 5.35, "z": 2.05, "bottom": 0, "top": 3.2, "radius": 0.07, "isSolid": false },
+    { "type": "verticalPipe", "x": 6, "z": 2.05, "bottom": 0, "top": 3.2, "radius": 0.07, "isSolid": false },
+    { "type": "pumpUnit", "x": 2.35, "z": 0.55, "angle": 0 },
+    { "type": "sign", "text": "{name}", "wall": "south", "along": 3.5, "centerY": 2.65, "width": 2, "height": 0.26, "isScrawled": false },
+    { "type": "sign", "text": "You found me!", "wall": "east", "along": 9.6, "centerY": 0.75, "width": 1.6, "height": 0.26, "isScrawled": true }
+  ]
+}
