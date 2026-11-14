@@ -1,5 +1,6 @@
 ## Ideas to (possibly) implement
 
+- Logo and favicon
 - Even better models
 - Better monster AI, more suspense
   - Alien isolation like type;
