@@ -21,6 +21,8 @@ const DIFFICULTY_PRESETS = {
     stillsEnabled: false,       // false: the calibration dummies stay ordinary statues
     hollowSpeedFactor: 1.0,     // multiplies every Hollow speed (roam, investigate, hunt, enraged)
     hearingFactor: 1.0,         // multiplies every noise radius and how close it must be to hear you
+    pressureFactor: 1.0,        // multiplies how quickly the Hollow closes in again after a breather, and shortens
+                                // the breather by the same amount (see "The director" in TUNING)
     heatFactor: 0.7             // multiplies how fast the scanner heats up (painting and sweeps).
                                 // Below 1 you can scan for longer before overheating, above 1 for less long.
                                 // It does not change how fast the scanner cools down.
@@ -32,6 +34,7 @@ const DIFFICULTY_PRESETS = {
     stillsEnabled: true,
     hollowSpeedFactor: 1.0,
     hearingFactor: 0.8,         // it hears 20 % less far than the numbers in TUNING: a sprint step carries 11.2 m, not 14 m
+    pressureFactor: 1.0,
     heatFactor: 1.0
   },
   nightmare: {
@@ -41,6 +44,7 @@ const DIFFICULTY_PRESETS = {
     stillsEnabled: true,
     hollowSpeedFactor: 1.14,    // 14 % faster: its hunt speed goes from 3.5 to about 4.0 (you sprint at 4.6)
     hearingFactor: 1.15,        // hears 15 % further than TUNING says: a sprint step carries 16.1 m (11.2 m on Standard)
+    pressureFactor: 1.4,        // it closes in 40 % sooner and breathers are 40 % shorter
     heatFactor: 1.3             // about 7.7 s of continuous painting before overheating instead of 10 s
   }
 };
@@ -154,8 +158,35 @@ const TUNING = {
   hollowListenEverySecondsMinimum: 14, // shortest gap between two pauses
   hollowListenEverySecondsMaximum: 26, // longest gap
   hollowListenHearingFactor: 1.5,   // how much further it hears while listening (1.5 = 50 %)
-  hollowPressureAfterSeconds: 55,   // if it has not hunted you for this long, its wandering drifts toward you.
-                                    // Lower means fewer quiet stretches. Very high means you may rarely meet it.
+
+  // ---- The director: decides which room the Hollow wanders to next. Only the Hollow; the Stills ignore it. ----
+  // It keeps a hidden "menace" level from 0 to 1. Menace rises while the Hollow is near you or after you, and
+  // drains while it is away. The run is a cycle of two phases:
+  //   CLOSING IN  its wandering is steered to rooms nearer and nearer to you.
+  //   BREATHER    once menace has been full, and it is not chasing or searching, it is sent to the far side of
+  //               the station and kept there until menace has drained.
+  // What keeps this fair: the director never tells the Hollow where you are. It only picks a room, never one
+  // closer than directorNearRingMinimumSteps, and the Hollow still has to hear you or feel the beam to find you.
+  // A breather always follows a full menace, and noise you make is the only thing that cuts one short.
+  // "Steps" below are metres of walking, round corners and through doors, not straight-line distance.
+  directorMenaceRangeSteps: 22,       // closer than this on foot counts as "near you". Larger = menace builds from further off.
+  directorPeakAfterHuntSeconds: 14,   // a chase fills menace in this long. Shorter = fewer long chases before it backs off.
+  directorPeakAfterSearchSeconds: 26, // searching or listening right beside you fills it in this long (slower further away)
+  directorPeakAfterLoomSeconds: 45,   // merely wandering right beside you fills it in this long (much slower further away)
+  directorCalmSeconds: 45,            // menace drains from full to empty in this long once it is away from you
+  directorReliefMinimumSeconds: 25,   // a breather lasts at least this long...
+  directorReliefEndsBelowMenace: 0.3, // ...and until menace has drained below this. Lower = longer breathers.
+  directorReliefSteps: 30,            // during a breather it keeps to rooms at least this far from you (or as far as there is)
+  directorBuildSeconds: 80,           // after a breather, how long until it has closed in fully. Its anger shortens this, up to half.
+  directorFarRingMinimumSteps: 12,    // straight after a breather it picks rooms between this...
+  directorFarRingMaximumSteps: 38,    // ...and this far from you
+  directorNearRingMinimumSteps: 4,    // fully closed in, it picks rooms between this (it is never steered closer than this)...
+  directorNearRingMaximumSteps: 13,   // ...and this far from you
+  // Tension rises as the job gets done: every spool you are carrying speeds the whole cycle up.
+  directorPressurePerSpool: 0.25,     // with one spool it closes in 25 % sooner and breathers drain 25 % faster, with two 50 %,
+                                      // with three 75 %. 0 = the same from start to finish. This multiplies with the threat
+                                      // level's pressureFactor.
+  directorReliefShortestSeconds: 12,  // however much the cycle is sped up, a breather is never shorter than this
   hollowWakeDelaySeconds: 6,        // seconds between starting the generator and the Hollow appearing at the shaft
   hollowImprintSeconds: 5.5,        // how long the red points a scan leaves on it stay visible (maximum 63)
 

@@ -165,6 +165,78 @@ function check(description, condition, detail) {
   });
   check('after losing the player it searches ahead in the direction they were moving',
     searchLead.state === 3 && searchLead.searchCenterX > 27, searchLead);
+
+  // --- the director: it steers the Hollow's wandering, and it has to be fair about it ---
+  const steering = await inGame(() => {
+    const debug = window.noReturnDebug, hollow = debug.hollow, director = debug.director;
+    debug.teleport(14, 51, 0); // the player stands still in the lift lobby
+    hollow.state = 0; hollow.anger = 0; hollow.graceTimer = 0; hollow.doubleBackTimer = 0;
+    hollow.figure.x = 30.5; hollow.figure.z = 52.5;
+    const sample = function (phaseTime) {
+      director.phase = 0; director.phaseTime = phaseTime; director.hasPeaked = false; director.menace = 0;
+      let nearest = Infinity, furthest = 0;
+      for (let pick = 0; pick < 150; pick++) {
+        debug.chooseHollowRoamTarget();
+        const steps = debug.stepsFromPlayerTo(hollow.targetX, hollow.targetZ);
+        nearest = Math.min(nearest, steps); furthest = Math.max(furthest, steps);
+      }
+      return { nearest: nearest, furthest: furthest, band: [director.ringMinimumSteps, director.ringMaximumSteps] };
+    };
+    const result = { justAfterBreather: sample(0), fullyClosedIn: sample(9999), floor: debug.tuning.directorNearRingMinimumSteps };
+    // The same forty seconds into closing in, empty-handed and carrying all three spools.
+    const spoolsReally = debug.game.flags.spoolsCollected;
+    debug.game.flags.spoolsCollected = 0; result.fortySecondsNoSpools = sample(40).band;
+    debug.game.flags.spoolsCollected = 3; result.fortySecondsThreeSpools = sample(40).band;
+    debug.game.flags.spoolsCollected = spoolsReally;
+    return result;
+  });
+  check('carrying spools makes it close in sooner', steering.fortySecondsThreeSpools[0] < steering.fortySecondsNoSpools[0] && steering.fortySecondsThreeSpools[1] < steering.fortySecondsNoSpools[1],
+    { noSpools: steering.fortySecondsNoSpools, threeSpools: steering.fortySecondsThreeSpools });
+  check('fresh from a breather the director keeps the Hollow to far rooms; later it closes in, but never nearer than its floor',
+    steering.justAfterBreather.nearest >= steering.justAfterBreather.band[0] && steering.justAfterBreather.band[0] > steering.fullyClosedIn.band[0] &&
+    steering.fullyClosedIn.nearest >= steering.floor && steering.fullyClosedIn.furthest <= steering.fullyClosedIn.band[1], steering);
+
+  const breather = await inGame(() => {
+    const debug = window.noReturnDebug, hollow = debug.hollow, director = debug.director;
+    const result = {};
+    // Menace is full while it is still chasing something: it must not be called off.
+    director.phase = 0; director.phaseTime = 50; director.menace = 1; director.hasPeaked = true;
+    hollow.figure.x = 30.5; hollow.figure.z = 52.5;
+    hollow.state = 2; hollow.lastKnownPlayerX = 36; hollow.lastKnownPlayerZ = 52.5; hollow.timeSinceSensed = 0;
+    debug.simulate(0.3);
+    result.duringChase = { phase: director.phase, state: hollow.state };
+    // The chase is over and it is back to wandering: now the breather starts, and it heads for a far room.
+    hollow.state = 0; hollow.doubleBackTimer = 3;
+    debug.simulate(0.3);
+    result.started = { phase: director.phase, targetSteps: debug.stepsFromPlayerTo(hollow.targetX, hollow.targetZ), feint: hollow.doubleBackTimer };
+    // The player keeps quiet for twenty seconds: it must stay away the whole time.
+    let nearestSteps = Infinity;
+    const stepsAtStart = debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z);
+    for (let second = 0; second < 20; second++) {
+      debug.simulate(1);
+      nearestSteps = Math.min(nearestSteps, debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z));
+    }
+    result.away = { stepsAtStart: stepsAtStart, nearestSteps: nearestSteps, stepsAfter: debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z), phase: director.phase, mode: debug.game.mode };
+    // Noise the player makes still reaches it: the breather protects nobody who shouts.
+    debug.emitNoise(debug.player.x, debug.player.z, 80);
+    result.afterNoise = { state: hollow.state };
+    // Put it back to wandering, with a room of the director's choosing (not the noise it was walking to).
+    hollow.state = 0;
+    debug.chooseHollowRoamTarget();
+    // Left alone, the breather ends by itself once menace has drained, and it starts closing in again.
+    let seconds = 20;
+    for (; seconds < 90 && director.phase === 1; seconds++) debug.simulate(1);
+    result.ended = { phase: director.phase, seconds: seconds, menace: Math.round(director.menace * 100) / 100, mode: debug.game.mode };
+    return result;
+  });
+  check('with menace full, the Hollow is not called off in the middle of a chase', breather.duringChase.phase === 0 && breather.duringChase.state === 2, breather.duringChase);
+  check('once the chase is over it gets a real breather: sent to a far room, with no pretending to leave',
+    breather.started.phase === 1 && breather.started.targetSteps >= 30 && breather.started.feint === 0, breather.started);
+  check('during the breather it stays away from a player who keeps quiet',
+    breather.away.phase === 1 && breather.away.mode === 'playing' && breather.away.nearestSteps >= breather.away.stepsAtStart - 2 && breather.away.stepsAfter >= 25, breather.away);
+  check('noise during a breather still brings it', breather.afterNoise.state === 1 || breather.afterNoise.state === 2, breather.afterNoise);
+  check('the breather ends by itself, after at least 25 seconds, and the closing-in starts again',
+    breather.ended.phase === 0 && breather.ended.seconds >= 25 && breather.ended.seconds < 90 && breather.ended.mode === 'playing', breather.ended);
   await inGame(() => { window.noReturnDebug.hollow.isActive = false; });
 
   // --- doors ---

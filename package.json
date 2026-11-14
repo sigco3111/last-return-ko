@@ -1,6 +1,6 @@
 {
   "name": "game-no-return",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "private": true,
   "description": "No Return: a first-person horror game where a handheld LiDAR scanner is the only way to see.",
   "scripts": {
