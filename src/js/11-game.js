@@ -27,6 +27,7 @@ const game = {
   deathSequence: null,
   ascentTimer: 0,
   hasShownHollowHint: false,
+  hasShownVentHint: false,
   attract: { yaw: -0.9, pitch: 0, timer: 0, sweepTimer: 4, sweepProgress: -1, rayBudget: 0, centerRange: -1 }
 };
 
@@ -85,6 +86,7 @@ function resetWorldState() {
   game.statistics.elapsed = 0; game.statistics.distanceWalked = 0; game.statistics.deaths = 0;
   game.interference = 0; game.danger = 0;
   game.hasShownHollowHint = false;
+  game.hasShownVentHint = false;
   game.deathSequence = null;
   for (const interactable of interactables) {
     interactable.isAvailable = true;
@@ -741,6 +743,9 @@ function startApplication() {
     level: level, interactables: interactables, zoneNames: ZONE_NAMES,
     loadStation: function (kind, seed, sizeKey, layoutKey, levelsKey) { const result = loadStation(kind, seed, sizeKey, layoutKey, levelsKey); resetWorldState(); return result; },
     getFloorHeightAt: getFloorHeightAt,
+    getHeadroomAt: getHeadroomAt,
+    isVentAt: function (x, z) { return (getTileFlagsAtPosition(x, z) & TILE_FLAG_VENT) !== 0; },
+    ventHeight: VENT_HEIGHT,
     chooseSeedFromText: chooseSeedFromText,
     getLiftDoor: function () { return liftDoor; },
     director: director, chooseHollowRoamTarget: chooseHollowRoamTarget,

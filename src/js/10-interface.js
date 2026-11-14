@@ -452,7 +452,8 @@ function updateHud(realDt) {
     elements['readout-heading'].innerHTML = String(heading).padStart(3, '0') + '&deg;';
 
     let stance = '';
-    if (player.isCrouching) stance = player.isMoving ? 'CROUCHED · QUIET' : 'CROUCHED · STILL · NEARLY SILENT';
+    if (player.isInVent) stance = player.isMoving ? 'IN A VENT · LOUD' : 'IN A VENT · STILL';
+    else if (player.isCrouching) stance = player.isMoving ? 'CROUCHED · QUIET' : 'CROUCHED · STILL · NEARLY SILENT';
     else if (player.isSprinting) stance = 'SPRINTING · LOUD';
     elements['hud-stance'].textContent = stance;
 

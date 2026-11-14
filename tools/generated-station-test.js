@@ -23,7 +23,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
       const debug = window.noReturnDebug;
       const layouts = ['tight', 'mixed', 'sprawling'];
       const bad = [];
-      let roomTotal = 0, loopTotal = 0, stairTotal = 0, twoLevelCount = 0;
+      let roomTotal = 0, loopTotal = 0, stairTotal = 0, twoLevelCount = 0, ventTotal = 0, withVent = 0;
       for (let seed = 1; seed <= seedCount; seed++) {
         const layout = layouts[seed % 3], levels = seed % 2 === 0 ? 'two' : 'one';
         const wasBuilt = debug.loadStation('generated', seed, size, layout, levels);
@@ -34,13 +34,16 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
         if (wasBuilt && levels === 'one' && (shaftFloor !== 0 || debug.level.stairCount !== 0)) found.push('one level was asked for but the shaft is at ' + shaftFloor);
         if (found.length > 0) bad.push({ seed: seed, layout: layout, levels: levels, problems: found.slice(0, 4) });
         roomTotal += debug.level.roomCount; loopTotal += debug.level.loopCount;
+        ventTotal += debug.level.ventCount; if (debug.level.ventCount > 0) withVent++;
         if (levels === 'two') { twoLevelCount++; stairTotal += debug.level.stairCount; }
       }
       return { bad: bad, averageRooms: Math.round(roomTotal / seedCount), averageLoops: Math.round(loopTotal / seedCount * 10) / 10,
-        averageStairs: Math.round(stairTotal / Math.max(1, twoLevelCount) * 10) / 10 };
+        averageStairs: Math.round(stairTotal / Math.max(1, twoLevelCount) * 10) / 10,
+        averageVents: Math.round(ventTotal / seedCount * 10) / 10, withVent: withVent };
     }, [sizeKey, SEEDS_PER_SIZE]);
     check(SEEDS_PER_SIZE + ' ' + sizeKey + ' stations, half of them with two levels: all can be built, walked and finished in order (about ' +
-      result.averageRooms + ' rooms and corridors, ' + result.averageLoops + ' extra ducts, ' + result.averageStairs + ' stairs each)', result.bad.length === 0, result.bad.slice(0, 3));
+      result.averageRooms + ' rooms and corridors, ' + result.averageLoops + ' extra ducts, ' + result.averageVents + ' vents, ' + result.averageStairs + ' stairs each)', result.bad.length === 0, result.bad.slice(0, 3));
+    check('at least three in four ' + sizeKey + ' stations have a vent', result.withVent >= SEEDS_PER_SIZE * 0.75, result.withVent + ' of ' + SEEDS_PER_SIZE);
   }
 
   // --- a seed is a promise: the same seed must give the same station, a different seed a different one ---
@@ -117,6 +120,86 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   check('walking down the stairs lowers the floor under you smoothly, three metres in all',
     stairs.floorAtTop === 0 && stairs.bottom.floor < -2.9 && Math.abs(descent.heights[descent.heights.length - 1] - stairs.bottom.floor) < 0.05 && neverJumps, { stairs: stairs, descent: descent });
   check('the view follows the floor down', cameraAtFoot < -1 && cameraAtFoot > -1.6, cameraAtFoot);
+  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
+
+  // --- vents: you only fit crouched, it is loud in there, and the Hollow crawls through ---
+  const vent = await inGame(() => {
+    const debug = window.noReturnDebug, level = debug.level;
+    const seed = level.seed; // the station being played; the seed was chosen so that it has a vent
+    // Its tiles, and the two places where it opens into a room: a vent tile with ordinary floor next to it.
+    const tiles = [], mouths = [];
+    for (let z = level.boundsMinimumZ; z < level.boundsMaximumZ; z++) for (let x = level.boundsMinimumX; x < level.boundsMaximumX; x++) {
+      if (!debug.isVentAt(x + 0.5, z + 0.5) || debug.zoneNames[debug.getZoneAt(x + 0.5, z + 0.5)] !== 'VENT') continue;
+      tiles.push([x, z]);
+      for (const step of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const beside = [x + step[0] + 0.5, z + step[1] + 0.5];
+        const spot = debug.findWalkableSpotNear(beside[0], beside[1]);
+        if (spot && spot.x === beside[0] && spot.z === beside[1] && !debug.isVentAt(beside[0], beside[1])) {
+          mouths.push({ mouthX: x + 0.5, mouthZ: z + 0.5, roomX: beside[0], roomZ: beside[1], stepX: -step[0], stepZ: -step[1] });
+        }
+      }
+    }
+    return { seed: seed, ventCount: level.ventCount, tileCount: tiles.length, mouths: mouths.slice(0, 2), headroom: tiles.length ? debug.getHeadroomAt(tiles[0][0] + 0.5, tiles[0][1] + 0.5) : 0, ventHeight: debug.ventHeight };
+  });
+  check('a vent is crawl height and opens into a room at each end', vent.mouths.length === 2 && Math.abs(vent.headroom - vent.ventHeight) < 0.01 && vent.tileCount >= 3, vent);
+  const enterVent = async (holdCrouch) => {
+    const mouth = vent.mouths[0];
+    await inGame(([m]) => {
+      const debug = window.noReturnDebug;
+      debug.teleport(m.roomX, m.roomZ, Math.atan2(m.stepX, -m.stepZ));
+      debug.player.velocityX = 0; debug.player.velocityZ = 0;
+      debug.simulate(0.1);
+    }, [mouth]);
+    if (holdCrouch) await page.keyboard.down('KeyC');
+    await page.keyboard.down('KeyW');
+    await inGame(() => window.noReturnDebug.simulate(2.5));
+    const state = await inGame(() => {
+      const debug = window.noReturnDebug;
+      return { inVent: debug.isVentAt(debug.player.x, debug.player.z), crouching: debug.player.isCrouching, audible: debug.player.audibleRadius, eye: Math.round(debug.player.eyeHeight * 100) / 100 };
+    });
+    if (holdCrouch) {
+      // Let go of crouch and keep crawling: there is no room to stand up.
+      await page.keyboard.up('KeyC');
+      await inGame(() => window.noReturnDebug.simulate(1));
+      Object.assign(state, await inGame(() => ({ stillCrouching: window.noReturnDebug.player.isCrouching, stillInVent: window.noReturnDebug.isVentAt(window.noReturnDebug.player.x, window.noReturnDebug.player.z),
+        eyeAfter: Math.round(window.noReturnDebug.player.eyeHeight * 100) / 100, quietLimit: window.noReturnDebug.tuning.audibleRadiusCrouchWalking, ventLimit: window.noReturnDebug.tuning.audibleRadiusVentCrawling })));
+    }
+    await page.keyboard.up('KeyW');
+    return state;
+  };
+  const standing = await enterVent(false);
+  check('walking at a vent on your feet does not get you in', standing.inVent === false && standing.crouching === false, standing);
+  const crawling = await enterVent(true);
+  check('crouched you crawl in, and you stay down in there even when you let go of crouch',
+    crawling.inVent && crawling.crouching && crawling.stillInVent && crawling.stillCrouching && crawling.eyeAfter < 1.05, crawling);
+  check('crawling in a vent is louder than creeping in a room', crawling.audible === crawling.ventLimit && crawling.ventLimit > crawling.quietLimit, crawling);
+  const hollowInVent = await inGame(([mouths]) => {
+    const debug = window.noReturnDebug, hollow = debug.hollow;
+    // Out of the vent and out of earshot; then send the Hollow from one end of the vent to the room at the other.
+    debug.teleport(debug.playerStart.x, debug.playerStart.z, 0);
+    debug.spawnHollow(mouths[0].roomX, mouths[0].roomZ);
+    hollow.graceTimer = 999; // it senses nothing: this is only about getting through
+    let wasInVent = false, lowestTopAboveFloor = Infinity, mostCrawl = 0, seconds = 0, closest = Infinity;
+    for (; seconds < 60 && closest > 1.6; seconds += 0.1) {
+      hollow.state = 0; hollow.targetX = mouths[1].roomX; hollow.targetZ = mouths[1].roomZ;
+      debug.simulate(0.1);
+      const figure = hollow.figure;
+      if (debug.isVentAt(figure.x, figure.z)) {
+        wasInVent = true;
+        let top = 0;
+        for (let capsule = 0; capsule < figure.capsuleCount; capsule++) top = Math.max(top, figure.capsules[capsule * 7 + 1] + figure.capsules[capsule * 7 + 6], figure.capsules[capsule * 7 + 4] + figure.capsules[capsule * 7 + 6]);
+        // measured two tiles in, once it has had time to get down
+        if (debug.isVentAt(figure.x + Math.sin(figure.yaw) * -1.2, figure.z - Math.cos(figure.yaw) * -1.2)) lowestTopAboveFloor = Math.min(lowestTopAboveFloor, top - figure.y);
+        mostCrawl = Math.max(mostCrawl, figure.pose.crawl);
+      }
+      closest = Math.min(closest, Math.hypot(figure.x - mouths[1].roomX, figure.z - mouths[1].roomZ));
+    }
+    hollow.isActive = false;
+    return { wasInVent: wasInVent, lowestTop: Math.round(lowestTopAboveFloor * 100) / 100, mostCrawl: Math.round(mostCrawl * 100) / 100, seconds: Math.round(seconds), closest: Math.round(closest * 10) / 10, mode: debug.game.mode };
+  }, [vent.mouths]);
+  check('the Hollow goes through the vent on knees and hands and comes out at the other end',
+    hollowInVent.wasInVent && hollowInVent.closest <= 1.6 && hollowInVent.mostCrawl > 0.8 && hollowInVent.lowestTop < vent.ventHeight, hollowInVent);
+
   await inGame(() => { const debug = window.noReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
 
   // Helpers that work in any station: stand next to a thing, or next to the first door of a kind.

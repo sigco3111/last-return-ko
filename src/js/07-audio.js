@@ -721,6 +721,22 @@ function playDoorSound(x, z, isOpening) {
   playTone({ waveform: 'triangle', frequency: 92, frequencyEnd: 60, duration: 0.3, gain: 0.5, delay: 0.62, destination: panner });
 }
 
+// Your own knees and elbows on sheet metal: a dull boom that rings on.
+function playVentCrawlSound() {
+  playNoiseBurst({ duration: 0.22, frequency: 260, gain: 0.34, useBrownNoise: true, playbackRate: 1.1, reverbAmount: 0.6 });
+  playResonantNoise({ frequency: 190 + Math.random() * 60, resonance: 16, duration: 0.5, gain: 0.1, attack: 0.004, reverbAmount: 0.7 });
+  playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 1700, gain: 0.05 });
+}
+
+// The Hollow in a vent. Louder and longer than its footsteps, and it carries: this is the warning you get.
+function playHollowVentStep(x, z, weight) {
+  const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 0.6, z);
+  if (!panner) return;
+  playNoiseBurst({ duration: 0.3, frequency: 240, gain: 1.5 * weight, useBrownNoise: true, playbackRate: 0.8, destination: panner });
+  playResonantNoise({ frequency: 150 + Math.random() * 50, resonance: 18, duration: 0.7, gain: 0.5 * weight, attack: 0.004, destination: panner });
+  playNoiseBurst({ duration: 0.07, filterType: 'bandpass', frequency: 2200, gain: 0.25 * weight, delay: 0.04, destination: panner });
+}
+
 function playHollowFootstep(x, z, weight) {
   const panner = createTemporaryPanner(x, 0.1, z);
   if (!panner) return;

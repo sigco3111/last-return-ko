@@ -572,6 +572,8 @@ function updateHollow(dt) {
   }
 
   speed *= game.difficulty.hollowSpeedFactor * (game.flags.spoolsCollected >= 3 ? TUNING.hollowSpeedBonusWithAllSpools : 1);
+  const isHollowInVent = (getTileFlagsAtPosition(figure.x, figure.z) & TILE_FLAG_VENT) !== 0;
+  if (isHollowInVent) speed *= TUNING.hollowVentSpeedFactor;
   if (hollow.enragedTimer > 0) speed = TUNING.hollowEnragedSpeed * game.difficulty.hollowSpeedFactor;
   else speed *= interpolateLinear(1, TUNING.hollowHeldSpeedFactor, hollow.heldAmount);
 
@@ -597,7 +599,8 @@ function updateHollow(dt) {
   const stepSign = Math.sin(hollow.walkPhase) >= 0 ? 1 : -1;
   if (stepSign !== hollow.lastStepSign) {
     hollow.lastStepSign = stepSign;
-    playHollowFootstep(figure.x, figure.z, isHunting ? 1 : 0.7);
+    if (isHollowInVent) playHollowVentStep(figure.x, figure.z, isHunting ? 1 : 0.8);
+    else playHollowFootstep(figure.x, figure.z, isHunting ? 1 : 0.7);
   }
 
   if (distanceToPlayer < TUNING.hollowKillDistance && hollow.graceTimer <= 0) triggerPlayerDeath('hollow', figure);
@@ -628,8 +631,10 @@ function poseHollow(creature, isHunting, isListening, dt) {
   // TWEAK: it ducks quickly (3 and 4) and unfolds slowly (0.7 and 1.2). Units are "whole range per second".
   pose.stretch = approachValue(pose.stretch, fit.stretch, dt * (fit.stretch < pose.stretch ? 3 : 0.7));
   // On top of what the ceiling demands it is always a little bent, except while it is drawing itself up.
-  const wantedStoop = Math.max(fit.stoop, TUNING.hollowBaseStoop * (1 - fit.stretch));
+  const wantedStoop = fit.crawl > 0 ? 0 : Math.max(fit.stoop, TUNING.hollowBaseStoop * (1 - fit.stretch));
   pose.stoop = approachValue(pose.stoop, wantedStoop, dt * (wantedStoop > pose.stoop ? 4 : 1.2));
+  // Into a vent it drops to knees and hands quickly, and gets up again more slowly.
+  pose.crawl = approachValue(pose.crawl, fit.crawl, dt * (fit.crawl > pose.crawl ? 5 : 2));
   pose.fingerSplay = approachValue(pose.fingerSplay, (isHunting || creature.heldAmount > 0.3) ? 1 : (isListening ? 0.75 : 0.2), dt * 2.5);
   pose.headTilt = 0.28 + Math.sin(game.time * (isListening ? 0.35 : 0.8)) * (isListening ? 0.45 : 0.2) +
     (creature.heldAmount > 0.3 ? (Math.random() - 0.5) * 0.9 : 0);
