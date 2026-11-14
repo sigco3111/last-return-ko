@@ -34,7 +34,8 @@ function initializeInterface() {
     'screen-reader', 'screen-death', 'screen-ending', 'screen-rotate', 'button-play-upright', 'fatal-error', 'title-range', 'title-returns',
     'difficulty-description', 'button-begin', 'intro-lines', 'button-skip-intro', 'pause-objective', 'button-resume',
     'button-pause-restart', 'reader-source', 'reader-heading', 'reader-body', 'button-close-reader', 'death-title',
-    'death-lines', 'button-retry', 'button-death-restart', 'ending-stats', 'ending-manifest', 'button-ending-restart'
+    'death-lines', 'button-retry', 'button-death-restart', 'ending-stats', 'ending-manifest', 'button-ending-restart',
+    'button-ending-uncharted', 'station-options', 'station-description', 'pause-station'
   ];
   for (const elementId of elementIds) interfaceState.elements[elementId] = getElement(elementId);
 
@@ -54,6 +55,12 @@ function initializeInterface() {
   elements['button-retry'].addEventListener('click', function () { retryFromCheckpoint(); });
   elements['button-death-restart'].addEventListener('click', function () { returnToTitle(); });
   elements['button-ending-restart'].addEventListener('click', function () { returnToTitle(); });
+  elements['button-ending-uncharted'].addEventListener('click', function () {
+    settings.station = 'generated';
+    saveSettings();
+    returnToTitle();
+    interfaceState.refreshStationControls();
+  });
   elements['map-close'].addEventListener('click', function () { toggleMapOverlay(); });
   elements['button-play-upright'].addEventListener('click', function () { allowUprightPlay(); });
   elements['screen-reader'].addEventListener('mousedown', function (event) {
@@ -78,8 +85,8 @@ function initializeInterface() {
   for (const control of settingControls) {
     control.addEventListener('input', function () {
       const name = control.dataset.setting;
-      if (name === 'quality') settings.quality = control.value;
-      else if (name === 'palette') settings.palette = Number(control.value);
+      // Settings that are words stay words; the rest are numbers.
+      if (typeof settings[name] === 'string') settings[name] = control.value;
       else settings[name] = Number(control.value);
       if (name === 'volume') setMasterVolume(settings.volume);
       saveSettings();
@@ -105,6 +112,27 @@ function initializeInterface() {
     });
   }
   refreshDifficulty();
+
+  // Which station to go down into.
+  const stationInputs = document.querySelectorAll('input[name="station"]');
+  const refreshStationControls = function () {
+    for (const radio of stationInputs) radio.checked = radio.value === settings.station;
+    const isGenerated = settings.station === 'generated';
+    elements['station-options'].hidden = !isGenerated;
+    let description = isGenerated
+      ? 'No drawings exist. Different on every descent; the same seed gives the same station.'
+      : 'The annex as it was built. The same every time.';
+    // After a run in a generated station, say which one it was, so it can be visited again.
+    if (isGenerated && level.kind === 'generated') description += ' Last descent: seed ' + level.seed + '.';
+    elements['station-description'].textContent = description;
+  };
+  for (const radio of stationInputs) {
+    radio.addEventListener('change', function () {
+      if (radio.checked) { settings.station = radio.value; saveSettings(); refreshStationControls(); }
+    });
+  }
+  refreshStationControls();
+  interfaceState.refreshStationControls = refreshStationControls;
 }
 
 function showOnlyScreen(screenId) {
@@ -239,9 +267,20 @@ function drawFullMap() {
   flushMapPixels();
   const canvas = interfaceState.elements['map-canvas'];
   const context = canvas.getContext('2d');
-  const scale = canvas.width / GRID_WIDTH;
+  // Show only the part of the map the station occupies, as large as fits.
+  const viewWidth = level.boundsMaximumX - level.boundsMinimumX, viewDepth = level.boundsMaximumZ - level.boundsMinimumZ;
+  const scale = Math.min(canvas.width / viewWidth, canvas.height / viewDepth);
+  const originX = (canvas.width - viewWidth * scale) / 2 - level.boundsMinimumX * scale;
+  const originY = (canvas.height - viewDepth * scale) / 2 - level.boundsMinimumZ * scale;
+  const toCanvasX = function (worldX) { return worldX * scale + originX; };
+  const toCanvasY = function (worldZ) { return worldZ * scale + originY; };
   context.imageSmoothingEnabled = false;
-  context.drawImage(interfaceState.mapSourceCanvas, 0, 0, MAP_WIDTH, MAP_HEIGHT, 0, 0, canvas.width, canvas.height);
+  context.fillStyle = '#04060a';
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  context.drawImage(interfaceState.mapSourceCanvas,
+    level.boundsMinimumX * MAP_PIXELS_PER_METRE, level.boundsMinimumZ * MAP_PIXELS_PER_METRE,
+    viewWidth * MAP_PIXELS_PER_METRE, viewDepth * MAP_PIXELS_PER_METRE,
+    toCanvasX(level.boundsMinimumX), toCanvasY(level.boundsMinimumZ), viewWidth * scale, viewDepth * scale);
   context.font = '11px "B612 Mono", ui-monospace, monospace';
   context.textAlign = 'center';
   // Zone labels appear once you have stood in the zone.
@@ -249,7 +288,7 @@ function drawFullMap() {
   for (let tileZ = 0; tileZ < GRID_DEPTH; tileZ++) {
     for (let tileX = 0; tileX < GRID_WIDTH; tileX++) {
       const zone = tileZone[tileIndexAt(tileX, tileZ)];
-      if (!zone || !interfaceState.visitedZones.has(zone)) continue;
+      if (!zone || !interfaceState.visitedZones.has(zone) || level.unlabelledZones.indexOf(zone) >= 0) continue;
       if (!labelPositions[zone]) labelPositions[zone] = { sumX: 0, sumZ: 0, count: 0 };
       labelPositions[zone].sumX += tileX + 0.5; labelPositions[zone].sumZ += tileZ + 0.5; labelPositions[zone].count++;
     }
@@ -257,17 +296,17 @@ function drawFullMap() {
   context.fillStyle = 'rgba(163, 122, 54, 0.95)';
   for (const zone in labelPositions) {
     const label = labelPositions[zone];
-    context.fillText(ZONE_NAMES[zone], label.sumX / label.count * scale, label.sumZ / label.count * scale + 4);
+    context.fillText(ZONE_NAMES[zone] || '', toCanvasX(label.sumX / label.count), toCanvasY(label.sumZ / label.count) + 4);
   }
   context.textAlign = 'left';
   for (const interactable of interactables) {
     if (!interactable.isAvailable || !interactable.isDiscovered) continue;
     context.fillStyle = '#f2a93b';
-    context.fillRect(interactable.x * scale - 4, interactable.z * scale - 4, 8, 8);
-    if (interactable.mapLabel) context.fillText(interactable.mapLabel, interactable.x * scale + 8, interactable.z * scale + 4);
+    context.fillRect(toCanvasX(interactable.x) - 4, toCanvasY(interactable.z) - 4, 8, 8);
+    if (interactable.mapLabel) context.fillText(interactable.mapLabel, toCanvasX(interactable.x) + 8, toCanvasY(interactable.z) + 4);
   }
-  drawDebugMapMarkers(context, function (worldX) { return worldX * scale; }, function (worldZ) { return worldZ * scale; }, 7);
-  drawPlayerMarker(context, player.x * scale, player.z * scale, player.yaw, 9);
+  drawDebugMapMarkers(context, toCanvasX, toCanvasY, 7);
+  drawPlayerMarker(context, toCanvasX(player.x), toCanvasY(player.z), player.yaw, 9);
 }
 
 function toggleMapOverlay() {
@@ -462,7 +501,7 @@ function openReader(entry) {
   body.textContent = '';
   for (const paragraphText of entry.paragraphs) {
     const paragraph = document.createElement('p');
-    paragraph.textContent = paragraphText;
+    paragraph.textContent = paragraphText.replace('{keycardRoom}', level.keycardRoomText);
     body.appendChild(paragraph);
   }
   elements['button-close-reader'].textContent = input.isPointerLocked ? 'Put it away (E or click)' : 'Put it away';
@@ -520,6 +559,7 @@ function showEndingScreen() {
   addRow('Distance walked', Math.round(game.statistics.distanceWalked) + ' m');
   addRow('Signal losses', String(game.statistics.deaths));
   addRow('Threat level', game.difficulty.label);
+  addRow('Station', level.description);
   if (debugState.hasBeenUsedThisRun) addRow('Debug mode', 'used, so this run sets no best time');
   if (game.statistics.bestTime !== null) addRow('Best time', formatClockTime(game.statistics.bestTime));
   const manifest = elements['ending-manifest'];

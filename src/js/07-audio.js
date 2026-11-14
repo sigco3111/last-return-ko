@@ -22,6 +22,7 @@ const audio = {
   hollowScreechFilterHigh: null,
   hollowThroatSource: null,
   generatorPanner: null,
+  liftPanner: null,
   generatorGain: null,
   liftGain: null,
   ambienceGain: null,
@@ -330,10 +331,10 @@ function initializeAudioEngine() {
   generatorRattleGain.connect(audio.generatorGain);
   generatorRattle.start();
 
-  const liftPanner = createPannerNode(LIFT_POSITION.x, 2.5, LIFT_POSITION.z, 5, 0.8);
+  audio.liftPanner = createPannerNode(LIFT_POSITION.x, 2.5, LIFT_POSITION.z, 5, 0.8);
   audio.liftGain = context.createGain();
   audio.liftGain.gain.value = 0;
-  audio.liftGain.connect(liftPanner);
+  audio.liftGain.connect(audio.liftPanner);
   for (const partial of [[64, 0.5], [128.6, 0.22], [191, 0.1]]) {
     const liftMotor = context.createOscillator();
     liftMotor.type = 'sine';
@@ -354,6 +355,13 @@ function initializeAudioEngine() {
   liftRattle.start();
 
   audio.ambienceGain.gain.setTargetAtTime(0.9, context.currentTime, 2.5); // TWEAK: 0.9 = loudness of the constant room tone
+}
+
+// Called when a different station is loaded: the generator and the lift are somewhere else now.
+function moveMachinerySoundsToLevel() {
+  if (!audio.context) return;
+  setPannerPosition(audio.generatorPanner, GENERATOR_POSITION.x, GENERATOR_POSITION.y, GENERATOR_POSITION.z);
+  setPannerPosition(audio.liftPanner, LIFT_POSITION.x, 2.5, LIFT_POSITION.z);
 }
 
 function setMasterVolume(volume) {

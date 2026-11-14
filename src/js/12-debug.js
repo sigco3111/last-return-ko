@@ -34,6 +34,7 @@ const debugState = {
   options: {},
   noiseEvents: [],
   zoneDestinations: [],
+  zoneSelectElement: null,
   defaultTuning: {},
   panelElement: null,
   readoutElement: null,
@@ -214,6 +215,20 @@ function debugTeleportToZone(zone) {
     player.velocityX = 0; player.velocityZ = 0;
     if (!debugState.options.flyMode) player.eyeHeight = TUNING.eyeHeightStanding;
     return;
+  }
+}
+
+// Refills the "Go to" list. Called at start-up and again whenever a different station is loaded.
+function rebuildDebugZoneList() {
+  computeDebugZoneDestinations();
+  const zoneSelect = debugState.zoneSelectElement;
+  if (!zoneSelect) return;
+  zoneSelect.textContent = '';
+  for (const destination of debugState.zoneDestinations) {
+    const option = document.createElement('option');
+    option.value = String(destination.zone);
+    option.textContent = ZONE_NAMES[destination.zone];
+    zoneSelect.appendChild(option);
   }
 }
 
@@ -410,6 +425,7 @@ function buildDebugReadout() {
   } else {
     lines.push('HOLLOW      not in the station');
   }
+  lines.push('station     ' + level.description);
   let presentStills = 0, nearestStill = Infinity;
   for (const still of stills) {
     if (!still.isPresent) continue;
@@ -498,12 +514,8 @@ function initializeDebugMode() {
   const teleportRow = createDebugElement('div', 'debug-row');
   const zoneSelect = document.createElement('select');
   zoneSelect.id = 'debug-zone';
-  for (const destination of debugState.zoneDestinations) {
-    const option = document.createElement('option');
-    option.value = String(destination.zone);
-    option.textContent = ZONE_NAMES[destination.zone];
-    zoneSelect.appendChild(option);
-  }
+  debugState.zoneSelectElement = zoneSelect;
+  rebuildDebugZoneList();
   const teleportButton = createDebugElement('button', 'button-quiet', 'Go');
   teleportButton.type = 'button';
   teleportButton.id = 'debug-teleport';

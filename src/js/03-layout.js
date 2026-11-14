@@ -1,5 +1,7 @@
 // ---------------------------------------------------------------------------
-// The Kessel-9 pumping annex: every room, prop, sign, door and pickup.
+// The rooms of the Kessel-9 pumping annex, each described once so it can be used two ways:
+//   the classic station puts every room exactly where these numbers say;
+//   a generated station (03-levelgen.js) moves and turns the same rooms into a new arrangement.
 // Coordinates are metres. X runs east, Z runs south, Y is up.
 // ---------------------------------------------------------------------------
 
@@ -14,6 +16,8 @@ const OBJECT_NOTE_LOCKER = 8;
 const OBJECT_NOTE_LAB = 9;
 const OBJECT_NOTE_ARCHIVE = 10;
 
+// Where things are in the station that is loaded. The rooms below fill these in as they are built,
+// so they are right for the classic station and for generated ones.
 const PLAYER_START = { x: 6.5, z: 53.5, yaw: Math.PI / 2 };
 const LIFT_CAR_BOUNDS = { minimumX: 5, maximumX: 8, minimumZ: 52, maximumZ: 55 };
 const GENERATOR_POSITION = { x: 71.5, y: 1.0, z: 47.5 };
@@ -38,94 +42,126 @@ function addSurveySpool(objectId, x, y, z, label) {
   registerInteractable(objectId, x, y + 0.08, z, 'Take survey spool', [reelCore, reelBase, reelCap], { removeWhenUsed: true, mapLabel: label });
 }
 
-// HOW TO CHANGE THE STATION
-//   A room:    carveRoom(startX, startZ, endX, endZ, ceilingHeight, ZONE_...) hollows out a rectangle of tiles.
-//              Rooms must be separated by at least one solid tile, and joined by a door or an open gap.
-//   A door:    addDoor(tileX, tileZ, DOOR_KIND_...) on the solid tile between two rooms.
-//              AUTOMATIC always opens, POWERED needs the generator, KEYCARD needs power and the card.
-//   An object: addBoxBetween(minX, minY, minZ, maxX, maxY, maxZ) for a box,
-//              or one of the furniture helpers in 02-world.js (addTable, addBarrel, addShelfRackAlongZ, ...).
-//              Pass { blocksMovement: false } (or CLUTTER) for things you should be able to walk through.
-//   Lettering: addWallSign('TEXT', tileX, tileZ, WALL_NORTH, { width, height, centerY }) on a wall of that tile.
-//              Add isScrawled: true for hand-scratched writing.
-// After a change, run `npm test`: its first check reports anything a creature can no longer reach.
-function buildFacilityLayout() {
-  const random = createSeededRandomGenerator(90210);
 
-  // ---- Rooms --------------------------------------------------------------
+function addKeycard(x, y, z) {
+  const keycard = addBoxProp(x, y, z, 0.07, 0.01, 0.045, { yaw: 0.5, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  const keycardLanyard = addBoxProp(x + 0.15, y - 0.003, z + 0.1, 0.1, 0.006, 0.012, { yaw: 1.1, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  registerInteractable(OBJECT_KEYCARD, x, y + 0.025, z, 'Take keycard', [keycard, keycardLanyard], { removeWhenUsed: true, mapLabel: 'KEYCARD' });
+}
+
+// A generated station may move the first spool or the keycard out of its usual room (see 03-levelgen.js).
+const relocatedObjectives = { spool1: false, keycard: false };
+function isObjectivePlacedInItsUsualRoom(objectiveName) {
+  return !relocatedObjectives[objectiveName];
+}
+
+// Adds [x, z] points (and anything after x and z in each entry) to a list, moved and turned with the room.
+function pushPlacedPoints(target) {
+  for (let argumentIndex = 1; argumentIndex < arguments.length; argumentIndex++) {
+    const point = arguments[argumentIndex];
+    const placed = placePoint(point[0], point[1]);
+    target.push([placed[0], placed[1]].concat(point.slice(2)));
+  }
+}
+
+function setLevelPlayerStart(x, z, yaw) {
+  const placed = placePoint(x, z);
+  PLAYER_START.x = placed[0]; PLAYER_START.z = placed[1]; PLAYER_START.yaw = wrapAngleToPi(placeYaw(yaw));
+}
+
+function setLevelLift(carStartX, carStartZ, carEndX, carEndZ, doorX, doorZ) {
+  const cornerA = placePoint(carStartX, carStartZ), cornerB = placePoint(carEndX, carEndZ), door = placePoint(doorX, doorZ);
+  LIFT_CAR_BOUNDS.minimumX = Math.min(cornerA[0], cornerB[0]); LIFT_CAR_BOUNDS.maximumX = Math.max(cornerA[0], cornerB[0]);
+  LIFT_CAR_BOUNDS.minimumZ = Math.min(cornerA[1], cornerB[1]); LIFT_CAR_BOUNDS.maximumZ = Math.max(cornerA[1], cornerB[1]);
+  LIFT_POSITION.x = door[0]; LIFT_POSITION.z = door[1];
+}
+
+function setLevelAttractCamera(x, y, z, yaw) {
+  const placed = placePoint(x, z);
+  level.attractCamera.x = placed[0]; level.attractCamera.y = y; level.attractCamera.z = placed[1];
+  level.attractCamera.yaw = placeYaw(yaw);
+}
+
+function setLevelGenerator(x, z, approachX, approachZ) {
+  const placed = placePoint(x, z), approach = placePoint(approachX, approachZ);
+  GENERATOR_POSITION.x = placed[0]; GENERATOR_POSITION.z = placed[1];
+  level.generatorApproachX = approach[0]; level.generatorApproachZ = approach[1];
+}
+
+function setLevelShaft(x, z, hollowSpawnX, hollowSpawnZ) {
+  const placed = placePoint(x, z), spawn = placePoint(hollowSpawnX, hollowSpawnZ);
+  SHAFT_POSITION.x = placed[0]; SHAFT_POSITION.z = placed[1];
+  HOLLOW_SPAWN_POSITION.x = spawn[0]; HOLLOW_SPAWN_POSITION.z = spawn[1];
+}
+
+// How far a point is outside the lift car (0 when inside it).
+function distanceOutsideLiftCar(x, z) {
+  const deltaX = Math.max(LIFT_CAR_BOUNDS.minimumX - x, 0, x - LIFT_CAR_BOUNDS.maximumX);
+  const deltaZ = Math.max(LIFT_CAR_BOUNDS.minimumZ - z, 0, z - LIFT_CAR_BOUNDS.maximumZ);
+  return Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+}
+
+// ---------------------------------------------------------------------------
+// Carving: hollowing each room out of the rock. Coordinates are the room's place in the classic station.
+// ---------------------------------------------------------------------------
+
+function carveLiftLobby() {
   carveRoom(5, 52, 8, 55, 2.5, ZONE_LIFT_CAR);
   carveRoom(9, 49, 18, 58, 3.4, ZONE_LOBBY);
-  carveRoom(18, 52, 40, 54, 2.8, ZONE_MAIN_CORRIDOR);
-  carveRoom(10, 43, 16, 48, 2.8, ZONE_SECURITY_OFFICE);
-  carveRoom(22, 55, 29, 61, 2.8, ZONE_LOCKER_ROOM);
-  carveRoom(22, 45, 30, 51, 2.8, ZONE_BREAK_ROOM);
-  carveRoom(33, 55, 37, 59, 2.6, ZONE_CLOSET);
-  carveRoom(31, 38, 33, 52, 2.8, ZONE_BRANCH_CORRIDOR);
-  carveRoom(41, 50, 46, 55, 3.0, ZONE_VESTIBULE);
-  carveRoom(46, 52, 47, 54, 2.6, ZONE_VESTIBULE);
+  liftDoor = addDoor(8, 53, DOOR_KIND_LIFT);
+  setLevelPlayerStart(6.5, 53.5, Math.PI / 2);
+  setLevelLift(5, 52, 8, 55, 8.5, 53.5);
+  setLevelAttractCamera(16.9, 1.5, 50.3, -1.95);
+}
+function carveSecurityOffice() { carveRoom(10, 43, 16, 48, 2.8, ZONE_SECURITY_OFFICE); }
+function carveLockerRoom() { carveRoom(22, 55, 29, 61, 2.8, ZONE_LOCKER_ROOM); }
+function carveMessRoom() { carveRoom(22, 45, 30, 51, 2.8, ZONE_BREAK_ROOM); }
+function carveStoreCloset() { carveRoom(33, 55, 37, 59, 2.6, ZONE_CLOSET); }
+function carvePumpHall() {
   carveRoom(47, 38, 66, 58, 7.0, ZONE_PUMP_HALL);
+  setTileFlagInRectangle(56, 51, 66, 58, TILE_FLAG_WATER);
+  setTileFlagInRectangle(49, 46, 64, 47, TILE_FLAG_HAZARD);
+  setTileFlagInRectangle(49, 50, 56, 51, TILE_FLAG_HAZARD);
+}
+function carveGeneratorRoom() {
   carveRoom(67, 44, 74, 51, 3.5, ZONE_GENERATOR_ROOM);
-  carveRoom(50, 32, 58, 37, 2.8, ZONE_CONTROL_ROOM);
-  carveRoom(12, 36, 14, 42, 2.6, ZONE_WEST_CORRIDOR);
-  carveRoom(20, 24, 42, 37, 3.2, ZONE_ARCHIVE);
-  carveRoom(9, 26, 19, 35, 3.0, ZONE_LAB);
-  carveRoom(10, 18, 16, 25, 2.6, ZONE_COLD_ROOM);
+  setLevelGenerator(71.5, 47.5, 68.5, 47.5);
+}
+function carveControlRoom() { carveRoom(50, 32, 58, 37, 2.8, ZONE_CONTROL_ROOM); }
+function carveLaboratory() { carveRoom(9, 26, 19, 35, 3.0, ZONE_LAB); }
+function carveColdRoom() { carveRoom(10, 18, 16, 25, 2.6, ZONE_COLD_ROOM); }
+function carveArchive() { carveRoom(20, 24, 42, 37, 3.2, ZONE_ARCHIVE); }
+function carveCalibrationStore() {
   carveRoom(24, 10, 40, 23, 4.0, ZONE_CALIBRATION_STORE);
-  carveRoom(43, 29, 60, 31, 2.5, ZONE_DEEP_CORRIDOR);
-  carveRoom(58, 15, 60, 29, 2.5, ZONE_DEEP_CORRIDOR);
+  level.storeZone = resolveZone(ZONE_CALIBRATION_STORE);
+}
+// Shaft 9: a round pit with a grated bridge out to a platform in the middle.
+function carveShaftChamber() {
   carveRoom(49, 2, 69, 15, 9.0, ZONE_SHAFT);
-
-  // ---- Shaft 9: a pit with a grated bridge to a platform in the middle ----
   for (let tileZ = 2; tileZ < 15; tileZ++) {
     for (let tileX = 49; tileX < 69; tileX++) {
-      const fromCenterX = tileX + 0.5 - SHAFT_POSITION.x, fromCenterZ = tileZ + 0.5 - SHAFT_POSITION.z;
+      const fromCenterX = tileX + 0.5 - 59.5, fromCenterZ = tileZ + 0.5 - 8.5;
       const isInsidePit = Math.sqrt(fromCenterX * fromCenterX + fromCenterZ * fromCenterZ) < 4.3;
       const isPlatform = Math.abs(fromCenterX) <= 1.5 && Math.abs(fromCenterZ) <= 1.5;
       const isBridge = tileX === 59 && tileZ >= 10 && tileZ <= 13;
-      const index = tileIndexAt(tileX, tileZ);
-      if (isInsidePit && !isPlatform && !isBridge) {
-        tileFlags[index] |= TILE_FLAG_PIT;
-        tileFloorHeight[index] = PIT_FLOOR_HEIGHT;
-      } else if (isInsidePit) {
-        tileFlags[index] |= TILE_FLAG_GRATE;
-      }
+      if (isInsidePit) setPitTile(tileX, tileZ, !isPlatform && !isBridge);
     }
   }
-
-  // ---- Floor conditions ---------------------------------------------------
-  setTileFlagInRectangle(56, 51, 66, 58, TILE_FLAG_WATER);
-  setTileFlagInRectangle(58, 18, 60, 26, TILE_FLAG_WATER);
-  setTileFlagInRectangle(49, 46, 64, 47, TILE_FLAG_HAZARD);
-  setTileFlagInRectangle(49, 50, 56, 51, TILE_FLAG_HAZARD);
   setTileFlagInRectangle(54, 13, 65, 15, TILE_FLAG_HAZARD);
+  setLevelShaft(59.5, 8.5, 52.5, 12.5);
+}
 
-  // ---- Doors (added after the rooms so each door knows which way it faces) -
-  liftDoor = addDoor(8, 53, DOOR_KIND_LIFT);
-  addDoor(13, 48, DOOR_KIND_AUTOMATIC);
-  addDoor(25, 54, DOOR_KIND_AUTOMATIC);
-  addDoor(26, 51, DOOR_KIND_AUTOMATIC);
-  addDoor(30, 48, DOOR_KIND_AUTOMATIC);
-  addDoor(35, 54, DOOR_KIND_AUTOMATIC);
-  addDoor(40, 52, DOOR_KIND_AUTOMATIC);
-  addDoor(66, 47, DOOR_KIND_AUTOMATIC);
-  addDoor(54, 37, DOOR_KIND_AUTOMATIC);
-  addDoor(31, 37, DOOR_KIND_POWERED);
-  addDoor(12, 42, DOOR_KIND_AUTOMATIC);
-  addDoor(12, 35, DOOR_KIND_POWERED);
-  addDoor(19, 30, DOOR_KIND_AUTOMATIC);
-  addDoor(13, 25, DOOR_KIND_AUTOMATIC);
-  addDoor(32, 23, DOOR_KIND_AUTOMATIC);
-  addDoor(42, 30, DOOR_KIND_KEYCARD);
-  addDoor(56, 31, DOOR_KIND_KEYCARD);
+// ---------------------------------------------------------------------------
+// Furnishing: everything that stands in each room.
+// ---------------------------------------------------------------------------
 
-  // ---- Lift car -----------------------------------------------------------
+// The lift car and the lobby it opens onto.
+function furnishLiftLobby(random) {
   addPipeAlongX(5.1, 7.9, 1.0, 52.07, 0.025);
   addPipeAlongX(5.1, 7.9, 1.0, 54.93, 0.025);
   addPipeAlongZ(52.1, 54.9, 1.0, 5.07, 0.025);
   addBoxProp(7.95, 1.3, 54.4, 0.04, 0.22, 0.14, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   addCeilingLamp(6.5, 53.5, 2.5, true);
-
-  // ---- Lift lobby ---------------------------------------------------------
   addBoxBetween(9.0, 0, 55.0, 9.34, 1.35, 55.6, { surfaceClass: SURFACE_METAL });
   const terminalScreen = addBoxBetween(9.34, 0.95, 55.08, 9.39, 1.3, 55.52,
     { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
@@ -152,8 +188,10 @@ function buildFacilityLayout() {
   addBoxProp(10.2, 0.2, 56.5, 0.32, 0.2, 0.12, { yaw: 1.2, blocksMovement: false });
   addWallSign('KESSEL-9 · INTAKE LEVEL', 13, 49, WALL_NORTH, { width: 5.2, height: 0.46, centerY: 2.98 });
   addWallSign('LIFT', 9, 53, WALL_WEST, { width: 0.95, height: 0.36, centerY: 2.78 });
+}
 
-  // ---- Security office ----------------------------------------------------
+// Security office.
+function furnishSecurityOffice(random) {
   addTable(14.9, 45.3, 0, 1.0, 2.6, 0.76);
   for (let monitorIndex = 0; monitorIndex < 3; monitorIndex++) {
     addBoxProp(15.2, 0.96, 44.5 + monitorIndex * 0.8, 0.03, 0.17, 0.22, { yaw: (monitorIndex - 1) * 0.25, blocksMovement: false });
@@ -167,23 +205,10 @@ function buildFacilityLayout() {
   addCeilingLamp(13, 45.5, 2.8, false);
   addNote(OBJECT_NOTE_SECURITY, 14.75, 0.77, 46.2, 0.3);
   addWallSign('SECURITY', 13, 49, WALL_NORTH, { width: 1.1, height: 0.2, centerY: 2.52, alongOffset: 0 });
+}
 
-  // ---- Main corridor A ----------------------------------------------------
-  addPipeAlongX(18, 40, 2.55, 52.22, 0.09);
-  addPipeAlongX(18, 40, 2.62, 53.76, 0.06);
-  for (let lampX = 21; lampX < 40; lampX += 6) addCeilingLamp(lampX, 53, 2.8, true);
-  addBoxProp(28.3, 0.3, 53.55, 0.45, 0.3, 0.3, { yaw: 0.35, surfaceClass: SURFACE_METAL });
-  addCylinderProp(AXIS_Y, 28.9, 0.08, 53.1, 0.08, 0.08, CLUTTER);
-  addCylinderProp(AXIS_Y, 22.5, 0.55, 53.9, 0.07, 0.25, CLUTTER);
-  addCrate(36.4, 53.65, 0.2, 0.4, 0);
-  addBoxProp(34.2, 0.03, 52.6, 0.3, 0.02, 0.2, { yaw: 0.9, blocksMovement: false });
-  addWallSign('← LIFT    PUMP HALL B →', 20, 52, WALL_NORTH, { width: 3.6, height: 0.3, centerY: 1.9, alongOffset: 0.5 });
-  addWallSign('ARCHIVE · LABORATORY →', 29, 52, WALL_NORTH, { width: 2.8, height: 0.26, centerY: 1.9 });
-  addWallSign('PUMP HALL B →', 37, 52, WALL_NORTH, { width: 2.4, height: 0.3, centerY: 1.9 });
-  addWallSign('LOCKERS', 25, 53, WALL_SOUTH, { width: 0.95, height: 0.2, centerY: 2.52 });
-  addWallSign('MESS', 26, 52, WALL_NORTH, { width: 0.8, height: 0.2, centerY: 2.52 });
-
-  // ---- Locker room --------------------------------------------------------
+// Locker room.
+function furnishLockerRoom(random) {
   for (let lockerIndex = 0; lockerIndex < 9; lockerIndex++) {
     addLocker(22.24, 56.2 + lockerIndex * 0.5, Math.PI / 2, lockerIndex === 3 || lockerIndex === 6);
     if (lockerIndex !== 4) addLocker(28.76, 56.2 + lockerIndex * 0.5, -Math.PI / 2, lockerIndex === 1);
@@ -197,8 +222,10 @@ function buildFacilityLayout() {
   addBoxProp(26.6, 0.12, 57.6, 0.2, 0.12, 0.3, { yaw: 0.7, blocksMovement: false });
   addCeilingLamp(25.5, 57.5, 2.8, false);
   addNote(OBJECT_NOTE_LOCKER, 25.5, 0.46, 58.3, -0.4);
+}
 
-  // ---- Mess room ----------------------------------------------------------
+// Mess room.
+function furnishMessRoom(random) {
   addBoxBetween(22.3, 0, 45.0, 27.5, 0.9, 45.6);
   addBoxBetween(22.3, 1.5, 45.0, 27.5, 2.2, 45.35, CLUTTER);
   addBoxBetween(28.2, 0, 45.0, 29.0, 1.9, 45.8, { surfaceClass: SURFACE_METAL });
@@ -214,29 +241,19 @@ function buildFacilityLayout() {
   addCylinderProp(AXIS_Y, 27.6, 0.82, 47.4, 0.04, 0.05, CLUTTER);
   addCylinderProp(AXIS_Y, 24.6, 0.95, 45.3, 0.09, 0.05, CLUTTER);
   addCeilingLamp(25.5, 48, 2.8, true);
+}
 
-  // ---- Store closet -------------------------------------------------------
+// Store closet.
+function furnishStoreCloset(random) {
   addShelfRackAlongZ(33.3, 55.2, 58.8, 2.2, random, 0.7);
   addShelfRackAlongZ(36.7, 56.2, 58.8, 2.2, random, 0.6);
   addCrate(35.0, 58.4, 0.3, 0.2, 0);
   addCylinderProp(AXIS_Y, 34.3, 0.18, 56.3, 0.17, 0.18, CLUTTER);
   addVerticalPipe(34.35, 56.2, 0.2, 1.4, 0.015, false);
+}
 
-  // ---- Archive access corridor --------------------------------------------
-  addPipeAlongZ(38, 52, 2.5, 31.22, 0.08);
-  addCeilingLamp(32, 45, 2.8, false);
-  addCrate(32.65, 41.5, 0.24, 0.2, 0);
-  addWallSign('ARCHIVE', 32, 38, WALL_NORTH, { width: 0.9, height: 0.24, centerY: 1.9 });
-  addWallSign('MAINS POWER DOOR', 32, 38, WALL_NORTH, { width: 0.9, height: 0.12, centerY: 1.62 });
-
-  // ---- Pump hall vestibule ------------------------------------------------
-  addCrateStack(41.7, 50.7, random);
-  addBarrel(45.3, 54.4);
-  addBarrel(44.55, 54.5);
-  addCeilingLamp(43.5, 52.5, 3.0, true);
-  addWallSign('PUMP HALL B', 45, 50, WALL_EAST, { width: 1.8, height: 0.34, centerY: 2.0, alongOffset: 0.5 });
-
-  // ---- Pump hall B --------------------------------------------------------
+// Pump hall B.
+function furnishPumpHall(random) {
   addTank(51.5, 42.5, 1.5, 5.2);
   addTank(56.5, 42.5, 1.5, 5.2);
   addTank(61.5, 42.5, 1.5, 5.2);
@@ -268,12 +285,14 @@ function buildFacilityLayout() {
   addCylinderProp(AXIS_X, 62.2, 0.27, 56.2, 0.29, 0.44, { surfaceClass: SURFACE_METAL });
   addBoxProp(58.2, 0.16, 52.6, 0.5, 0.05, 0.35, { yaw: -0.5, blocksMovement: false });
   addBoxBetween(47.0, 0, 55.6, 47.5, 1.6, 57.0, { surfaceClass: SURFACE_METAL });
-  addWallSign('GENERATOR 2', 65, 47, WALL_EAST, { width: 2.6, height: 0.42, centerY: 2.95 });
-  addWallSign('CONTROL ROOM', 54, 38, WALL_NORTH, { width: 2.6, height: 0.4, centerY: 2.95 });
+  if (!placement.isGenerating) addWallSign('GENERATOR 2', 65, 47, WALL_EAST, { width: 2.6, height: 0.42, centerY: 2.95 });
+  if (!placement.isGenerating) addWallSign('CONTROL ROOM', 54, 38, WALL_NORTH, { width: 2.6, height: 0.4, centerY: 2.95 });
   addWallSign('PUMP HALL B', 47, 52, WALL_WEST, { width: 4.4, height: 0.7, centerY: 3.7, alongOffset: 0.5 });
   addWallSign('DANGER · FLOODED BELOW THIS LINE', 60, 57, WALL_SOUTH, { width: 5.5, height: 0.3, centerY: 1.4 });
+}
 
-  // ---- Generator room -----------------------------------------------------
+// Generator room.
+function furnishGeneratorRoom(random) {
   addBoxBetween(69.9, 0, 46.7, 73.1, 1.7, 48.3, { surfaceClass: SURFACE_METAL });
   addBoxBetween(73.1, 0.2, 46.9, 73.5, 1.6, 48.1, { surfaceClass: SURFACE_METAL });
   addVerticalPipe(72.5, 47.5, 1.7, 3.5, 0.12, false);
@@ -292,8 +311,10 @@ function buildFacilityLayout() {
   addCeilingLamp(70.5, 47.5, 3.5, true);
   addWallSign('DO NOT START IT', 70, 44, WALL_NORTH, { width: 3.6, height: 0.55, centerY: 1.6, alongOffset: 0.5, isScrawled: true });
   addWallSign('GENERATOR 2 · 400 V', 72, 50, WALL_SOUTH, { width: 2.4, height: 0.26, centerY: 2.2 });
+}
 
-  // ---- Control room -------------------------------------------------------
+// Control room.
+function furnishControlRoom(random) {
   addBoxBetween(50.0, 0, 33.0, 50.8, 0.95, 35.8, { surfaceClass: SURFACE_METAL });
   addBoxBetween(50.0, 0.95, 33.0, 50.35, 1.6, 35.8, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   for (let gaugeIndex = 0; gaugeIndex < 5; gaugeIndex++) {
@@ -305,15 +326,13 @@ function buildFacilityLayout() {
   addBoxBetween(57.3, 0, 32.2, 57.95, 1.9, 33.4, { surfaceClass: SURFACE_METAL });
   addBoxProp(57.94, 1.5, 34.6, 0.04, 0.4, 0.6, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   addCeilingLamp(53.5, 34.5, 2.8, true);
-  addSurveySpool(OBJECT_SPOOL_1, 53.0, 0.77, 34.3, 'SPOOL');
+  if (isObjectivePlacedInItsUsualRoom('spool1')) addSurveySpool(OBJECT_SPOOL_1, 53.0, 0.77, 34.3, 'SPOOL');
   addWallSign('PUMP CONTROL', 53, 32, WALL_NORTH, { width: 2.4, height: 0.3, centerY: 2.2 });
-  addWallSign('DEEP CORRIDOR', 56, 32, WALL_NORTH, { width: 0.95, height: 0.16, centerY: 2.5 });
+  if (!placement.isGenerating) addWallSign('DEEP CORRIDOR', 56, 32, WALL_NORTH, { width: 0.95, height: 0.16, centerY: 2.5 });
+}
 
-  // ---- West service passage -----------------------------------------------
-  addPipeAlongZ(36, 42, 2.3, 13.78, 0.09);
-  addCrate(13.6, 39.2, 0.22, 0.3, 0);
-
-  // ---- Laboratory ---------------------------------------------------------
+// Laboratory.
+function furnishLaboratory(random) {
   addBoxBetween(9.2, 0, 26.0, 12.4, 0.9, 26.6);
   addBoxBetween(14.4, 0, 26.0, 18.3, 0.9, 26.6);
   addBoxBetween(12.0, 0, 30.0, 15.2, 0.9, 31.2);
@@ -333,12 +352,12 @@ function buildFacilityLayout() {
   addCeilingLamp(13.5, 28.5, 3.0, true);
   addCeilingLamp(13.5, 32.5, 3.0, true);
   addNote(OBJECT_NOTE_LAB, 13.0, 0.91, 30.6, 0.2);
-  const keycard = addBoxProp(17.3, 0.775, 33.4, 0.07, 0.01, 0.045, { yaw: 0.5, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  const keycardLanyard = addBoxProp(17.45, 0.772, 33.5, 0.1, 0.006, 0.012, { yaw: 1.1, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(OBJECT_KEYCARD, 17.3, 0.8, 33.4, 'Take keycard', [keycard, keycardLanyard], { removeWhenUsed: true, mapLabel: 'KEYCARD' });
+  if (isObjectivePlacedInItsUsualRoom('keycard')) addKeycard(17.3, 0.775, 33.4);
   addWallSign('LABORATORY 2', 12, 34, WALL_SOUTH, { width: 0.95, height: 0.18, centerY: 2.6 });
+}
 
-  // ---- Cold room ----------------------------------------------------------
+// Cold room.
+function furnishColdRoom(random) {
   addGurney(11.2, 21.2, 0.0, true);
   addGurney(14.7, 20.4, 0.14, true);
   addGurney(12.9, 22.9, 1.45, false);
@@ -351,8 +370,10 @@ function buildFacilityLayout() {
   }
   addCeilingLamp(13, 21.5, 2.6, false);
   addWallSign('COLD STORE', 13, 26, WALL_NORTH, { width: 0.95, height: 0.18, centerY: 2.6 });
+}
 
-  // ---- Archive ------------------------------------------------------------
+// Archive.
+function furnishArchive(random) {
   const archiveRowPositions = [23.5, 26.5, 29.5, 34.5, 37.5];
   for (const rowX of archiveRowPositions) {
     addShelfRackAlongZ(rowX, 26.2, 29.3, 2.3, random, 0.75);
@@ -368,11 +389,13 @@ function buildFacilityLayout() {
   addBoxProp(28.2, 0.02, 30.7, 0.15, 0.01, 0.11, { yaw: -0.3, blocksMovement: false });
   for (let lampX = 22; lampX < 42; lampX += 6) addCeilingLamp(lampX, 30.5, 3.2, true);
   addWallSign('COUNT THEM', 35, 24, WALL_NORTH, { width: 2.8, height: 0.55, centerY: 1.55, isScrawled: true });
-  addWallSign('CALIBRATION STORE C4', 32, 24, WALL_NORTH, { width: 2.6, height: 0.3, centerY: 2.75 });
-  addWallSign('DEEP CORRIDOR · KEYCARD', 41, 30, WALL_EAST, { width: 2.8, height: 0.26, centerY: 2.72 });
+  if (!placement.isGenerating) addWallSign('CALIBRATION STORE C4', 32, 24, WALL_NORTH, { width: 2.6, height: 0.3, centerY: 2.75 });
+  if (!placement.isGenerating) addWallSign('DEEP CORRIDOR · KEYCARD', 41, 30, WALL_EAST, { width: 2.8, height: 0.26, centerY: 2.72 });
   addWallSign('RECORDS 1961–1987', 26, 36, WALL_SOUTH, { width: 3.0, height: 0.3, centerY: 2.1 });
+}
 
-  // ---- Calibration store C4 -----------------------------------------------
+// Calibration store C4, home of the Stills.
+function furnishCalibrationStore(random) {
   addShelfRackAlongZ(24.4, 11.0, 17.0, 2.3, random, 0.4);
   addShelfRackAlongZ(39.6, 13.0, 20.0, 2.3, random, 0.4);
   addRegistrationSphere(27.5, 21.4);
@@ -391,23 +414,14 @@ function buildFacilityLayout() {
   addCrate(25.0, 21.6, 0.35, -0.3, 0);
   addBoxProp(34.4, 0.03, 13.4, 0.9, 0.02, 0.6, { yaw: 0.4, blocksMovement: false });
   addWallSign('C4 · CALIBRATION DUMMIES · QTY 9', 36, 22, WALL_SOUTH, { width: 4.8, height: 0.34, centerY: 2.0 });
-  stillSpawnPoints.push(
+  pushPlacedPoints(stillSpawnPoints,
     [27.5, 19.5], [30.5, 20.5], [34.5, 19.5], [37.5, 18.5], [26.5, 15.5],
     [31.5, 16.5], [36.5, 14.5], [28.5, 12.5], [35.5, 12.5]);
-  lateStillSpawnPoints.push([30.5, 21.5], [33.5, 21.5]);
+  pushPlacedPoints(lateStillSpawnPoints,[30.5, 21.5], [33.5, 21.5]);
+}
 
-  // ---- Deep corridor ------------------------------------------------------
-  addPipeAlongX(43, 58, 2.2, 29.22, 0.14);
-  addPipeAlongX(43, 58, 2.32, 29.52, 0.06);
-  addPipeAlongZ(15, 29, 2.25, 58.2, 0.12);
-  addCrate(51.5, 30.7, 0.2, 0.5, 0);
-  addBoxProp(47.2, 0.05, 30.5, 0.35, 0.03, 0.05, { yaw: 0.6, blocksMovement: false });
-  addBoxProp(47.3, 0.12, 30.3, 0.1, 0.1, 0.13, { yaw: 0.2, surfaceClass: SURFACE_METAL, blocksMovement: false });
-  addWallSign('IT FEELS THE LIGHT', 48, 29, WALL_NORTH, { width: 4.6, height: 0.55, centerY: 1.45, alongOffset: 0.5, isScrawled: true });
-  addWallSign('TURN IT OFF', 58, 22, WALL_WEST, { width: 2.8, height: 0.5, centerY: 1.4, isScrawled: true });
-  addWallSign('SHAFT 9 →', 55, 30, WALL_SOUTH, { width: 1.4, height: 0.26, centerY: 1.9, alongOffset: -1.5 });
-
-  // ---- Shaft 9 chamber ----------------------------------------------------
+// Shaft 9 chamber.
+function furnishShaftChamber(random) {
   addBoxBetween(52.0, 6.0, 8.35, 67.0, 6.3, 8.65, CLUTTER);
   addBoxBetween(52.0, 0, 8.2, 52.3, 6.0, 8.8);
   addBoxBetween(66.7, 0, 8.2, 67.0, 6.0, 8.8);
@@ -431,6 +445,94 @@ function buildFacilityLayout() {
   addBoxBetween(66.0, 0, 2.4, 68.4, 1.1, 3.4, { surfaceClass: SURFACE_METAL });
   addWallSign('SHAFT 9 · DEPTH UNSURVEYED', 59, 2, WALL_NORTH, { width: 7.2, height: 0.58, centerY: 2.9, alongOffset: 0 });
   addWallSign('NO RETURN BELOW 40 m', 59, 2, WALL_NORTH, { width: 5.2, height: 0.42, centerY: 2.15, alongOffset: 0 });
+}
+
+// ---------------------------------------------------------------------------
+// The classic station: the hand-built arrangement, identical every time.
+// ---------------------------------------------------------------------------
+
+// HOW TO CHANGE THE STATION
+//   A room:    carveRoom(startX, startZ, endX, endZ, ceilingHeight, ZONE_...) hollows out a rectangle of tiles.
+//              Rooms must be separated by at least one solid tile, and joined by a door or an open gap.
+//   A door:    addDoor(tileX, tileZ, DOOR_KIND_...) on the solid tile between two rooms.
+//              AUTOMATIC always opens, POWERED needs the generator, KEYCARD needs power and the card.
+//   An object: addBoxBetween(minX, minY, minZ, maxX, maxY, maxZ) for a box,
+//              or one of the furniture helpers in 02-world.js (addTable, addBarrel, addShelfRackAlongZ, ...).
+//              Pass { blocksMovement: false } (or CLUTTER) for things you should be able to walk through.
+//   Lettering: addWallSign('TEXT', tileX, tileZ, WALL_NORTH, { width, height, centerY }) on a wall of that tile.
+//              Add isScrawled: true for hand-scratched writing.
+// After a change, run `npm test`: its first check reports anything a creature can no longer reach.
+function buildFacilityLayout() {
+  const random = createSeededRandomGenerator(90210);
+  level.kind = 'classic';
+  level.description = 'Kessel-9 (classic)';
+  level.keycardRoomText = 'the laboratory';
+  level.stillZones.length = 0;
+  level.stillZones.push(ZONE_CALIBRATION_STORE, ZONE_ARCHIVE);
+  level.unlabelledZones.length = 0;
+  relocatedObjectives.spool1 = false; relocatedObjectives.keycard = false;
+  ZONE_NAMES.length = 0;
+  for (const name of CLASSIC_ZONE_NAMES) ZONE_NAMES.push(name);
+
+  // ---- Rooms --------------------------------------------------------------
+  carveLiftLobby();
+  carveSecurityOffice();
+  carveLockerRoom();
+  carveMessRoom();
+  carveStoreCloset();
+  carvePumpHall();
+  carveGeneratorRoom();
+  carveControlRoom();
+  carveLaboratory();
+  carveColdRoom();
+  carveArchive();
+  carveCalibrationStore();
+  carveShaftChamber();
+  // corridors and connecting spaces that only the classic station has
+  carveRoom(18, 52, 40, 54, 2.8, ZONE_MAIN_CORRIDOR);
+  carveRoom(31, 38, 33, 52, 2.8, ZONE_BRANCH_CORRIDOR);
+  carveRoom(41, 50, 46, 55, 3.0, ZONE_VESTIBULE);
+  carveRoom(46, 52, 47, 54, 2.6, ZONE_VESTIBULE);
+  carveRoom(12, 36, 14, 42, 2.6, ZONE_WEST_CORRIDOR);
+  carveRoom(43, 29, 60, 31, 2.5, ZONE_DEEP_CORRIDOR);
+  carveRoom(58, 15, 60, 29, 2.5, ZONE_DEEP_CORRIDOR);
+  setTileFlagInRectangle(58, 18, 60, 26, TILE_FLAG_WATER);
+
+  // ---- Doors (added after the rooms so each door knows which way it faces) -
+  addDoor(13, 48, DOOR_KIND_AUTOMATIC);
+  addDoor(25, 54, DOOR_KIND_AUTOMATIC);
+  addDoor(26, 51, DOOR_KIND_AUTOMATIC);
+  addDoor(30, 48, DOOR_KIND_AUTOMATIC);
+  addDoor(35, 54, DOOR_KIND_AUTOMATIC);
+  addDoor(40, 52, DOOR_KIND_AUTOMATIC);
+  addDoor(66, 47, DOOR_KIND_AUTOMATIC);
+  addDoor(54, 37, DOOR_KIND_AUTOMATIC);
+  addDoor(31, 37, DOOR_KIND_POWERED);
+  addDoor(12, 42, DOOR_KIND_AUTOMATIC);
+  addDoor(12, 35, DOOR_KIND_POWERED);
+  addDoor(19, 30, DOOR_KIND_AUTOMATIC);
+  addDoor(13, 25, DOOR_KIND_AUTOMATIC);
+  addDoor(32, 23, DOOR_KIND_AUTOMATIC);
+  addDoor(42, 30, DOOR_KIND_KEYCARD);
+  addDoor(56, 31, DOOR_KIND_KEYCARD);
+
+  // ---- Furnishing, in a fixed order so the seeded clutter lands the same every time ----
+  furnishLiftLobby(random);
+  furnishSecurityOffice(random);
+  furnishClassicMainCorridor(random);
+  furnishLockerRoom(random);
+  furnishMessRoom(random);
+  furnishStoreCloset(random);
+  furnishClassicConnections(random);
+  furnishPumpHall(random);
+  furnishGeneratorRoom(random);
+  furnishControlRoom(random);
+  furnishLaboratory(random);
+  furnishColdRoom(random);
+  furnishArchive(random);
+  furnishCalibrationStore(random);
+  furnishClassicDeepCorridor(random);
+  furnishShaftChamber(random);
 
   // ---- Structure: ribs, pilasters and beams, so walls and ceilings are not blank ----
   addPortalFrames(18, 52, 40, 54, 2.8, 4, true);      // main corridor
@@ -446,7 +548,7 @@ function buildFacilityLayout() {
   addCeilingBeams(49, 2, 69, 15, 9.0, 5, false, 0.5); // shaft chamber
 
   // ---- Places the roaming thing likes to check ----------------------------
-  roamingWaypoints.push(
+  pushPlacedPoints(roamingWaypoints,
     [14, 51], [28, 52.5], [25, 48], [25, 58], [31.5, 44], [43, 52], [49, 50], [58, 46], [54, 40],
     [68, 47.5], [54, 34], [31.5, 35.5], [21, 30], [40, 30], [14, 29], [13, 23], [50, 29.5],
     [58.5, 22], [54, 13.5], [12, 45], [12.5, 39]);
@@ -458,6 +560,53 @@ function buildFacilityLayout() {
     { x: 62.5, z: 55.5, yaw: -1.9, triggerZone: ZONE_PUMP_HALL, onlyBeforePower: true });
 
   computeNavigationGrid();
+  computeLevelBounds();
+}
+
+// Main corridor A (classic station only).
+function furnishClassicMainCorridor(random) {
+  addPipeAlongX(18, 40, 2.55, 52.22, 0.09);
+  addPipeAlongX(18, 40, 2.62, 53.76, 0.06);
+  for (let lampX = 21; lampX < 40; lampX += 6) addCeilingLamp(lampX, 53, 2.8, true);
+  addBoxProp(28.3, 0.3, 53.55, 0.45, 0.3, 0.3, { yaw: 0.35, surfaceClass: SURFACE_METAL });
+  addCylinderProp(AXIS_Y, 28.9, 0.08, 53.1, 0.08, 0.08, CLUTTER);
+  addCylinderProp(AXIS_Y, 22.5, 0.55, 53.9, 0.07, 0.25, CLUTTER);
+  addCrate(36.4, 53.65, 0.2, 0.4, 0);
+  addBoxProp(34.2, 0.03, 52.6, 0.3, 0.02, 0.2, { yaw: 0.9, blocksMovement: false });
+  addWallSign('← LIFT    PUMP HALL B →', 20, 52, WALL_NORTH, { width: 3.6, height: 0.3, centerY: 1.9, alongOffset: 0.5 });
+  addWallSign('ARCHIVE · LABORATORY →', 29, 52, WALL_NORTH, { width: 2.8, height: 0.26, centerY: 1.9 });
+  addWallSign('PUMP HALL B →', 37, 52, WALL_NORTH, { width: 2.4, height: 0.3, centerY: 1.9 });
+  addWallSign('LOCKERS', 25, 53, WALL_SOUTH, { width: 0.95, height: 0.2, centerY: 2.52 });
+  addWallSign('MESS', 26, 52, WALL_NORTH, { width: 0.8, height: 0.2, centerY: 2.52 });
+}
+
+// Archive access corridor, pump hall vestibule and west service passage (classic station only).
+function furnishClassicConnections(random) {
+  addPipeAlongZ(38, 52, 2.5, 31.22, 0.08);
+  addCeilingLamp(32, 45, 2.8, false);
+  addCrate(32.65, 41.5, 0.24, 0.2, 0);
+  addWallSign('ARCHIVE', 32, 38, WALL_NORTH, { width: 0.9, height: 0.24, centerY: 1.9 });
+  addWallSign('MAINS POWER DOOR', 32, 38, WALL_NORTH, { width: 0.9, height: 0.12, centerY: 1.62 });
+  addCrateStack(41.7, 50.7, random);
+  addBarrel(45.3, 54.4);
+  addBarrel(44.55, 54.5);
+  addCeilingLamp(43.5, 52.5, 3.0, true);
+  addWallSign('PUMP HALL B', 45, 50, WALL_EAST, { width: 1.8, height: 0.34, centerY: 2.0, alongOffset: 0.5 });
+  addPipeAlongZ(36, 42, 2.3, 13.78, 0.09);
+  addCrate(13.6, 39.2, 0.22, 0.3, 0);
+}
+
+// Deep corridor (classic station only).
+function furnishClassicDeepCorridor(random) {
+  addPipeAlongX(43, 58, 2.2, 29.22, 0.14);
+  addPipeAlongX(43, 58, 2.32, 29.52, 0.06);
+  addPipeAlongZ(15, 29, 2.25, 58.2, 0.12);
+  addCrate(51.5, 30.7, 0.2, 0.5, 0);
+  addBoxProp(47.2, 0.05, 30.5, 0.35, 0.03, 0.05, { yaw: 0.6, blocksMovement: false });
+  addBoxProp(47.3, 0.12, 30.3, 0.1, 0.1, 0.13, { yaw: 0.2, surfaceClass: SURFACE_METAL, blocksMovement: false });
+  addWallSign('IT FEELS THE LIGHT', 48, 29, WALL_NORTH, { width: 4.6, height: 0.55, centerY: 1.45, alongOffset: 0.5, isScrawled: true });
+  addWallSign('TURN IT OFF', 58, 22, WALL_WEST, { width: 2.8, height: 0.5, centerY: 1.4, isScrawled: true });
+  addWallSign('SHAFT 9 →', 55, 30, WALL_SOUTH, { width: 1.4, height: 0.26, centerY: 1.9, alongOffset: -1.5 });
 }
 
 // Reports anything the walking creatures could not reach. Used by the automated checks.

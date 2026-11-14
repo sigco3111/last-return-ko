@@ -19,7 +19,7 @@ const renderer = {
   debugCylinderVertexArray: null, debugCylinderVertexCount: 0, debugSphereVertexArray: null, debugSphereVertexCount: 0,
   debugLineVertexArray: null, debugLineBuffer: null, identityMatrix: writeIdentityMatrix(new Float32Array(16)),
   pointVertexArray: null, pointBuffer: null,
-  worldVertexArray: null, worldVertexCount: 0,
+  worldVertexArray: null, worldVertexBuffer: null, worldVertexCount: 0,
   unitCubeVertexArray: null,
   viewmodelVertexArray: null, viewmodelRanges: null,
   beamVertexArray: null, beamBuffer: null,
@@ -511,7 +511,19 @@ function clearAllPoints() {
 }
 
 function uploadWorldOccluderMesh(vertices) {
-  renderer.worldVertexArray = createPositionOnlyVertexArray(renderer.gl, vertices);
+  // Called again whenever a different station is loaded, so the old mesh is replaced, not added to.
+  const gl = renderer.gl;
+  if (renderer.worldVertexArray) gl.deleteVertexArray(renderer.worldVertexArray);
+  if (renderer.worldVertexBuffer) gl.deleteBuffer(renderer.worldVertexBuffer);
+  renderer.worldVertexArray = gl.createVertexArray();
+  renderer.worldVertexBuffer = gl.createBuffer();
+  gl.bindVertexArray(renderer.worldVertexArray);
+  gl.bindBuffer(gl.ARRAY_BUFFER, renderer.worldVertexBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+  gl.enableVertexAttribArray(0);
+  gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 0, 0);
+  gl.disableVertexAttribArray(1);
+  gl.bindVertexArray(null);
   renderer.worldVertexCount = vertices.length / 3;
 }
 

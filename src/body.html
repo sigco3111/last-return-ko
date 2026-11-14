@@ -91,6 +91,33 @@
           <label class="pill"><input type="radio" name="difficulty" id="difficulty-nightmare" value="nightmare"><span>Nightmare</span></label>
         </fieldset>
         <p id="difficulty-description" class="difficulty-description"></p>
+        <div class="station-row">
+          <fieldset class="difficulty-group">
+            <legend>Station</legend>
+            <label class="pill"><input type="radio" name="station" id="station-classic" value="classic" checked><span>Kessel-9</span></label>
+            <label class="pill"><input type="radio" name="station" id="station-generated" value="generated"><span>Uncharted annex</span></label>
+          </fieldset>
+          <div id="station-options" class="station-options" hidden>
+            <label>Size
+              <select id="title-station-size" data-setting="stationSize">
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+            <label>Layout
+              <select id="title-station-layout" data-setting="stationLayout">
+                <option value="tight">Tight</option>
+                <option value="mixed">Mixed</option>
+                <option value="sprawling">Sprawling</option>
+              </select>
+            </label>
+            <label>Seed
+              <input type="text" id="title-seed" data-setting="seedText" maxlength="24" size="9" autocomplete="off" spellcheck="false" placeholder="random">
+            </label>
+          </div>
+        </div>
+        <p id="station-description" class="difficulty-description station-description"></p>
         <div class="begin-row">
           <button type="button" id="button-begin" class="button-primary">Begin descent</button>
           <span class="headphones-note">Headphones strongly recommended. Sound tells you where it is.</span>
@@ -142,6 +169,7 @@
       <p class="eyebrow">SCANNER STANDBY</p>
       <h2 class="panel-title">Paused</h2>
       <p id="pause-objective" class="panel-text"></p>
+      <p id="pause-station" class="panel-text panel-text-quiet"></p>
       <div class="settings-grid">
         <label for="pause-sensitivity">Look speed</label>
         <input type="range" id="pause-sensitivity" data-setting="sensitivity" min="0.2" max="3" step="0.1" value="1">
@@ -203,6 +231,7 @@
       <p id="ending-manifest" class="panel-text ending-manifest"></p>
       <div class="button-row">
         <button type="button" id="button-ending-restart" class="button-primary">Go back down</button>
+        <button type="button" id="button-ending-uncharted" class="button-quiet">Go down somewhere uncharted</button>
       </div>
     </div>
   </section>

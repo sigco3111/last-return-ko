@@ -49,7 +49,6 @@ let playerDistanceFieldAge = 99;
 
 const stills = [];
 let stillsAreHunting = false;
-const stillAllowedZones = [ZONE_CALIBRATION_STORE, ZONE_ARCHIVE];
 const stillDistanceField = new Int16Array(TILE_COUNT);
 let stillDistanceFieldAge = 99;
 let stillShiftCaptionCooldown = 0;
@@ -208,7 +207,7 @@ function relocateHollowAwayFromPlayer(graceSeconds) {
     const index = findNearestWalkableTileIndex(waypoint[0], waypoint[1]);
     if (index < 0) continue;
     const steps = playerDistanceField[index];
-    if (steps < NAVIGATION_UNREACHABLE && steps > bestSteps && tileZone[index] !== ZONE_CALIBRATION_STORE) { bestSteps = steps; best = waypoint; }
+    if (steps < NAVIGATION_UNREACHABLE && steps > bestSteps && tileZone[index] !== level.storeZone) { bestSteps = steps; best = waypoint; }
   }
   hollow.figure.x = best[0]; hollow.figure.z = best[1];
   hollow.state = HOLLOW_STATE_ROAM;
@@ -241,13 +240,13 @@ function moveHollowToward(targetX, targetZ, speed, dt) {
   const figure = hollow.figure;
   const targetIndex = findNearestWalkableTileIndex(targetX, targetZ);
   if (targetIndex !== hollow.fieldTargetIndex) {
-    computeDistanceField(hollow.distanceField, targetIndex, ZONE_CALIBRATION_STORE, null);
+    computeDistanceField(hollow.distanceField, targetIndex, level.storeZone, null);
     hollow.fieldTargetIndex = targetIndex;
   }
   let goalX = targetX, goalZ = targetZ;
   const directDistance = distanceBetweenPoints(figure.x, figure.z, targetX, targetZ);
   const canWalkStraight = directDistance < 8 && hasClearWalkingLine(figure.x, figure.z, targetX, targetZ) &&
-    getZoneAtPosition(targetX, targetZ) !== ZONE_CALIBRATION_STORE;
+    getZoneAtPosition(targetX, targetZ) !== level.storeZone;
   if (!canWalkStraight) {
     const tileX = Math.floor(figure.x), tileZ = Math.floor(figure.z);
     const currentIndex = isInsideGrid(tileX, tileZ) ? tileIndexAt(tileX, tileZ) : -1;
@@ -304,7 +303,7 @@ function chooseHollowSearchCenter() {
   const leadX = hollow.lastKnownPlayerX + hollow.lastKnownVelocityX * TUNING.hollowSearchLeadSeconds;
   const leadZ = hollow.lastKnownPlayerZ + hollow.lastKnownVelocityZ * TUNING.hollowSearchLeadSeconds;
   if (isWalkableAt(Math.floor(leadX), Math.floor(leadZ)) && hasClearWalkingLine(hollow.lastKnownPlayerX, hollow.lastKnownPlayerZ, leadX, leadZ) &&
-      getZoneAtPosition(leadX, leadZ) !== ZONE_CALIBRATION_STORE) {
+      getZoneAtPosition(leadX, leadZ) !== level.storeZone) {
     hollow.searchCenterX = leadX; hollow.searchCenterZ = leadZ;
     hollow.targetX = leadX; hollow.targetZ = leadZ;
     hollow.searchRetargetTimer = randomBetween(2, 3.5);
@@ -401,7 +400,7 @@ function updateHollow(dt) {
       hollow.searchRetargetTimer = randomBetween(1.5, 3);
       for (let attempt = 0; attempt < 8; attempt++) {
         const candidateX = hollow.searchCenterX + randomBetween(-5, 5), candidateZ = hollow.searchCenterZ + randomBetween(-5, 5);
-        if (isWalkableAt(Math.floor(candidateX), Math.floor(candidateZ)) && getZoneAtPosition(candidateX, candidateZ) !== ZONE_CALIBRATION_STORE) {
+        if (isWalkableAt(Math.floor(candidateX), Math.floor(candidateZ)) && getZoneAtPosition(candidateX, candidateZ) !== level.storeZone) {
           hollow.targetX = candidateX; hollow.targetZ = candidateZ;
           break;
         }
@@ -575,13 +574,13 @@ function isPositionCrowdedByOtherStill(still, x, z) {
 function updateStills(dt) {
   if (!game.difficulty.stillsEnabled) return;
   const playerZone = getZoneAtPosition(player.x, player.z);
-  const isPlayerInStore = playerZone === ZONE_CALIBRATION_STORE;
-  const isPlayerInReach = isPlayerInStore || playerZone === ZONE_ARCHIVE;
+  const isPlayerInStore = playerZone === level.storeZone;
+  const isPlayerInReach = level.stillZones.indexOf(playerZone) >= 0;
   if (!isPlayerInReach || debugState.options.creaturesIgnorePlayer) return;
   stillShiftCaptionCooldown -= dt;
   stillDistanceFieldAge += dt;
   if (stillsAreHunting && stillDistanceFieldAge > 0.3) {
-    computeDistanceField(stillDistanceField, findNearestWalkableTileIndex(player.x, player.z), 0, stillAllowedZones);
+    computeDistanceField(stillDistanceField, findNearestWalkableTileIndex(player.x, player.z), 0, level.stillZones);
     stillDistanceFieldAge = 0;
   }
   for (const still of stills) {
@@ -601,7 +600,7 @@ function updateStills(dt) {
         const newX = figure.x + (player.x - figure.x) / distanceToPlayer * shift;
         const newZ = figure.z + (player.z - figure.z) / distanceToPlayer * shift;
         if (isWalkableAt(Math.floor(newX), Math.floor(newZ)) && !isPositionCrowdedByOtherStill(still, newX, newZ) &&
-            getZoneAtPosition(newX, newZ) === ZONE_CALIBRATION_STORE) {
+            getZoneAtPosition(newX, newZ) === level.storeZone) {
           figure.x = newX; figure.z = newZ;
         }
       }
