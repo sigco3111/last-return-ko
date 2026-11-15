@@ -177,6 +177,7 @@ const TUNING = {
                                       // square metres of floor ...
   hollowHatchMostPerPart: 3,          // ... up to this many ...
   hollowHatchLeastMetresApart: 10,    // ... and never two closer together than this
+  hollowHatchBurstCaptionMetres: 25,  // a hatch being forced for the first time is put into words if it is this near to you
 
   // ---- Breaking a door down (see 08-crawlspace.js) ----
   // Hunting, with a keycard door shut between it and you that you have the card for, it goes at the door first.

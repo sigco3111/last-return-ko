@@ -57,7 +57,8 @@ const SOUND_LEVELS = {
   hollowFootstep: 1,
   hollowVentStep: 1,      // crawling in a vent
   hollowCeilingStep: 1,   // crawling above the ceiling, on its way round a locked door
-  hatchRattle: 1,         // a ceiling hatch: it has gone in, or it is about to come out
+  hatchRattle: 1,         // a ceiling hatch that is already open: it has gone in, or it is about to come out
+  hatchBurst: 1,          // a ceiling hatch forced open for the first time
   doorBang: 1,            // one blow of it pounding on a door
   doorBreak: 1,           // a door giving way
   hollowRumble: 1,
@@ -1218,6 +1219,35 @@ function playDoorBreak(x, z) {
   for (let clatter = 0; clatter < 4; clatter++) {
     const delay = 0.55 + clatter * (0.16 + Math.random() * 0.08);
     playResonantNoise({ frequency: 240 + Math.random() * 260, resonance: 20, duration: 0.3, gain: (0.56 - clatter * 0.1) * level, attack: 0.002, delay: delay, destination: panner });
+  }
+}
+
+// A ceiling hatch forced open for the first time: the blow that breaks the catch, the cover swinging down and
+// banging on its hinge, and the hinge ringing on. Meant to be heard from a long way off: it tells you that it
+// has gone into the ceiling, or that it has just come out of it, and roughly where.
+// TWEAK: the gains are the balance between the layers. How loud the whole thing is, is SOUND_LEVELS.hatchBurst.
+function playHatchBurst(x, z) {
+  const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + getHeadroomAt(x, z), z);
+  if (!panner) return;
+  const level = 1.4 * SOUND_LEVELS.hatchBurst; // 1.4: with the level at 1 the loudest moment is about four fifths of what a speaker takes
+  // The blow: a short hard smack in the range ears are best at, with a little weight under it.
+  playNoiseBurst({ duration: 0.12, filterType: 'bandpass', frequency: 680, resonance: 1.2, gain: 4.6 * level, attack: 0.002, reverbAmount: 0.7, destination: panner });
+  playNoiseBurst({ duration: 0.28, frequency: 240, gain: 0.8 * level, useBrownNoise: true, playbackRate: 0.8, reverbAmount: 0.5, destination: panner });
+  if (audio.metalStruck) {
+    // The cover is a loose plate: it rings when it is hit, and again each time it swings back against its frame.
+    playMetalStrike({ shape: 'plate', frequency: 265 + Math.random() * 50, duration: 1.4, hardness: 0.8, damping: 0.45, bend: 0.04, gain: 1.3 * level, destination: panner });
+    for (let swing = 0; swing < 3; swing++) {
+      const delay = 0.34 + swing * (0.21 + Math.random() * 0.06);
+      playMetalStrike({ shape: 'plate', frequency: 300 + Math.random() * 90, duration: 0.5, hardness: 0.75, damping: 0.55, gain: (0.6 - swing * 0.16) * level, delay: delay, destination: panner });
+      playMetalStrike({ shape: 'bar', frequency: 1050 + Math.random() * 400, duration: 0.2, hardness: 0.9, gain: (0.3 - swing * 0.07) * level, delay: delay + 0.015, destination: panner });
+    }
+    return;
+  }
+  playResonantNoise({ frequency: 330 + Math.random() * 60, resonance: 18, duration: 0.9, gain: 2.0 * level, attack: 0.002, destination: panner });
+  for (let swing = 0; swing < 3; swing++) {
+    const delay = 0.34 + swing * (0.21 + Math.random() * 0.06);
+    playResonantNoise({ frequency: 420 + Math.random() * 180, resonance: 22, duration: 0.3, gain: (1.2 - swing * 0.3) * level, attack: 0.002, delay: delay, destination: panner });
+    playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 2600, gain: (0.7 - swing * 0.18) * level, delay: delay, destination: panner });
   }
 }
 

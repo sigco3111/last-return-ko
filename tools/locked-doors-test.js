@@ -414,6 +414,50 @@ const labSource = String(function () {
     poundingRules.mended.flat < 0.1 && poundingRules.mended.after === poundingRules.mended.standing && !poundingRules.mended.broken && poundingRules.mended.damage === 0 &&
     poundingRules.mended.blocksMovement === true, poundingRules.mended);
 
+  // --- hatches are shut until it has been through them once ---
+  const firstUse = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.lab, kinds = d.doorKinds, result = {};
+    const coverOf = function (hatch) { return { open: hatch.isOpen, isFlat: hatch.cover.halfY < 0.05, hangsDownTo: Math.round((hatch.ceilingY - hatch.cover.minimumY) * 100) / 100 }; };
+    lab.fresh();
+    d.game.flags.powerOn = true; lab.takeCardsAway();
+    result.atTheStart = d.hollowHatches.map(coverOf);
+    // The same meeting across a shut keycard door as above: it has to go up through one hatch and down through another.
+    const door = lab.findDoor(kinds.keycard).door;
+    lab.faceOffAcross(door);
+    let from = null, to = null, openWhenItWentIn = null, openWhileItCrawled = null, openJustBeforeTheDrop = null, wasCrawling = false;
+    for (let time = 0; time < 120; time += 0.1) {
+      d.simulate(0.1);
+      const crawl = d.hollow.crawlspace;
+      if (crawl) {
+        wasCrawling = true; from = crawl.from; to = crawl.to;
+        if (crawl.phase === 0 && openWhenItWentIn === null) openWhenItWentIn = from.isOpen;
+        if (crawl.phase === 1) openWhileItCrawled = to.isOpen;
+        if (crawl.phase === 2) openJustBeforeTheDrop = to.isOpen;
+      } else if (wasCrawling) break; // it has dropped out
+    }
+    result.wentIn = from ? coverOf(from) : null;
+    result.cameOut = to ? coverOf(to) : null;
+    result.inWasForcedAtOnce = openWhenItWentIn;
+    result.outStayedShutWhileItCrawled = openWhileItCrawled === false && openJustBeforeTheDrop === false;
+    result.others = d.hollowHatches.filter((hatch) => hatch !== from && hatch !== to).map(coverOf);
+    // They stay open for the rest of the descent ...
+    d.hollow.isActive = false; lab.far(); d.simulate(5);
+    result.stillOpenLater = Boolean(from && to && from.isOpen && to.isOpen);
+    // ... and a new descent starts with all of them shut.
+    d.shutHollowHatches();
+    result.afterANewStart = d.hollowHatches.map(coverOf);
+    return result;
+  });
+  check('every ceiling hatch starts shut, its cover flat in the frame',
+    firstUse.atTheStart.length >= 2 && firstUse.atTheStart.every((cover) => !cover.open && cover.isFlat && cover.hangsDownTo < 0.1), firstUse.atTheStart);
+  check('the hatch it climbs into is forced open as it goes in, and the one it comes out of stays shut until the moment it drops',
+    firstUse.wentIn && firstUse.wentIn.open && firstUse.inWasForcedAtOnce === true && firstUse.outStayedShutWhileItCrawled && firstUse.cameOut.open,
+    { wentIn: firstUse.wentIn, cameOut: firstUse.cameOut, forcedAtOnce: firstUse.inWasForcedAtOnce, outShutMeanwhile: firstUse.outStayedShutWhileItCrawled });
+  check('a hatch it has been through hangs open from then on, and the ones it has not used are still shut',
+    firstUse.stillOpenLater && !firstUse.wentIn.isFlat && firstUse.wentIn.hangsDownTo > 0.5 && !firstUse.cameOut.isFlat &&
+    firstUse.others.every((cover) => !cover.open && cover.isFlat), { wentIn: firstUse.wentIn, cameOut: firstUse.cameOut, others: firstUse.others });
+  check('a new descent starts with every hatch shut again', firstUse.afterANewStart.every((cover) => !cover.open && cover.isFlat), firstUse.afterANewStart);
+
   // --- the hatches: every locked-off part has one, the same station always gets the same ones ---
   const hatches = await inGame(() => {
     const d = window.lastReturnDebug, result = {};

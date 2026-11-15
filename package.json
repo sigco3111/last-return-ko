@@ -1,6 +1,6 @@
 {
   "name": "game-last-return",
-  "version": "1.14.0",
+  "version": "1.15.0",
   "private": true,
   "description": "Last Return: a first-person horror game where a handheld LiDAR scanner is the only way to see.",
   "scripts": {

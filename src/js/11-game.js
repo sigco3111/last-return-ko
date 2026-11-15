@@ -125,6 +125,7 @@ function resetWorldState() {
   }
   liftDoor.forcedState = true;
   liftDoor.openFraction = 1;
+  shutHollowHatches(); // the ceiling hatches are shut again until it has been through them
   raycastableFigures.length = 0;
   deactivateHollow();
   hollow.knowsPlayerPositionAlways = false;
@@ -916,7 +917,8 @@ function startApplication() {
       computeHollowDistanceField(field, findNearestWalkableTileIndex(x, z), true);
       return field[findNearestWalkableTileIndex(hollow.figure.x, hollow.figure.z)];
     },
-    playHollowCeilingStep: playHollowCeilingStep, playHatchRattle: playHatchRattle,
+    playHollowCeilingStep: playHollowCeilingStep, playHatchRattle: playHatchRattle, playHatchBurst: playHatchBurst,
+    forceHollowHatchOpen: forceHollowHatchOpen, shutHollowHatches: shutHollowHatches,
     // Threat levels: the presets, the player's settings, and what the custom one comes to.
     settings: settings, difficultyPresets: DIFFICULTY_PRESETS, customDifficultyOptions: CUSTOM_DIFFICULTY_OPTIONS,
     getChosenDifficulty: getChosenDifficulty, buildCustomDifficulty: buildCustomDifficulty, createCustomDifficultyValues: createCustomDifficultyValues,
