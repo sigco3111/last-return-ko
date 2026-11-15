@@ -167,6 +167,7 @@ const level = {
   attractCamera: { x: 16.9, y: 1.5, z: 50.3, yaw: -1.95 },
   boundsMinimumX: 0, boundsMinimumZ: 0, boundsMaximumX: GRID_WIDTH, boundsMaximumZ: GRID_DEPTH,
   roomCount: 0,
+  hatchCount: 0,          // ceiling hatches of the Hollow's crawlspace (see 08-crawlspace.js)
   description: 'Kessel-9 (classic)'
 };
 
@@ -270,6 +271,7 @@ function resetWorldForNewLevel() {
   tilePropLists.fill(null); tileSignLists.fill(null);
   worldProps.length = 0; dynamicBoxProps.length = 0; doors.length = 0; interactables.length = 0;
   roamingWaypoints.length = 0;
+  clearHollowHatches();
   clearPlacement();
   placement.isGenerating = false;
 }

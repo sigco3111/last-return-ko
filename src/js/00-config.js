@@ -160,6 +160,21 @@ const TUNING = {
                                     // a shortcut for it; at 1 it is as fast on its knees as on its feet.
   hollowBeamHitsToNotice: 2,        // pulses that must land on it in one frame before it counts as "in the beam"
   hollowKillDistance: 0.4,          // closer than this and it has you
+
+  // ---- The crawlspace: the Hollow's way round locked doors (see 08-crawlspace.js) ----
+  // It cannot open a keycard door or the lift door. It goes up through a ceiling hatch, crawls, and drops out of another.
+  hollowCrawlSpeed: 2.4,              // metres per second above the ceiling. Slower than it hunts on foot (hollowHuntSpeed).
+  hollowCrawlClimbSeconds: 1.4,       // how long it stands under a hatch reaching up before it is gone
+  hollowCrawlDropWarningSeconds: 2.5, // how long the hatch it is coming out of rattles before it drops. This is your warning.
+  hollowCrawlLandingGraceSeconds: 1.0,// after it lands it cannot catch you for this long
+  hollowCrawlFixedSteps: 14,          // how unwilling it is to use the crawlspace at all: going up and coming down count
+                                      // as this many steps of walking when it works out the shortest way ...
+  hollowCrawlStepsPerMetre: 1.5,      // ... and every metre crawled counts as this many. Raise both and it only goes up
+                                      // when a lock leaves it no choice; lower them and it takes short cuts over your head.
+  hollowHatchTilesPerExtra: 260,      // a locked-off part of the station gets one hatch, plus one more for every so many
+                                      // square metres of floor ...
+  hollowHatchMostPerPart: 3,          // ... up to this many ...
+  hollowHatchLeastMetresApart: 10,    // ... and never two closer together than this
   // How the Hollow holds itself. Its size is in FIGURE_PROPORTIONS_HOLLOW (04-figures.js); these two decide how bent it is.
   hollowBaseStoop: 0.3,             // how bent it always is, from 0 (as upright as its hunch allows) to 1 (folded right over).
                                     // It still draws itself up when it stops to listen.

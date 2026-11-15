@@ -42,6 +42,9 @@ const hollow = {
   armRaise: 0,
   distanceField: new Int16Array(TILE_COUNT),
   fieldTargetIndex: -1,
+  fieldVersion: -1,           // the value of hollowNavigationVersion its way was last worked out for
+  isTargetOutOfReach: false,  // where it was last sent is behind a door it cannot pass, with no way round
+  crawlspace: null,           // while it is going through the crawlspace: where from, where to, how far along (08-crawlspace.js)
   currentSpeed: 0,
   knowsPlayerPositionAlways: false
 };
@@ -125,7 +128,13 @@ function updateDoors(dt) {
           else showMessage('Door has no power.', 3.5, 'warning');
         }
       }
-      if (hollow.isActive && distanceBetweenPoints(hollow.figure.x, hollow.figure.z, door.centerX, door.centerZ) < 1.8) wantsOpen = true;
+      // The Hollow: a door opens for it only if it is one it can open (not a keycard door: see 08-crawlspace.js).
+      // A door that is already open for someone else never closes on it.
+      if (hollow.isActive && !isHollowInCrawlspace()) {
+        const hollowDistance = distanceBetweenPoints(hollow.figure.x, hollow.figure.z, door.centerX, door.centerZ);
+        if (hollowDistance < 1.8 && canHollowOpenDoor(door)) wantsOpen = true;
+        else if (hollowDistance < 1.0 && door.openFraction > 0) wantsOpen = true;
+      }
       if (stillsAreHunting && !wantsOpen) {
         for (const still of stills) {
           if (still.isPresent && distanceBetweenPoints(still.figure.x, still.figure.z, door.centerX, door.centerZ) < 1.5) { wantsOpen = true; break; }
@@ -154,6 +163,7 @@ function updateDoors(dt) {
     slab.maximumY = slab.centerY + slab.halfY;
     slab.isRemoved = door.openFraction > 0.97;
   }
+  refreshHollowDoorBlocks();
 }
 
 // ---------------------------------------------------------------------------
@@ -171,6 +181,7 @@ function activateHollow(x, z, graceSeconds) {
   hollow.listenTimer = 0; hollow.nextListenIn = 12; hollow.doubleBackTimer = 0; hollow.hasHeardNoise = false;
   hollow.graceTimer = graceSeconds;
   hollow.fieldTargetIndex = -1;
+  cancelHollowCrawl();
   resetDirector(false);
   updateFigureCapsules(hollow.figure);
   setFigureRaycastable(hollow.figure, true);
@@ -178,6 +189,7 @@ function activateHollow(x, z, graceSeconds) {
 
 function deactivateHollow() {
   hollow.isActive = false;
+  cancelHollowCrawl();
   setFigureRaycastable(hollow.figure, false);
 }
 
@@ -341,6 +353,8 @@ function relocateHollowAwayFromPlayer(graceSeconds) {
     const steps = playerDistanceField[index];
     if (steps < NAVIGATION_UNREACHABLE && steps > bestSteps && tileZone[index] !== level.storeZone) { bestSteps = steps; best = waypoint; }
   }
+  cancelHollowCrawl();
+  setFigureRaycastable(hollow.figure, true);
   hollow.figure.x = best[0]; hollow.figure.z = best[1];
   hollow.state = HOLLOW_STATE_ROAM;
   hollow.timeSinceSensed = 99;
@@ -375,13 +389,16 @@ function beginHollowHunt(x, z) {
 function moveHollowToward(targetX, targetZ, speed, dt) {
   const figure = hollow.figure;
   const targetIndex = findNearestWalkableTileIndex(targetX, targetZ);
-  if (targetIndex !== hollow.fieldTargetIndex) {
-    computeDistanceField(hollow.distanceField, targetIndex, level.storeZone, null);
+  // Its way is worked out again when it is sent somewhere else, and when a door opens or closes to it.
+  if (targetIndex !== hollow.fieldTargetIndex || hollow.fieldVersion !== hollowNavigationVersion) {
+    computeHollowDistanceField(hollow.distanceField, targetIndex, true);
     hollow.fieldTargetIndex = targetIndex;
+    hollow.fieldVersion = hollowNavigationVersion;
   }
+  hollow.isTargetOutOfReach = false;
   let goalX = targetX, goalZ = targetZ;
   const directDistance = distanceBetweenPoints(figure.x, figure.z, targetX, targetZ);
-  const canWalkStraight = directDistance < 8 && hasClearWalkingLine(figure.x, figure.z, targetX, targetZ) &&
+  const canWalkStraight = directDistance < 8 && hasClearHollowWalkingLine(figure.x, figure.z, targetX, targetZ) &&
     getZoneAtPosition(targetX, targetZ) !== level.storeZone;
   if (!canWalkStraight) {
     const tileX = Math.floor(figure.x), tileZ = Math.floor(figure.z);
@@ -396,12 +413,22 @@ function moveHollowToward(targetX, targetZ, speed, dt) {
           if (!isInsideGrid(nearX, nearZ)) continue;
           const nearIndex = tileIndexAt(nearX, nearZ);
           if (field[nearIndex] >= NAVIGATION_UNREACHABLE) continue;
+          // Not one on the far side of a wall or of a door that is shut to it: it would drift straight through.
+          if (!isOpenGroundBetween(figure.x, figure.z, nearX + 0.5, nearZ + 0.5)) continue;
           const nearDistance = distanceBetweenPoints(figure.x, figure.z, nearX + 0.5, nearZ + 0.5);
           if (nearDistance < bestDistance) { bestDistance = nearDistance; bestIndex = nearIndex; }
         }
       }
-      if (bestIndex < 0) return 0;
+      if (bestIndex < 0) { hollow.isTargetOutOfReach = true; return 0; } // behind a door it cannot pass, with no way round
       goalX = bestIndex % GRID_WIDTH + 0.5; goalZ = Math.floor(bestIndex / GRID_WIDTH) + 0.5;
+    } else if (field[currentIndex] > 0 && findHollowHatchAtTile(currentIndex) && findHollowCrawlFrom(findHollowHatchAtTile(currentIndex), field)) {
+      // Under a ceiling hatch, and the shortest way on is up through it: stand right under it, then climb in.
+      const hatch = findHollowHatchAtTile(currentIndex);
+      if (distanceBetweenPoints(figure.x, figure.z, hatch.x, hatch.z) < 0.25) {
+        beginHollowCrawl(hatch, findHollowCrawlFrom(hatch, field));
+        return 0;
+      }
+      goalX = hatch.x; goalZ = hatch.z;
     } else if (field[currentIndex] > 0) {
       let bestValue = field[currentIndex], bestX = tileX, bestZ = tileZ, bestIsDiagonal = false;
       for (let offsetZ = -1; offsetZ <= 1; offsetZ++) {
@@ -438,7 +465,7 @@ function chooseHollowSearchCenter() {
   const figure = hollow.figure;
   const leadX = hollow.lastKnownPlayerX + hollow.lastKnownVelocityX * TUNING.hollowSearchLeadSeconds;
   const leadZ = hollow.lastKnownPlayerZ + hollow.lastKnownVelocityZ * TUNING.hollowSearchLeadSeconds;
-  if (isWalkableAt(Math.floor(leadX), Math.floor(leadZ)) && hasClearWalkingLine(hollow.lastKnownPlayerX, hollow.lastKnownPlayerZ, leadX, leadZ) &&
+  if (isWalkableAt(Math.floor(leadX), Math.floor(leadZ)) && hasClearHollowWalkingLine(hollow.lastKnownPlayerX, hollow.lastKnownPlayerZ, leadX, leadZ) &&
       getZoneAtPosition(leadX, leadZ) !== level.storeZone) {
     hollow.searchCenterX = leadX; hollow.searchCenterZ = leadZ;
     hollow.targetX = leadX; hollow.targetZ = leadZ;
@@ -466,6 +493,8 @@ function updateHollow(dt) {
     else hollow.voiceTimer = 1;
   }
   updateDirector(dt);
+  // Above the ceiling, on its way round a locked door: nothing else happens until it has dropped out again.
+  if (isHollowInCrawlspace()) { updateHollowInCrawlspace(dt); return; }
   const distanceToPlayer = distanceBetweenPoints(figure.x, figure.z, player.x, player.z);
   const beamHits = figure.hitsThisFrame;
   figure.hitsThisFrame = 0;
@@ -569,7 +598,8 @@ function updateHollow(dt) {
     hollow.listenTimer -= dt;
     if (hollow.listenTimer <= 0) hollow.state = HOLLOW_STATE_ROAM;
   } else {
-    if (distanceBetweenPoints(figure.x, figure.z, hollow.targetX, hollow.targetZ) < 1.5) chooseHollowRoamTarget();
+    // Somewhere new once it has arrived, or if where it was sent turns out to be behind a door it cannot pass.
+    if (distanceBetweenPoints(figure.x, figure.z, hollow.targetX, hollow.targetZ) < 1.5 || hollow.isTargetOutOfReach) chooseHollowRoamTarget();
     if (hollow.doubleBackTimer > 0) {
       hollow.doubleBackTimer -= dt;
       if (hollow.doubleBackTimer <= 0) {
