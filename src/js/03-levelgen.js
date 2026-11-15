@@ -948,6 +948,14 @@ function findDropSpot(room, random, takenSpots) {
         }
       }
       for (const taken of takenSpots) if (Math.abs(taken[0] - tileX - 0.5) < 3 && Math.abs(taken[1] - tileZ - 0.5) < 3) isClear = false;
+      // Nothing may already stand or lie on the tile itself, not even something low enough to walk over
+      // (a pallet, a heap of planks): the thing put here would be standing in it. What hangs overhead is fine.
+      const propsOnTile = tilePropLists[tileIndexAt(tileX, tileZ)];
+      if (isClear && propsOnTile) {
+        for (const prop of propsOnTile) {
+          if (!prop.isRemoved && prop.minimumY < tileFloorHeight[tileIndexAt(tileX, tileZ)] + 2) { isClear = false; break; }
+        }
+      }
       if (isClear) candidates.push([tileX + 0.5, tileZ + 0.5]);
     }
   }
