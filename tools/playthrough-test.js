@@ -14,6 +14,20 @@ function check(description, condition, detail) {
   const inGame = (callback, argument) => page.evaluate(callback, argument);
 
   check('layout audit finds nothing unreachable', (await inGame(() => window.lastReturnDebug.auditLayout())).length === 0);
+
+  // --- the title screen says which build this is, and its "Report a problem" has no descent to describe ---
+  const title = await inGame(() => {
+    const link = document.getElementById('link-report-problem-title');
+    link.focus();
+    const address = new URL(link.href);
+    return { buildLine: document.getElementById('title-build').textContent, isVisible: link.getBoundingClientRect().height > 0,
+      address: address.origin + address.pathname, fields: Object.fromEntries(address.searchParams) };
+  });
+  check('the title screen shows the build, and "Report a problem" there opens the bug form with the build, the chosen threat level and no room',
+    /^Version: \d+\.\d+\.\d+ · build \d+ · [0-9a-f]{7}\+?$/.test(title.buildLine) && title.isVisible &&
+    title.address === 'https://github.com/StefanKnol/Last-Return/issues/new' && title.fields.template === '1-bug.yml' &&
+    'Version: ' + title.fields.version === title.buildLine && title.fields.station === 'Title screen' && title.fields.threat === 'Standard' &&
+    title.fields.where === undefined && title.fields.seed === undefined && title.fields.build.length > 0, title);
   await startGame(page, false);
 
   // --- walking out of the lift ---
@@ -36,9 +50,15 @@ function check(description, condition, detail) {
   check('"Report a problem" opens the bug form with the build, the station, the threat level and the room filled in',
     paused.mode === 'paused' && paused.address === 'https://github.com/StefanKnol/Last-Return/issues/new' && paused.fields.template === '1-bug.yml' &&
     'Version: ' + paused.fields.version === paused.buildLine && paused.fields.station === 'Kessel-9' && paused.fields.seed === undefined &&
-    paused.fields.threat === 'Standard' && /^[A-Z0-9 ]+ \(x [\d.]+, z [\d.]+\)$/.test(paused.fields.where) && paused.fields.where.indexOf('UNSURVEYED') < 0 && paused.fields.device.length > 0, paused);
+    paused.fields.threat === 'Standard' && /^[A-Z0-9 ]+ \(x [\d.]+, z [\d.]+\)$/.test(paused.fields.where) && paused.fields.where.indexOf('UNSURVEYED') < 0 && paused.fields.device.length > 0 && paused.fields.quality === 'Medium' &&
+    /^(index\.html opened from disk|Served from this computer \(.+\))$/.test(paused.fields.build), paused);
+  // Pausing lets go of the mouse, and the browser reports that a moment later. Resuming before it has would
+  // let that report arrive in the middle of play, where it means "the player pressed Escape": paused again.
+  await page.waitForFunction(() => document.pointerLockElement === null, null, { polling: 50 });
+  await page.waitForTimeout(100);
   await page.keyboard.press('Escape');
-  check('Escape resumes the descent', (await inGame(() => window.lastReturnDebug.game.mode)) === 'playing');
+  await page.waitForTimeout(300);
+  check('Escape resumes the descent, and it stays resumed', (await inGame(() => window.lastReturnDebug.game.mode)) === 'playing');
 
   // --- the quiet screen: instruments stay out of the way until they have something to say ---
   await drawFrames(page, 2);
@@ -188,7 +208,8 @@ function check(description, condition, detail) {
     debug.hollow.nextListenIn = 0.05;
     debug.simulate(0.5);
     const during = { state: debug.hollow.state, speed: debug.hollow.currentSpeed, timer: debug.hollow.listenTimer };
-    debug.simulate(7.5);
+    // However long it may stand there, and a little more: the pause is drawn between two tuning values.
+    debug.simulate(debug.tuning.hollowListenSecondsMaximum + 0.5);
     return { during: during, stateAfter: debug.hollow.state };
   });
   check('wandering near the player it stops dead to listen, then moves on',

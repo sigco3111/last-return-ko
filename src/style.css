@@ -202,6 +202,11 @@ body.is-touch #hud-prompt { top: calc(50% + 48px); }
 .difficulty-description { margin: 0; min-height: 2.8em; max-width: 56ch; font-size: 13px; color: var(--text-dim); }
 .begin-row { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; margin-top: 4px; }
 .headphones-note { font-size: 13px; color: var(--text-dim); max-width: 30ch; }
+/* which build this is and a way to report a problem, at the foot of the field card */
+.title-build { margin: 0; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 14px; font-family: var(--font-data); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--instrument-dim); }
+.title-build a { white-space: nowrap; }
+.title-build a { color: var(--text-dim); }
+.title-build a:hover { color: var(--text); }
 
 button { cursor: pointer; }
 .button-primary {

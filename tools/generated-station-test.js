@@ -144,12 +144,14 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   await startGame(page, false);
   const loaded = await inGame(() => ({ kind: window.lastReturnDebug.level.kind, seed: window.lastReturnDebug.level.seed, description: window.lastReturnDebug.level.description }));
   check('Begin descent loads the generated station for the typed seed', loaded.kind === 'generated' && loaded.seed === playSeed, loaded);
-  await page.keyboard.press('Escape');
-  const reported = await inGame(() => Object.fromEntries(new URL(document.getElementById('link-report-problem').href).searchParams));
-  await page.keyboard.press('Escape');
-  check('"Report a problem" on the pause screen carries the seed and the station options',
-    reported.station === 'Uncharted annex' && new RegExp('^' + playSeed + ', medium, [a-z]+, two levels$').test(reported.seed) &&
-    (await inGame(() => window.lastReturnDebug.game.mode)) === 'playing', reported);
+  // The link works out its address when it is reached for, so there is no need to pause for this.
+  const reported = await inGame(() => {
+    const link = document.getElementById('link-report-problem');
+    link.dispatchEvent(new Event('pointerdown'));
+    return Object.fromEntries(new URL(link.href).searchParams);
+  });
+  check('"Report a problem" carries the seed and the station options',
+    reported.station === 'Uncharted annex' && new RegExp('^' + playSeed + ', medium, [a-z]+, two levels$').test(reported.seed), reported);
 
   await page.keyboard.down('KeyW');
   await inGame(() => window.lastReturnDebug.simulate(4));

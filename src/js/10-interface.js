@@ -40,7 +40,8 @@ function initializeInterface() {
     'difficulty-description', 'button-begin', 'intro-lines', 'button-skip-intro', 'pause-objective', 'button-resume',
     'button-pause-restart', 'reader-source', 'reader-heading', 'reader-body', 'button-close-reader', 'death-title',
     'death-lines', 'button-retry', 'button-death-restart', 'ending-stats', 'ending-manifest', 'button-ending-restart',
-    'button-ending-uncharted', 'station-options', 'station-description', 'pause-station', 'pause-build', 'link-report-problem'
+    'button-ending-uncharted', 'station-options', 'station-description', 'pause-station', 'pause-build', 'link-report-problem',
+    'title-build', 'link-report-problem-title'
   ];
   for (const elementId of elementIds) interfaceState.elements[elementId] = getElement(elementId);
 
@@ -53,6 +54,14 @@ function initializeInterface() {
 
   const elements = interfaceState.elements;
   elements['button-begin'].addEventListener('click', function () { beginNewGame(); });
+  // Which build this is, and "Report a problem", on the title screen and the pause screen. The address is worked
+  // out at the moment the link is reached for, so it carries the settings as they are then.
+  elements['title-build'].textContent = 'Version: ' + describeBuild();
+  for (const link of [elements['link-report-problem-title'], elements['link-report-problem']]) {
+    for (const eventName of ['pointerdown', 'focus', 'click']) {
+      link.addEventListener(eventName, function () { link.href = buildReportProblemAddress(); });
+    }
+  }
   elements['button-skip-intro'].addEventListener('click', function () { finishIntro(); });
   elements['button-resume'].addEventListener('click', function () { resumeGame(); });
   elements['button-pause-restart'].addEventListener('click', function () { returnToTitle(); });
@@ -704,21 +713,39 @@ function describeBuild() {
   return parts.length > 0 ? parts.join(' · ') : 'unknown';
 }
 
-// The address "Report a problem" on the pause screen opens: the bug form in .github/ISSUE_TEMPLATE/1-bug.yml,
+// The address "Report a problem" on the title screen and the pause screen opens: the bug form in .github/ISSUE_TEMPLATE/1-bug.yml,
 // with what the game knows already filled in. Each name here is the `id` of a field in that form, so a field
-// renamed there must be renamed here. Nothing is sent anywhere: the player sees the form and decides.
+// renamed there must be renamed here. GitHub fills in text fields only, never a list to pick from, which is why
+// those fields are text in the form. Nothing is sent anywhere: the player sees the form and decides.
+// Where this page came from, as far as a page can tell: the dev build, a file opened from disk, a server on this
+// computer (which is also what Docker looks like), or a page online. Only the host and the path are given, and
+// for a file nothing at all, because its path has the player's user name in it.
+function describeHowThePageIsServed() {
+  if (BUILD_STAMP.isDevBuild) return 'The dev build (npm run dev)';
+  const protocol = window.location.protocol, host = window.location.host;
+  if (protocol === 'file:') return 'index.html opened from disk';
+  if (protocol !== 'http:' && protocol !== 'https:') return 'Inside another page';
+  if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) return 'Served from this computer (' + host + ')';
+  return 'Online at ' + host + window.location.pathname;
+}
+
 const REPORT_PROBLEM_ADDRESS = 'https://github.com/StefanKnol/Last-Return/issues/new';
 function buildReportProblemAddress() {
+  // From the title screen there is no descent to describe: the threat level is the one chosen there, and there
+  // is no room. A generated station stays loaded after a descent, so its seed is still given, as the last one.
+  const isOnTitleScreen = game.mode === 'title';
   const isGenerated = level.kind === 'generated';
+  const difficulty = isOnTitleScreen ? getChosenDifficulty() : game.difficulty;
   const fields = {
     template: '1-bug.yml',
     version: describeBuild(),
-    station: isGenerated ? 'Uncharted annex' : 'Kessel-9',
-    threat: game.difficulty.label,
-    where: ZONE_NAMES[getZoneAtPosition(player.x, player.z)] + ' (x ' + player.x.toFixed(1) + ', z ' + player.z.toFixed(1) + ')',
+    station: isOnTitleScreen ? 'Title screen' + (isGenerated ? ', after a descent into an Uncharted annex' : '') : (isGenerated ? 'Uncharted annex' : 'Kessel-9'),
+    threat: difficulty.isCustom ? difficulty.label + ': ' + difficulty.description : difficulty.label,
     quality: settings.quality.charAt(0).toUpperCase() + settings.quality.slice(1),
-    device: navigator.userAgent
+    device: navigator.userAgent,
+    build: describeHowThePageIsServed()
   };
+  if (!isOnTitleScreen) fields.where = ZONE_NAMES[getZoneAtPosition(player.x, player.z)] + ' (x ' + player.x.toFixed(1) + ', z ' + player.z.toFixed(1) + ')';
   if (isGenerated) fields.seed = [level.seed, level.sizeKey, level.layoutKey, level.levelsKey === 'two' ? 'two levels' : 'one level'].join(', ');
   return REPORT_PROBLEM_ADDRESS + '?' + new URLSearchParams(fields).toString();
 }
