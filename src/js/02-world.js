@@ -562,12 +562,18 @@ function addTank(x, z, radius, height) {
   addBoxProp(x + 0.2, height / 2 - 0.2, z + radius + 0.09, 0.015, height / 2 - 0.2, 0.015, CLUTTER);
 }
 
-function addPumpUnit(x, z) {
+// TWEAK: how high the pipe that rises out of a pump unit goes, in metres above the floor.
+const PUMP_UNIT_PIPE_TOP = 5.4;
+
+// `ceilingHeight` is the ceiling of the room it stands in: the pipe stops there instead of going on through it.
+// Left out, the pipe has its full height.
+function addPumpUnit(x, z, ceilingHeight) {
+  const pipeTop = ceilingHeight === undefined ? PUMP_UNIT_PIPE_TOP : Math.min(PUMP_UNIT_PIPE_TOP, ceilingHeight);
   addBoxBetween(x - 0.95, 0, z - 0.5, x + 0.95, 0.32, z + 0.5, { surfaceClass: SURFACE_METAL });
   addCylinderProp(AXIS_X, x - 0.3, 0.82, z, 0.4, 0.52, { surfaceClass: SURFACE_METAL });
   addCylinderProp(AXIS_X, x + 0.52, 0.82, z, 0.55, 0.17, { surfaceClass: SURFACE_METAL });
   addCylinderProp(AXIS_X, x - 0.9, 0.82, z, 0.2, 0.08, { surfaceClass: SURFACE_METAL, blocksMovement: false });
-  addVerticalPipe(x + 0.52, z, 1.3, 5.4, 0.14, false);
+  addVerticalPipe(x + 0.52, z, 1.3, pipeTop, 0.14, false);
   addCylinderProp(AXIS_Y, x + 0.52, 2.2, z, 0.2, 0.04, { surfaceClass: SURFACE_METAL, blocksMovement: false });
 }
 

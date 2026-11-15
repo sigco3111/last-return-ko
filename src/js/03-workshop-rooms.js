@@ -81,7 +81,7 @@ const ROOM_ITEM_TYPES = {
     fields: [numberField('radius', 'Radius', 1.2, 0.4, 3, 0.05), numberField('height', 'Height', 3, 1, 8, 0.1)],
     build: function (item) { addTank(item.x, item.z, item.radius, item.height); } },
   pumpUnit: { label: 'Pump unit', group: 'Machinery', placement: 'floor', angleStep: 90, fields: [],
-    build: function (item) { addPumpUnit(item.x, item.z); } },
+    build: function (item, context) { addPumpUnit(item.x, item.z, context.ceiling); } },
   pipe: { label: 'Pipe (lying)', group: 'Machinery', placement: 'floor', angleStep: 90,
     fields: [numberField('length', 'Length', 4, 0.3, 24, 0.1), numberField('height', 'Height of its middle', 2.4, 0.05, 8.5, 0.05), numberField('radius', 'Radius', 0.1, 0.02, 0.5, 0.01)],
     build: function (item) { addPipeAlongX(item.x - item.length / 2, item.x + item.length / 2, item.height, item.z, item.radius); } },

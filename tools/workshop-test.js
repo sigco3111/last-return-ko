@@ -141,6 +141,23 @@ function checkSourcePatching() {
     await setNumber('workshop-item-z', 1.5);
     check('and not once it is moved away', (await inPage(() => window.lastReturnDebug.roomWorkshop.problems.length)) === 0, await inPage(() => window.lastReturnDebug.roomWorkshop.problems));
 
+    // --- a pump unit's pipe stops at the ceiling of a low room, and is not reported as too tall ---
+    await page.selectOption('#workshop-add-type', 'pumpUnit');
+    await page.click('#workshop-add-item');
+    await frames();
+    const pumpUnit = await inPage(() => {
+      const state = window.lastReturnDebug.roomWorkshop;
+      const shapes = state.itemShapes[state.selectedIndex] || [];
+      return { type: state.room.items[state.selectedIndex].type, ceiling: state.room.ceiling, shapeCount: shapes.length,
+        highestPoint: Math.max.apply(null, shapes.map((shape) => shape.maximumY)), problems: state.problems.slice() };
+    });
+    check('a pump unit in a low room has its pipe end at the ceiling',
+      pumpUnit.type === 'pumpUnit' && pumpUnit.shapeCount > 0 && Math.abs(pumpUnit.highestPoint - pumpUnit.ceiling) < 0.001 &&
+      !pumpUnit.problems.some((problem) => problem.includes('ceiling')), pumpUnit);
+    await page.keyboard.press('Delete');
+    await frames();
+    check('and the room is as it was once the pump unit is removed', (await inPage(() => window.lastReturnDebug.roomWorkshop.room.items.length)) === 2);
+
     // --- saving: a file appears, the page reloads into the saved room ---
     await page.fill('#workshop-room-key', 'testRoom');
     await page.locator('#workshop-room-key').blur();
