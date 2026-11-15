@@ -149,8 +149,9 @@ function updateDoors(dt) {
       door.closeDelay = 1.3;
       if (door.openFraction === 0) {
         const slab = door.slab;
-        removePointsInsideBox(door.centerX - slab.halfX - 0.1, door.baseY, door.centerZ - slab.halfZ - 0.1,
-          door.centerX + slab.halfX + 0.1, door.baseY + 2.5, door.centerZ + slab.halfZ + 0.1);
+        fadePointsInsideBox(door.centerX - slab.halfX - 0.1, door.baseY, door.centerZ - slab.halfZ - 0.1,
+          door.centerX + slab.halfX + 0.1, door.baseY + 2.5, door.centerZ + slab.halfZ + 0.1,
+          convertSecondsToPointLifeCode(TUNING.doorImprintSeconds));
         playDoorSound(door.centerX, door.centerZ, true);
         if (openedByPlayer) emitNoise(door.centerX, door.centerZ, TUNING.noiseRadiusDoor);
       }

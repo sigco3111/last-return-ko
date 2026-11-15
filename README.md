@@ -335,7 +335,7 @@ A few details worth knowing if you change things:
 - Creatures are built from capsules (rods with rounded ends): 25 for the Hollow, down to three long fingers on each hand, and 24 for a dummy. The Hollow's pose follows its mood: hunched when wandering, reaching when it hunts, drawn up to its full height when it stops to listen.
 - Sound is synthesised live, mostly from noise shaped by filters. The Hollow's growl is a recorded-in-code rattle of clicks pushed through three resonances, the way a throat and chest shape a voice.
 - Points live in a ring buffer on the graphics card (250,000 to 1,000,000 depending on the quality setting). The oldest points are overwritten first.
-- Points left on a creature carry a lifetime and fade; points on the station are permanent.
+- Points left on a creature carry a lifetime and fade; points on the station are permanent, except those on a door, which fade once it slides away (`doorImprintSeconds`).
 
 ## Building and testing
 

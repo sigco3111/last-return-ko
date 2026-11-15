@@ -123,6 +123,8 @@ const TUNING = {
   sweepHeatCost: 0.35,              // heat added by one sweep. Sweeps are refused above 0.78 heat.
   sweepHalfWidthDegrees: 55,        // how far left and right of centre a sweep reaches
   sweepHalfHeightDegrees: 40,       // how far above and below centre a sweep reaches
+  doorImprintSeconds: 4,            // how long the points on a door stay where they were measured once it slides away
+                                    // (maximum 63). They are solid for the first half and thin out over the second.
 
   // ---- Noise you make ------------------------------------------------------
   // Each of these is a one-off sound. If the Hollow is within this many metres it hears it

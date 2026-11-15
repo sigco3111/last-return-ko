@@ -553,7 +553,7 @@ function addScanPoint(x, y, z, intensity, surfaceClass, lifeCode) {
 
 let currentPointTime = 0;
 
-// Removes stored points inside a box (used when a door slides away or an item is taken).
+// Removes stored points inside a box (used when an item is taken or a door is broken down).
 function removePointsInsideBox(minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ) {
   const floats = pointCloud.floatView;
   let removedAny = false;
@@ -569,6 +569,29 @@ function removePointsInsideBox(minimumX, minimumY, minimumZ, maximumX, maximumY,
     removedAny = true;
   }
   if (removedAny) pointCloud.needsFullUpload = true;
+}
+
+// Lets stored points inside a box fade out from now on, over `lifeCode` * 0.25 seconds (used when a door slides
+// away: its old points stay where they were measured for a moment). Points that are already fading keep their own time.
+function fadePointsInsideBox(minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ, lifeCode) {
+  const floats = pointCloud.floatView;
+  let fadedAny = false;
+  for (let index = 0; index < pointCloud.storedCount; index++) {
+    const offset = index * POINT_STRIDE_FLOATS;
+    const x = floats[offset];
+    if (x < minimumX || x > maximumX) continue;
+    const z = floats[offset + 2];
+    if (z < minimumZ || z > maximumZ) continue;
+    const y = floats[offset + 1];
+    if (y < minimumY || y > maximumY) continue;
+    if (floats[offset + 3] === DEAD_POINT_BIRTH_TIME) continue;
+    const lifeCodeByteOffset = index * POINT_STRIDE_BYTES + 18;
+    if (pointCloud.byteView[lifeCodeByteOffset] !== 0) continue;
+    floats[offset + 3] = currentPointTime;
+    pointCloud.byteView[lifeCodeByteOffset] = lifeCode;
+    fadedAny = true;
+  }
+  if (fadedAny) pointCloud.needsFullUpload = true;
 }
 
 function flushPointUploads() {

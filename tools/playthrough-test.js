@@ -147,7 +147,42 @@ function check(description, condition, detail) {
   });
   check('standing among the dummies without scanning stores no points', figureTrace.returnsAdded === 0 && figureTrace.stillCount === 9, figureTrace);
 
-  // --- first spool and the reader ---
+  // --- a door that opens leaves its old points behind until they fade ---
+  const doorPoints = await inGame(() => {
+    const debug = window.lastReturnDebug;
+    const door = debug.doors.find((candidate) => candidate !== debug.getLiftDoor() && candidate.openFraction === 0 && debug.getDoorSides(candidate));
+    const cloud = debug.pointCloud;
+    const firstPointIndex = cloud.writeIndex, pointCount = 20;
+    for (let pointNumber = 0; pointNumber < pointCount; pointNumber++) {
+      debug.addScanPoint(door.centerX, door.baseY + 0.2 + pointNumber * 0.1, door.centerZ, 0.8, door.slab.surfaceClass, 0);
+    }
+    const describePoints = () => {
+      let stillThere = 0, fading = 0, faded = 0;
+      for (let pointNumber = 0; pointNumber < pointCount; pointNumber++) {
+        const pointIndex = (firstPointIndex + pointNumber) % cloud.capacity;
+        const birthTime = cloud.floatView[pointIndex * 5 + 3];
+        const lifeSeconds = cloud.byteView[pointIndex * 20 + 18] * 0.25;
+        if (birthTime > -1e8) stillThere++;
+        if (birthTime > -1e8 && lifeSeconds > 0) fading++;
+        if (birthTime > -1e8 && lifeSeconds > 0 && debug.game.time - birthTime >= lifeSeconds) faded++;
+      }
+      return { stillThere: stillThere, fading: fading, faded: faded };
+    };
+    const whileShut = describePoints();
+    const side = debug.getDoorSides(door)[0];
+    debug.teleport(side.x, side.z, 0);
+    debug.simulate(0.5);
+    const justOpened = describePoints();
+    justOpened.openFraction = door.openFraction;
+    debug.simulate(debug.tuning.doorImprintSeconds + 0.5);
+    return { pointCount: pointCount, whileShut: whileShut, justOpened: justOpened, later: describePoints() };
+  });
+  check('points on a shut door are permanent', doorPoints.whileShut.stillThere === doorPoints.pointCount && doorPoints.whileShut.fading === 0, doorPoints.whileShut);
+  check('a door that opens keeps its old points, and they start to fade',
+    doorPoints.justOpened.openFraction > 0 && doorPoints.justOpened.stillThere === doorPoints.pointCount &&
+    doorPoints.justOpened.fading === doorPoints.pointCount && doorPoints.justOpened.faded === 0, doorPoints.justOpened);
+  check('the old points of an opened door are gone after doorImprintSeconds', doorPoints.later.faded === doorPoints.pointCount, doorPoints.later);
+
   await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(53, 35.2, 0); debug.use(3); });
   check('taking a spool opens its log', (await inGame(() => window.lastReturnDebug.game.mode)) === 'reading');
   await page.keyboard.press('KeyE');

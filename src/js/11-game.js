@@ -934,6 +934,7 @@ function startApplication() {
     awakenStills: awakenStills,
     emitNoise: emitNoise,
     setScanHeld: function (isHeld) { input.isScanHeld = isHeld; },
+    addScanPoint: addScanPoint,
     setScannerSpread: setScannerSpread,
     updateFigureCapsules: updateFigureCapsules,
     voiceState: voiceState, hasVoiceLine: hasVoiceLine, playRadioLine: playRadioLine, playVoiceLine: playVoiceLine,
