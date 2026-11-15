@@ -76,8 +76,8 @@ const SOUND_LEVELS = {
   shaftKnocks: 1,         // knocking from Shaft 9
 
   // ---- voices ----
-  voiceRadio: 1,          // dispatch, with its static
-  voiceRecorder: 1        // the spools read aloud
+  voiceRadio: 0.8,          // dispatch, with its static
+  voiceRecorder: 0.8        // the spools read aloud
 };
 
 const audio = {
@@ -96,6 +96,8 @@ const audio = {
   hollowScreechFilterHigh: null,
   hollowShriekVoiced: true, // EXPERIMENT: true makes the shriek in play the voiced one. The sound board has both.
   hollowRoarVoiced: true,   // EXPERIMENT: the same for the roar
+  metalStruck: true,       // EXPERIMENT: true makes grates, vents, the door latch, settling metal and the lift bell ring like struck metal (playMetalStrike)
+  waterBubbles: true,      // EXPERIMENT: true makes footsteps in water and drips out of ringing bubbles (playWaterBubbles)
   hollowVoicedShriekGain: null,
   hollowVoicedShriekThroats: [],  // { oscillator, pitch }: see initializeAudioEngine
   hollowVoicedShriekFormants: [], // { filter, restFrequency, rise }
@@ -760,6 +762,108 @@ function playThroatVoice(options) {
   breath.start(now, Math.random() * 1.5); breath.stop(end + 0.05);
 }
 
+// Struck metal. What makes metal sound like metal is that its overtones do NOT line up. A string or a voice
+// has overtones at 2, 3, 4 times its note, and the ear hears one note. A steel bar has them at 2.76, 5.4 and 8.93
+// times: they clash, and that clash is the clang. (A PeriodicWave can only hold overtones that line up, so it
+// cannot do this: here every overtone is a sine wave of its own.) The high overtones die away first, which
+// is why a clang starts bright and ends as a hum.
+// TWEAK: each line is one kind of object, as the pitch of each overtone against the lowest.
+const METAL_SHAPES = {
+  bar: [1, 2.76, 5.4, 8.93, 13.34],                          // a rail, a pipe, one bar of a grate: clear and ringing
+  plate: [1, 1.58, 2.5, 2.92, 4, 5, 5.43, 6.5, 8.5],         // sheet metal, a duct, a door: dense, a boom with a rattle on top
+  bell: [0.5, 1, 1.2, 1.5, 2, 2.5, 3, 4]                     // a cast bell. `frequency` is the note you hear, with a hum an octave under it
+};
+
+//   frequency   the lowest overtone, in Hz. Lower is a larger or thinner piece of metal.
+//   shape       'bar', 'plate' or 'bell': see METAL_SHAPES (default 'bar')
+//   duration    how long the lowest overtone rings, in seconds. Short is metal held or bolted down, long hangs free.
+//   hardness    what hit it, 0 to 1. 0 is a boot or a knee: mostly the low overtones, no click. 1 is steel on steel (default 0.5)
+//   damping     how much sooner the high overtones die than the low ones. 0: they all ring on, like a bell. 1: only a hum is left (default 0.7)
+//   bend        how far the pitch sags after the hit, as thin sheet metal does when it buckles. 0.04 is 4 percent (default 0)
+function playMetalStrike(options) {
+  if (!isAudioReady()) return;
+  const context = audio.context;
+  const now = context.currentTime + (options.delay || 0);
+  const ratios = METAL_SHAPES[options.shape || 'bar'];
+  const hardness = options.hardness === undefined ? 0.5 : options.hardness;
+  const damping = options.damping === undefined ? 0.7 : options.damping;
+  const loudness = options.gain === undefined ? 0.3 : options.gain;
+  const tilt = 2 - 1.8 * hardness; // a soft hit leaves the high overtones much quieter than the low ones
+  let total = 0;
+  for (const ratio of ratios) total += Math.pow(ratio, -tilt);
+  const output = context.createGain();
+  output.gain.value = loudness / total; // all the overtones together are never louder than `gain`
+  output.connect(options.destination || audio.masterGain);
+  if (options.reverbAmount) {
+    const send = context.createGain();
+    send.gain.value = options.reverbAmount;
+    output.connect(send); send.connect(audio.reverbInput);
+  }
+  for (const ratio of ratios) {
+    // TWEAK: 0.03 is how far each overtone may sit off its place (3 percent), so no two strikes are the same piece of metal.
+    const frequency = options.frequency * ratio * (1 + (Math.random() - 0.5) * 0.03);
+    if (frequency > 14000) continue;
+    const ringTime = options.duration * Math.pow(ratio, -damping);
+    const overtone = context.createOscillator();
+    overtone.frequency.setValueAtTime(frequency * (1 + (options.bend || 0)), now);
+    if (options.bend) overtone.frequency.exponentialRampToValueAtTime(frequency, now + ringTime * 0.5);
+    const level = context.createGain();
+    level.gain.setValueAtTime(Math.pow(ratio, -tilt), now);
+    level.gain.exponentialRampToValueAtTime(0.0001, now + ringTime);
+    overtone.connect(level); level.connect(output);
+    overtone.start(now);
+    overtone.stop(now + ringTime + 0.05);
+  }
+  // The hit itself: a click, louder and brighter the harder the thing that struck.
+  if (hardness > 0) {
+    playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: Math.min(9000, options.frequency * (3 + hardness * 9)), resonance: 1, gain: loudness * hardness * 0.6,
+      attack: 0.001, delay: options.delay, destination: options.destination, reverbAmount: options.reverbAmount });
+  }
+}
+
+// Water. The sound of water is not the water, it is air: every drop and every splash traps bubbles, and each
+// bubble rings for a few hundredths of a second, a clean note that slides UP as it dies. One bubble is a drip.
+// Dozens of all sizes, tumbling over each other, is a splash. Noise alone only ever gives the hiss of spray.
+//   count                     how many bubbles
+//   spread                    over how many seconds they start. Most come early. 0 is all at once.
+//   frequency, frequencyMax   the notes they are picked from, in Hz. A large bubble is low (300), a small one high (4000).
+//   ring                      how long the lowest one rings, in seconds. Higher ones are shorter (default 0.06)
+//   rise                      how far each note slides up. 0.5 is half as high again: the "bloop" (default 0.5)
+function playWaterBubbles(options) {
+  if (!isAudioReady()) return;
+  const context = audio.context;
+  const now = context.currentTime + (options.delay || 0);
+  const count = options.count || 1;
+  const spread = options.spread || 0;
+  const lowest = options.frequency, highest = options.frequencyMax || options.frequency;
+  const ring = options.ring || 0.06;
+  const rise = options.rise === undefined ? 0.5 : options.rise;
+  const output = context.createGain();
+  output.gain.value = (options.gain === undefined ? 0.3 : options.gain) / Math.sqrt(count); // many bubbles rarely peak together
+  output.connect(options.destination || audio.masterGain);
+  if (options.reverbAmount) {
+    const send = context.createGain();
+    send.gain.value = options.reverbAmount;
+    output.connect(send); send.connect(audio.reverbInput);
+  }
+  for (let bubbleIndex = 0; bubbleIndex < count; bubbleIndex++) {
+    const early = Math.random() * Math.random(); // between 0 and 1, mostly near 0
+    const start = now + spread * early;
+    const frequency = lowest * Math.pow(highest / lowest, Math.random());
+    const ringTime = ring * Math.sqrt(lowest / frequency);
+    const bubble = context.createOscillator();
+    bubble.frequency.setValueAtTime(frequency, start);
+    bubble.frequency.exponentialRampToValueAtTime(frequency * (1 + rise), start + ringTime);
+    const level = context.createGain();
+    level.gain.setValueAtTime(0.0001, start);
+    level.gain.linearRampToValueAtTime((0.4 + Math.random() * 0.6) * (1 - early * 0.7), start + 0.002); // the late ones are the small ones
+    level.gain.exponentialRampToValueAtTime(0.0001, start + ringTime);
+    bubble.connect(level); level.connect(output);
+    bubble.start(start);
+    bubble.stop(start + ringTime + 0.02);
+  }
+}
+
 function createTemporaryPanner(x, y, z) {
   if (!isAudioReady()) return null;
   const panner = createPannerNode(x, y, z, 2.5, 1.2);
@@ -913,6 +1017,17 @@ function playVoiceLine(key, treatmentName, startDelay, whenLengthKnown) {
 // ---------------------------------------------------------------------------
 
 function playFootstepSound(isInWater, isOnGrate, loudness) {
+  if (isInWater && audio.waterBubbles) {
+    const level = loudness * SOUND_LEVELS.footstepWater;
+    // The foot goes in: a dull push of water and one big gulp of air dragged under with it.
+    playNoiseBurst({ duration: 0.22, frequency: 700, frequencyEnd: 260, gain: 0.45 * level, useBrownNoise: true, playbackRate: 1.4, attack: 0.01, reverbAmount: 0.4 });
+    playWaterBubbles({ count: 2, spread: 0.03, frequency: 170, frequencyMax: 300, ring: 0.11, rise: 0.35, gain: 0.22 * level, reverbAmount: 0.4 });
+    // The splash: bubbles of every size, more of them the harder you run.
+    playWaterBubbles({ count: Math.round(10 + loudness * 16), spread: 0.3, frequency: 450, frequencyMax: 3800, ring: 0.06, gain: 0.32 * level, delay: 0.02, reverbAmount: 0.5 });
+    // A little spray off the top.
+    playNoiseBurst({ duration: 0.14, filterType: 'bandpass', frequency: 5200, gain: 0.16 * level, delay: 0.04 });
+    return;
+  }
   if (isInWater) {
     playNoiseBurst({ duration: 0.32, frequency: 1500, frequencyEnd: 420, gain: 2.3 * loudness * SOUND_LEVELS.footstepWater, resonance: 1.4, reverbAmount: 0.5 });
     playNoiseBurst({ duration: 0.18, filterType: 'bandpass', frequency: 3200, gain: 2.1 * loudness * SOUND_LEVELS.footstepWater, delay: 0.05 });
@@ -920,7 +1035,11 @@ function playFootstepSound(isInWater, isOnGrate, loudness) {
   }
   playNoiseBurst({ duration: 0.11, frequency: 520 + Math.random() * 180, gain: 2.26 * loudness * SOUND_LEVELS.footstep, useBrownNoise: true, playbackRate: 1.6, reverbAmount: 0.35 });
   playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 2100, gain: 2.05 * loudness * SOUND_LEVELS.footstep });
-  if (isOnGrate) playTone({ waveform: 'triangle', frequency: 610 + Math.random() * 90, frequencyEnd: 560, duration: 0.25, gain: 2.07 * loudness * SOUND_LEVELS.footstep, reverbAmount: 0.6 });
+  if (isOnGrate && audio.metalStruck) {
+    // A boot comes down on two bars of the grate, one a moment after the other.
+    playMetalStrike({ shape: 'bar', frequency: 410 + Math.random() * 90, duration: 0.45, hardness: 0.4, damping: 0.8, gain: 1.6 * loudness * SOUND_LEVELS.footstep, reverbAmount: 0.6 });
+    playMetalStrike({ shape: 'bar', frequency: 560 + Math.random() * 120, duration: 0.3, hardness: 0.5, damping: 0.8, gain: 0.9 * loudness * SOUND_LEVELS.footstep, delay: 0.018, reverbAmount: 0.6 });
+  } else if (isOnGrate) playTone({ waveform: 'triangle', frequency: 610 + Math.random() * 90, frequencyEnd: 560, duration: 0.25, gain: 2.07 * loudness * SOUND_LEVELS.footstep, reverbAmount: 0.6 });
 }
 
 function setScannerSound(paintLevel) {
@@ -974,12 +1093,21 @@ function playDoorSound(x, z, isOpening) {
   if (!panner) return;
   playNoiseBurst({ duration: 0.75, filterType: 'bandpass', frequency: isOpening ? 700 : 1500, frequencyEnd: isOpening ? 2400 : 500, gain: 2.7 * SOUND_LEVELS.door, attack: 0.05, resonance: 1.6, destination: panner });
   playNoiseBurst({ duration: 0.16, frequency: 240, gain: 2.9 * SOUND_LEVELS.door, useBrownNoise: true, playbackRate: 1.3, delay: 0.62, destination: panner });
-  playTone({ waveform: 'triangle', frequency: 92, frequencyEnd: 60, duration: 0.3, gain: 2.7 * SOUND_LEVELS.door, delay: 0.62, destination: panner });
+  if (audio.metalStruck) {
+    // The slab meets its frame, and the latch drops a moment before.
+    playMetalStrike({ shape: 'plate', frequency: 120, duration: 0.7, hardness: 0.55, gain: 1.8 * SOUND_LEVELS.door, delay: 0.62, destination: panner });
+    playMetalStrike({ shape: 'bar', frequency: 880, duration: 0.12, hardness: 0.9, gain: 0.6 * SOUND_LEVELS.door, delay: 0.59, destination: panner });
+  } else playTone({ waveform: 'triangle', frequency: 92, frequencyEnd: 60, duration: 0.3, gain: 2.7 * SOUND_LEVELS.door, delay: 0.62, destination: panner });
 }
 
 // Your own knees and elbows on sheet metal: a dull boom that rings on.
 function playVentCrawlSound() {
   playNoiseBurst({ duration: 0.22, frequency: 260, gain: 0.34 * SOUND_LEVELS.ventCrawl, useBrownNoise: true, playbackRate: 1.1, reverbAmount: 0.6 });
+  if (audio.metalStruck) {
+    // The duct's floor buckles under a knee and springs back.
+    playMetalStrike({ shape: 'plate', frequency: 95 + Math.random() * 30, duration: 0.9, hardness: 0.25, bend: 0.04, gain: 0.2 * SOUND_LEVELS.ventCrawl, reverbAmount: 0.7 });
+    return;
+  }
   playResonantNoise({ frequency: 190 + Math.random() * 60, resonance: 16, duration: 0.5, gain: 0.1 * SOUND_LEVELS.ventCrawl, attack: 0.004, reverbAmount: 0.7 });
   playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 1700, gain: 0.05 * SOUND_LEVELS.ventCrawl });
 }
@@ -989,6 +1117,11 @@ function playHollowVentStep(x, z, weight) {
   const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 0.6, z);
   if (!panner) return;
   playNoiseBurst({ duration: 0.3, frequency: 240, gain: 2.5 * weight * SOUND_LEVELS.hollowVentStep, useBrownNoise: true, playbackRate: 0.8, destination: panner });
+  if (audio.metalStruck) {
+    // Something much heavier than you on the same sheet metal: lower, longer, and it buckles further.
+    playMetalStrike({ shape: 'plate', frequency: 68 + Math.random() * 24, duration: 1.4, hardness: 0.35, bend: 0.06, gain: 1.3 * weight * SOUND_LEVELS.hollowVentStep, destination: panner });
+    return;
+  }
   playResonantNoise({ frequency: 150 + Math.random() * 50, resonance: 18, duration: 0.7, gain: 1.5 * weight * SOUND_LEVELS.hollowVentStep, attack: 0.004, destination: panner });
   playNoiseBurst({ duration: 0.07, filterType: 'bandpass', frequency: 2200, gain: 1.25 * weight * SOUND_LEVELS.hollowVentStep, delay: 0.04, destination: panner });
 }
@@ -1209,6 +1342,10 @@ function setLiftMachinerySound(level) {
 function playLiftBell() {
   const panner = createTemporaryPanner(LIFT_POSITION.x, 2.4, LIFT_POSITION.z);
   if (!panner) return;
+  if (audio.metalStruck) {
+    playMetalStrike({ shape: 'bell', frequency: 1480, duration: 1.6, hardness: 0.6, damping: 0.5, gain: 1.5 * SOUND_LEVELS.liftBell, destination: panner });
+    return;
+  }
   for (const frequency of [1480, 2217, 2960]) {
     playTone({ waveform: 'sine', frequency: frequency, duration: 0.9, gain: 0.5 * SOUND_LEVELS.liftBell, attack: 0.002, destination: panner });
   }
@@ -1225,6 +1362,16 @@ function playAmbientDrips(x, z) {
   const panner = createTemporaryPanner(x, 2.5, z);
   if (!panner) return;
   const dripCount = 1 + Math.floor(Math.random() * 3);
+  if (audio.waterBubbles) {
+    // Each drop into standing water: the tick of it landing, the bubble it makes, and often a smaller one right behind.
+    for (let dripIndex = 0; dripIndex < dripCount; dripIndex++) {
+      const delay = dripIndex * randomBetween(0.25, 0.5), note = 900 + Math.random() * 1300;
+      playNoiseBurst({ duration: 0.012, filterType: 'bandpass', frequency: 4200, gain: 0.08 * SOUND_LEVELS.drips, attack: 0.001, delay: delay, destination: panner });
+      playWaterBubbles({ frequency: note, ring: 0.08, rise: 0.7, gain: 0.3 * SOUND_LEVELS.drips, delay: delay + 0.012, destination: panner, reverbAmount: 0.3 });
+      if (Math.random() < 0.6) playWaterBubbles({ frequency: note * randomBetween(1.5, 2.2), ring: 0.04, rise: 0.5, gain: 0.12 * SOUND_LEVELS.drips, delay: delay + randomBetween(0.04, 0.08), destination: panner, reverbAmount: 0.3 });
+    }
+    return;
+  }
   for (let dripIndex = 0; dripIndex < dripCount; dripIndex++) {
     playTone({ waveform: 'sine', frequency: 1500 + Math.random() * 900, frequencyEnd: 700, duration: 0.09, gain: 0.2 * SOUND_LEVELS.drips, delay: dripIndex * randomBetween(0.25, 0.5), attack: 0.005, destination: panner });
   }
@@ -1240,6 +1387,13 @@ function playAmbientPipeGroan(x, z) {
 function playAmbientMetalSettling(x, z) {
   const panner = createTemporaryPanner(x, 1, z);
   if (!panner) return;
+  if (audio.metalStruck) {
+    // A panel lets go as it cools: one sharp tick that rings, and often a smaller one after it.
+    const note = 190 + Math.random() * 170;
+    playMetalStrike({ shape: 'plate', frequency: note, duration: 1.6, hardness: 0.75, gain: 1.5 * SOUND_LEVELS.metalSettling, destination: panner });
+    if (Math.random() < 0.6) playMetalStrike({ shape: 'plate', frequency: note * 1.07, duration: 0.9, hardness: 0.6, gain: 0.6 * SOUND_LEVELS.metalSettling, delay: 0.12 + Math.random() * 0.3, destination: panner });
+    return;
+  }
   playTone({ waveform: 'triangle', filterType: 'bandpass', frequency: 300 + Math.random() * 200, frequencyEnd: 280 + Math.random() * 200, duration: 1.2, gain: 0.8 * SOUND_LEVELS.metalSettling, attack: 0.003, destination: panner });
   playNoiseBurst({ duration: 0.2, frequency: 800, gain: 1.3 * SOUND_LEVELS.metalSettling, destination: panner });
 }

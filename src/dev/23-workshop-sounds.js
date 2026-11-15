@@ -57,6 +57,24 @@ function applySoundBoardHollowVoice(dt) {
     voice ? voice.aggression : 0, voice ? voice.shriekLevel : 0, dt, game.time);
 }
 
+// Some sounds come two ways: the old way, and an experiment built differently (struck metal from playMetalStrike,
+// water from playWaterBubbles). Play uses whichever its switch in `audio` says (audio.metalStruck, audio.waterBubbles).
+// A button on the board always plays its own, and puts play's choice back after.
+function playSoundBoardExperiment(switchName, isOn, play) {
+  const inPlay = audio[switchName];
+  audio[switchName] = isOn;
+  try { play(); } finally { audio[switchName] = inPlay; }
+}
+function createSoundBoardExperimentPair(switchName, name, hint, extraSeconds, entry) {
+  const play = entry.play;
+  const experiment = Object.assign({}, entry, { key: entry.key + switchName.charAt(0).toUpperCase() + switchName.slice(1), label: entry.label + ', ' + name + ' (experiment)',
+    hint: hint + ' In play when audio.' + switchName + ' is true.', seconds: entry.seconds + extraSeconds, play: function () { playSoundBoardExperiment(switchName, true, play); } });
+  entry.play = function () { playSoundBoardExperiment(switchName, false, play); };
+  return [entry, experiment];
+}
+function createSoundBoardMetalPair(entry) { return createSoundBoardExperimentPair('metalStruck', 'struck metal', 'Built from overtones that clash.', 0.8, entry); }
+function createSoundBoardWaterPair(entry) { return createSoundBoardExperimentPair('waterBubbles', 'bubbles', 'Built from ringing bubbles.', 0.2, entry); }
+
 // A recording. How long it lasts is only known once it has been unpacked, so `load` finds that out first.
 function createSoundBoardVoice(key, treatmentName, label, hint, startDelay) {
   const entry = {
@@ -88,11 +106,11 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'You', key: 'stepWalk', level: 'footstep', label: 'Footstep, walking', seconds: 0.5, play: function () { playFootstepSound(false, false, 0.55); } },
   { group: 'You', key: 'stepCrouch', level: 'footstep', label: 'Footstep, crouching', seconds: 0.5, play: function () { playFootstepSound(false, false, 0.25); } },
   { group: 'You', key: 'stepSprint', level: 'footstep', label: 'Footstep, sprinting', seconds: 0.5, play: function () { playFootstepSound(false, false, 1.0); } },
-  { group: 'You', key: 'stepGrate', level: 'footstep', label: 'Footstep on a grate, walking', seconds: 0.6, play: function () { playFootstepSound(false, true, 0.55); } },
-  { group: 'You', key: 'stepWater', level: 'footstepWater', label: 'Footstep in water, walking', seconds: 0.6, play: function () { playFootstepSound(true, false, 0.55); } },
-  { group: 'You', key: 'stepWaterSprint', level: 'footstepWater', label: 'Footstep in water, sprinting', seconds: 0.6, play: function () { playFootstepSound(true, false, 1.0); } },
-  { group: 'You', key: 'ventCrawl', level: 'ventCrawl', label: 'Crawling in a vent', hint: 'A crouched footstep and the sheet metal under you, as in play.', seconds: 0.8,
-    play: function () { playFootstepSound(false, false, 0.25); playVentCrawlSound(); } },
+  ...createSoundBoardMetalPair({ group: 'You', key: 'stepGrate', level: 'footstep', label: 'Footstep on a grate, walking', seconds: 0.6, play: function () { playFootstepSound(false, true, 0.55); } }),
+  ...createSoundBoardWaterPair({ group: 'You', key: 'stepWater', level: 'footstepWater', label: 'Footstep in water, walking', seconds: 0.6, play: function () { playFootstepSound(true, false, 0.55); } }),
+  ...createSoundBoardWaterPair({ group: 'You', key: 'stepWaterSprint', level: 'footstepWater', label: 'Footstep in water, sprinting', seconds: 0.6, play: function () { playFootstepSound(true, false, 1.0); } }),
+  ...createSoundBoardMetalPair({ group: 'You', key: 'ventCrawl', level: 'ventCrawl', label: 'Crawling in a vent', hint: 'A crouched footstep and the sheet metal under you, as in play.', seconds: 0.8,
+    play: function () { playFootstepSound(false, false, 0.25); playVentCrawlSound(); } }),
   { group: 'You', key: 'heartbeatFaint', level: 'heartbeat', label: 'Heartbeat, something is near', hint: 'The faintest it gets: the threat has only just begun.', seconds: 0.6, play: function () { playHeartbeat(0.36); } },
   { group: 'You', key: 'heartbeatFull', level: 'heartbeat', label: 'Heartbeat, it is on you', seconds: 0.6, play: function () { playHeartbeat(1); } },
 
@@ -113,7 +131,7 @@ const SOUND_BOARD_ENTRIES = [
 
   // ---- doors and machinery ----
   { group: 'Doors and machinery', key: 'doorOpen', level: 'door', label: 'Door opens', seconds: 1.1, hasPlace: true, play: function () { playDoorSound(getSoundBoardListenerX(), getSoundBoardSourceZ(), true); } },
-  { group: 'Doors and machinery', key: 'doorClose', level: 'door', label: 'Door closes', seconds: 1.1, hasPlace: true, play: function () { playDoorSound(getSoundBoardListenerX(), getSoundBoardSourceZ(), false); } },
+  ...createSoundBoardMetalPair({ group: 'Doors and machinery', key: 'doorClose', level: 'door', label: 'Door closes', seconds: 1.1, hasPlace: true, play: function () { playDoorSound(getSoundBoardListenerX(), getSoundBoardSourceZ(), false); } }),
   { group: 'Doors and machinery', key: 'generatorStart', level: 'generatorStart', label: 'Generator is started', hint: 'Five turns of the starter, then it catches.', seconds: 6, hasPlace: true,
     play: startGeneratorSound,
     finish: function () {
@@ -129,7 +147,7 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'Doors and machinery', key: 'liftDepart', level: 'liftMachinery', label: 'Lift leaves without you', hint: 'What you hear after stepping out at the start.', seconds: 7.2, hasPlace: true,
     play: playLiftDepartSound,
     finish: function () { setLiftMachinerySound(soundBoard.heldKeys.liftMachinery ? 0.85 : 0); } },
-  { group: 'Doors and machinery', key: 'liftBell', level: 'liftBell', label: 'Lift bell', seconds: 1.0, hasPlace: true, play: playLiftBell },
+  ...createSoundBoardMetalPair({ group: 'Doors and machinery', key: 'liftBell', level: 'liftBell', label: 'Lift bell', seconds: 1.0, hasPlace: true, play: playLiftBell }),
 
   // ---- the Hollow ----
   createSoundBoardGrowl('growlCalm', 'hollowGrowl', 'Growl, roaming', 'With the knocking it makes now and then.', 0.1, 0),
@@ -147,7 +165,7 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'The Hollow', key: 'hollowStepRoam', level: 'hollowFootstep', label: 'Its footstep, roaming', seconds: 0.5, hasPlace: true, play: function () { playHollowFootstep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.7); } },
   { group: 'The Hollow', key: 'hollowStepHunt', level: 'hollowFootstep', label: 'Its footstep, hunting', seconds: 0.5, hasPlace: true, play: function () { playHollowFootstep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
   { group: 'The Hollow', key: 'hollowVentRoam', level: 'hollowVentStep', label: 'It crawls in a vent, roaming', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.8); } },
-  { group: 'The Hollow', key: 'hollowVentHunt', level: 'hollowVentStep', label: 'It crawls in a vent, hunting', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
+  ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hollowVentHunt', level: 'hollowVentStep', label: 'It crawls in a vent, hunting', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } }),
 
   // ---- the Stills ----
   { group: 'The Stills', key: 'stillShuffle', level: 'stillShuffle', label: 'A Still moves', seconds: 0.4, hasPlace: true, play: function () { playStillShuffleSound(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
@@ -165,9 +183,9 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'The station', key: 'roomTone', level: 'roomTone', label: 'Room tone', hint: 'Always there in play. Switch it on to hear the other sounds against it.', seconds: 2,
     start: function () { setSoundBoardRoomTone(true); },
     stop: function () { setSoundBoardRoomTone(false); } },
-  { group: 'The station', key: 'drips', level: 'drips', label: 'Water drips', hint: 'In play: 6 to 16 m away.', seconds: 1.2, hasPlace: true, play: function () { playAmbientDrips(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
+  ...createSoundBoardWaterPair({ group: 'The station', key: 'drips', level: 'drips', label: 'Water drips', hint: 'In play: 6 to 16 m away.', seconds: 1.2, hasPlace: true, play: function () { playAmbientDrips(getSoundBoardListenerX(), getSoundBoardSourceZ()); } }),
   { group: 'The station', key: 'pipeGroan', level: 'pipeGroan', label: 'A pipe groans', hint: 'In play: 6 to 16 m away.', seconds: 2.7, hasPlace: true, play: function () { playAmbientPipeGroan(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
-  { group: 'The station', key: 'metalSettles', level: 'metalSettling', label: 'Metal settles', hint: 'In play: 6 to 16 m away.', seconds: 1.4, hasPlace: true, play: function () { playAmbientMetalSettling(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
+  ...createSoundBoardMetalPair({ group: 'The station', key: 'metalSettles', level: 'metalSettling', label: 'Metal settles', hint: 'In play: 6 to 16 m away.', seconds: 1.4, hasPlace: true, play: function () { playAmbientMetalSettling(getSoundBoardListenerX(), getSoundBoardSourceZ()); } }),
   { group: 'The station', key: 'shaftKnocks', level: 'shaftKnocks', label: 'Knocking from Shaft 9', hint: 'In play: from wherever the shaft is, usually far off.', seconds: 2.3, hasPlace: true, play: playAmbientShaftKnocks }
 ];
 

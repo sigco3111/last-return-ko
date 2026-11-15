@@ -2,6 +2,9 @@
 
 - Logo and favicon
 - Even better models
+- random object that make sound when walked on and warn the monster
+- Hollow can go through locked doors, though small chance, shouldn't be a thing, give alternative ways to get around (ceiling vents only for the monster? teleport with delay), also opens up player locking doors to get away
+  - if enough doors are locked in its face it starts breaking them down? (protected doors it can't break down?)
 
 - more random objectives
   - item collection, multi-stage generators, activate and escape
