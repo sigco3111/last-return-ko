@@ -444,7 +444,11 @@ function cardLevelForTier(tier) {
 function tryPlanRoomAtSocket(plan, roomKey, socket, tier, onlyOwnSocketIndex) {
   const definition = ROOM_CATALOGUE[roomKey];
   const facing = (socket.wall + 2) % 4; // the new room's socket must face back toward the socket's owner
-  let candidates = definition.sockets.slice().sort(function () { return plan.random() - 0.5; });
+  // Shuffled by giving each doorway a random number and sorting on that. Never put the random number inside the
+  // comparison itself: a sort may ask the same question any number of times, and browsers ask a different number
+  // once the code has warmed up, so the same seed would stop giving the same station.
+  let candidates = definition.sockets.map(function (ownSocket) { return [plan.random(), ownSocket]; })
+    .sort(function (first, second) { return first[0] - second[0]; }).map(function (pair) { return pair[1]; });
   if (onlyOwnSocketIndex !== undefined) candidates = [definition.sockets[onlyOwnSocketIndex]];
   const drops = definition.socketDrops;
   for (const ownSocket of candidates) {
@@ -546,9 +550,11 @@ function planRoom(plan, roomKey, tier, floorY, onlyOwnSocketIndex) {
     const corridorLength = plan.layout.corridorLength[0] + Math.floor(plan.random() * (plan.layout.corridorLength[1] - plan.layout.corridorLength[0] + 1));
     const corridor = tryPlanCorridorAtSocket(plan, socket, corridorLength, tier);
     if (!corridor) continue;
-    const corridorSockets = plan.sockets.slice(savedSockets).sort(function (first, second) {
-      return (second.isCorridorEnd ? 1 : 0) - (first.isCorridorEnd ? 1 : 0) + (plan.random() - 0.5);
-    });
+    // The corridor's far end is usually tried before its sides. (Each doorway's random number is drawn once,
+    // before sorting: see the note in tryPlanRoomAtSocket.)
+    const corridorSockets = plan.sockets.slice(savedSockets)
+      .map(function (corridorSocket) { return [(corridorSocket.isCorridorEnd ? 1 : 0) + plan.random() * 1.5, corridorSocket]; })
+      .sort(function (first, second) { return second[0] - first[0]; }).map(function (pair) { return pair[1]; });
     let placed = null;
     for (const corridorSocket of corridorSockets) {
       placed = tryPlanRoomAtSocket(plan, roomKey, corridorSocket, tier, onlyOwnSocketIndex);

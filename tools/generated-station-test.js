@@ -17,6 +17,36 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   const { browser, page, problems } = await openGame();
   const inGame = (callback, argument) => page.evaluate(callback, argument);
 
+  // Describes the first vent of the station that is loaded: its tiles, and the two places where it opens into a
+  // room (a vent tile with ordinary floor next to it). It runs inside the page, so it is handed over as text.
+  const describeFirstVent = function () {
+    const debug = window.noReturnDebug, level = debug.level;
+    const tiles = [], mouths = [];
+    for (let z = level.boundsMinimumZ; z < level.boundsMaximumZ; z++) for (let x = level.boundsMinimumX; x < level.boundsMaximumX; x++) {
+      if (!debug.isVentAt(x + 0.5, z + 0.5) || debug.zoneNames[debug.getZoneAt(x + 0.5, z + 0.5)] !== 'VENT') continue;
+      tiles.push([x, z]);
+      for (const step of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const beside = [x + step[0] + 0.5, z + step[1] + 0.5];
+        const spot = debug.findWalkableSpotNear(beside[0], beside[1]);
+        if (spot && spot.x === beside[0] && spot.z === beside[1] && !debug.isVentAt(beside[0], beside[1])) {
+          mouths.push({ mouthX: x + 0.5, mouthZ: z + 0.5, roomX: beside[0], roomZ: beside[1], stepX: -step[0], stepZ: -step[1] });
+        }
+      }
+    }
+    return { seed: level.seed, ventCount: level.ventCount, tileCount: tiles.length, mouths: mouths.slice(0, 2), mouthCount: mouths.length,
+      headroom: tiles.length ? debug.getHeadroomAt(tiles[0][0] + 0.5, tiles[0][1] + 0.5) : 0, ventHeight: debug.ventHeight };
+  };
+
+  // --- a seed is a promise, part one: note what a few seeds build while the page is still cold ---
+  // (A browser runs code differently once it has warmed up. Anything in the planner that leans on that, such as
+  // a sort with a random number inside its comparison, shows up as a station that differs between now and later.)
+  const promisedSeeds = [[2, 'large', 'mixed', 'one'], [3, 'large', 'sprawling', 'two'], [7, 'medium', 'mixed', 'two'], [11, 'small', 'tight', 'one'], [5, 'massive', 'mixed', 'two']];
+  const buildPrints = (seeds) => inGame((list) => list.map((entry) => {
+    window.noReturnDebug.loadStation('generated', entry[0], entry[1], entry[2], entry[3]);
+    return window.noReturnDebug.getStationFingerprint();
+  }), seeds);
+  const coldPrints = await buildPrints(promisedSeeds);
+
   // --- many stations: every one must be buildable and finishable in the intended order ---
   for (const sizeKey of ['small', 'medium', 'large']) {
     const result = await inGame(([size, seedCount]) => {
@@ -59,8 +89,33 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
       numberSeed: debug.chooseSeedFromText('4471'), emptySeedsDiffer: debug.chooseSeedFromText('') !== debug.chooseSeedFromText('') };
   });
   check('the same seed builds the same station, and another seed a different one', repeat.same && repeat.different, repeat);
+  // Part two of the promise: after well over a hundred stations the page is warm. The same seeds must build the same stations.
+  const warmPrints = await buildPrints(promisedSeeds);
+  const changed = promisedSeeds.filter((entry, index) => coldPrints[index] !== warmPrints[index]).map((entry) => entry.join('/'));
+  check('five seeds build exactly the same stations on a warm page as they did on a cold one', changed.length === 0, changed);
+  const plannerSource = require('fs').readFileSync(require('path').join(__dirname, '..', 'src', 'js', '03-levelgen.js'), 'utf8');
+  const riskySorts = plannerSource.match(/\.sort\(function \([^)]*\) \{[^}]*random\(/g) || [];
+  check('no sort in the planner has a random number inside its comparison', riskySorts.length === 0, riskySorts);
   check('a typed number is used as the seed, a typed word always gives the same seed, an empty box a new one',
     repeat.numberSeed === 4471 && repeat.wordSeed && repeat.emptySeedsDiffer, repeat);
+
+  // --- choose the station for the lift-to-lift run below ---
+  // It has to have a vent that is the shortest way between the two rooms it joins, so that the Hollow, which
+  // always takes the shortest way, can be watched crawling through it. Which seed that is depends on the planner,
+  // so the test looks for one instead of trusting a number that was right once.
+  const playSeed = await inGame(([describeSource]) => {
+    const debug = window.noReturnDebug, describeFirstVent = (0, eval)('(' + describeSource + ')');
+    for (let seed = 1; seed <= 80; seed++) {
+      if (!debug.loadStation('generated', seed, 'medium', 'mixed', 'two')) continue;
+      const vent = describeFirstVent();
+      if (vent.mouths.length !== 2 || vent.tileCount < 3) continue;
+      debug.teleport(vent.mouths[0].roomX, vent.mouths[0].roomZ, 0);
+      // room, every vent tile, room: one more step than the vent has tiles
+      if (debug.stepsFromPlayerTo(vent.mouths[1].roomX, vent.mouths[1].roomZ) === vent.tileCount + 1) return seed;
+    }
+    return 0;
+  }, [String(describeFirstVent)]);
+  check('a medium two-level station whose first vent is a real short cut exists among the first 80 seeds', playSeed > 0, playSeed);
 
   // --- going back to the classic station restores it exactly ---
   const classicAgain = await inGame(() => {
@@ -76,10 +131,10 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   check('choosing "Uncharted annex" shows the size, layout and seed boxes', await page.evaluate(() => !document.getElementById('station-options').hidden));
   await page.selectOption('#title-station-size', 'medium');
   await page.selectOption('#title-station-layout', 'mixed');
-  await page.fill('#title-seed', '7');
+  await page.fill('#title-seed', String(playSeed));
   await startGame(page, false);
   const loaded = await inGame(() => ({ kind: window.noReturnDebug.level.kind, seed: window.noReturnDebug.level.seed, description: window.noReturnDebug.level.description }));
-  check('Begin descent loads the generated station for the typed seed', loaded.kind === 'generated' && loaded.seed === 7, loaded);
+  check('Begin descent loads the generated station for the typed seed', loaded.kind === 'generated' && loaded.seed === playSeed, loaded);
 
   await page.keyboard.down('KeyW');
   await inGame(() => window.noReturnDebug.simulate(4));
@@ -93,13 +148,19 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     const debug = window.noReturnDebug, level = debug.level;
     const zone = debug.zoneNames.indexOf('STAIRS');
     let top = null, bottom = null;
+    const tiles = [];
     for (let z = level.boundsMinimumZ; z < level.boundsMaximumZ; z++) for (let x = level.boundsMinimumX; x < level.boundsMaximumX; x++) {
       if (debug.getZoneAt(x + 0.5, z + 0.5) !== zone) continue;
       const floor = debug.getFloorHeightAt(x + 0.5, z + 0.5);
-      if (!top || floor > top.floor) top = { x: x + 0.5, z: z + 0.5, floor: floor };
+      tiles.push({ x: x + 0.5, z: z + 0.5, floor: floor });
       if (!bottom || floor < bottom.floor) bottom = { x: x + 0.5, z: z + 0.5, floor: floor };
     }
-    // Stand at the top, in the same lane as the bottom tile found, facing down the flight.
+    // Stand on the top landing, on the tile nearest the foot (the far end of the landing is the stair door, and a
+    // closed door pushes you back out of it), in the same lane as the bottom tile found, facing down the flight.
+    for (const tile of tiles) {
+      if (tile.floor < -0.01) continue;
+      if (!top || Math.hypot(tile.x - bottom.x, tile.z - bottom.z) < Math.hypot(top.x - bottom.x, top.z - bottom.z)) top = tile;
+    }
     const alongX = Math.abs(bottom.x - top.x) > Math.abs(bottom.z - top.z);
     if (alongX) top.z = bottom.z; else top.x = bottom.x;
     debug.teleport(top.x, top.z, Math.atan2(bottom.x - top.x, -(bottom.z - top.z)));
@@ -125,24 +186,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   await inGame(() => { const debug = window.noReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
 
   // --- vents: you only fit crouched, it is loud in there, and the Hollow crawls through ---
-  const vent = await inGame(() => {
-    const debug = window.noReturnDebug, level = debug.level;
-    const seed = level.seed; // the station being played; the seed was chosen so that it has a vent
-    // Its tiles, and the two places where it opens into a room: a vent tile with ordinary floor next to it.
-    const tiles = [], mouths = [];
-    for (let z = level.boundsMinimumZ; z < level.boundsMaximumZ; z++) for (let x = level.boundsMinimumX; x < level.boundsMaximumX; x++) {
-      if (!debug.isVentAt(x + 0.5, z + 0.5) || debug.zoneNames[debug.getZoneAt(x + 0.5, z + 0.5)] !== 'VENT') continue;
-      tiles.push([x, z]);
-      for (const step of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-        const beside = [x + step[0] + 0.5, z + step[1] + 0.5];
-        const spot = debug.findWalkableSpotNear(beside[0], beside[1]);
-        if (spot && spot.x === beside[0] && spot.z === beside[1] && !debug.isVentAt(beside[0], beside[1])) {
-          mouths.push({ mouthX: x + 0.5, mouthZ: z + 0.5, roomX: beside[0], roomZ: beside[1], stepX: -step[0], stepZ: -step[1] });
-        }
-      }
-    }
-    return { seed: seed, ventCount: level.ventCount, tileCount: tiles.length, mouths: mouths.slice(0, 2), headroom: tiles.length ? debug.getHeadroomAt(tiles[0][0] + 0.5, tiles[0][1] + 0.5) : 0, ventHeight: debug.ventHeight };
-  });
+  const vent = await inGame(([describeSource]) => (0, eval)('(' + describeSource + ')')(), [String(describeFirstVent)]);
   check('a vent is crawl height and opens into a room at each end', vent.mouths.length === 2 && Math.abs(vent.headroom - vent.ventHeight) < 0.01 && vent.tileCount >= 3, vent);
   const enterVent = async (holdCrouch) => {
     const mouth = vent.mouths[0];
@@ -282,7 +326,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   await page.waitForFunction(() => window.noReturnDebug.game.mode === 'ending', null, { timeout: 90000 });
   await drawFrames(page, 1);
   const endingText = await page.evaluate(() => document.getElementById('ending-stats').textContent);
-  check('the ending screen names the station and its seed', /seed 7/.test(endingText), endingText);
+  check('the ending screen names the station and its seed', endingText.indexOf('seed ' + playSeed) >= 0, endingText);
 
   // --- "somewhere uncharted" on the ending screen switches the title screen over ---
   await page.evaluate(() => document.getElementById('button-ending-uncharted').click());
