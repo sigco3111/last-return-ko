@@ -2,6 +2,7 @@
   "name": "game-last-return",
   "version": "1.16.0",
   "private": true,
+  "license": "MIT",
   "description": "Last Return: a first-person horror game where a handheld LiDAR scanner is the only way to see.",
   "scripts": {
     "build": "node build.js && node --check build/bundle.js",
