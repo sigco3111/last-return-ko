@@ -204,6 +204,41 @@ const TUNING = {
 
   // ---- Apparitions ---------------------------------------------------------
   phantomImprintSeconds: 5,       // how long the points of a figure that "was never there" stay visible
+  // Besides the few that stand at fixed places, apparitions turn up by chance, at a place chosen at that moment
+  // from where you are and which way you are looking (see 08-phantoms.js). These numbers say how often.
+  phantomFirstAfterSeconds: 45,     // none in the first seconds after you leave the lift
+  phantomGapShortestSeconds: 70,    // after one has gone, the next comes no sooner than this ...
+  phantomGapLongestSeconds: 170,    // ... and no later than this, if the rules below allow it then
+  phantomRetryShortestSeconds: 18,  // one that nobody saw does not count; another is tried after this short a wait ...
+  phantomRetryLongestSeconds: 40,   // ... or this long
+  phantomBudgetBase: 2,             // how many a descent may have: this many ...
+  phantomRoomsPerExtra: 8,          // ... plus one for every so many rooms (Kessel-9: 4, a massive station: about 10)
+  phantomMostMenace: 0.45,          // none while the director's menace is above this: they belong to the quiet stretches.
+                                    // Raise toward 1 to let them turn up with the Hollow close by.
+  phantomUnseenSeconds: 30,         // one that has stood this long without being scanned is withdrawn
+  phantomStingerGapSeconds: 40,     // the three sagging notes play at most this often
+  phantomWatcherNearestMetres: 8,   // "watcher": stands and faces you from between this far ...
+  phantomWatcherFarthestMetres: 20, // ... and this far away, where you can see it from where you are
+  phantomBehindNearestMetres: 3.5,  // "behind you": between this far ...
+  phantomBehindFarthestMetres: 6.5, // ... and this far behind your back
+  phantomBehindSeconds: 14,         // and gone again after this long if you never turn round
+  phantomDummyNearestMetres: 7,     // "dummy": a mannequin where none should be, between this far ...
+  phantomDummyFarthestMetres: 14,   // ... and this far away. Look away and it is closer. Look away again and it is gone.
+  phantomDummyLookAwaySeconds: 0.8, // how long it must go unscanned before it moves
+  phantomCrosserNearestMetres: 9,   // "crosser": walks across your view between this far ...
+  phantomCrosserFarthestMetres: 20, // ... and this far away, and is gone at the other side
+  phantomCrosserSpeed: 1.5,         // metres per second
+  phantomCrawlerNearestMetres: 4.5, // "crawler": on its knees and hands in a vent mouth, between this far ...
+  phantomCrawlerFarthestMetres: 16, // ... and this far away
+  // "In your face": you start a scan and it is standing right in front of you. Not one of the kinds above:
+  // it has its own dice, thrown every time you start to scan, and its own limit.
+  phantomFaceChancePerScan: 0.01,   // the chance each time a scan starts (0.01 = one in a hundred). 0 switches it off.
+  phantomFaceMostPerDescent: 1,     // however the dice fall, no more than this many in one descent. A scare like this wears out fast.
+  phantomFaceNotBeforeSeconds: 120, // and never in the first two minutes
+  phantomFaceMetres: 1.8,           // how far in front of you its feet are (it leans in: its head is about a metre from yours)
+  phantomFaceSeconds: 0.7,          // how long it stays once the scan has touched it
+  // The few that stand at fixed places:
+  phantomPlacedNearestMetres: 3,    // a placed one is not shown while you are closer to its spot than this
 
   // ---- The lift ------------------------------------------------------------
   liftArrivalSeconds: 40,           // how long you must survive after uploading the spools

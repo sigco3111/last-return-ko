@@ -151,6 +151,18 @@ function debugGiveAllSpools() {
   showMessage('Debug: all three spools given.', 3, 'info');
 }
 
+// Puts out one apparition of the chosen kind. Each kind has its own idea of a good place (see 08-phantoms.js),
+// and from where you are standing there may not be one: then this says so.
+function debugSummonPhantom(kindKey) {
+  markDebugUsed();
+  const phantom = summonPhantom(kindKey);
+  const label = PHANTOM_KINDS[kindKey].label.toLowerCase();
+  if (!phantom) { showMessage('Debug: no good place for the "' + label + '" apparition from here. Try a longer room or corridor.', 4, 'warning'); return; }
+  const distance = distanceBetweenPoints(phantom.figure.x, phantom.figure.z, player.x, player.z).toFixed(0);
+  if (phantom.state === PHANTOM_STATE_WAITING) showMessage('Debug: "' + label + '" is waiting ' + distance + ' m away. Scan ahead of you and it starts.', 4, 'warning');
+  else showMessage('Debug: "' + label + '" apparition is out, ' + distance + ' m away. Switch on "Show creatures" to see where.', 4, 'warning');
+}
+
 function debugSummonHollow() {
   markDebugUsed();
   // Look for a spot about eight metres ahead; fall back to nearer ones if that is inside a wall.
@@ -440,6 +452,14 @@ function buildDebugReadout() {
   }
   lines.push('STILLS      ' + presentStills + (stillsAreHunting ? ' awake' : ' dormant') + '   nearest ' + (nearestStill < 999 ? nearestStill.toFixed(1) + ' m' : '-'));
   if (game.liftCountdown > 0) lines.push('lift in     ' + game.liftCountdown.toFixed(1) + ' s');
+  // Apparitions: how many chance ones this descent has had, why none may come now, and the one that is out.
+  const holdReason = getPhantomHoldReason();
+  lines.push('APPARITIONS ' + phantomDirector.used + ' of ' + phantomDirector.budget + ' seen   ' + (holdReason === '' ? 'looking for a place' : holdReason));
+  if (phantomDirector.current) {
+    const current = phantomDirector.current;
+    lines.push('  out now   ' + PHANTOM_KINDS[current.kind].label.toLowerCase() + (current.state === PHANTOM_STATE_WAITING ? ' (waiting for you to scan its way)' : '') + ', ' +
+      distanceBetweenPoints(current.figure.x, current.figure.z, player.x, player.z).toFixed(1) + ' m away, ' + current.figure.totalHits + ' points on it');
+  }
   return lines.join('\n');
 }
 
@@ -524,6 +544,25 @@ function initializeDebugMode() {
     actionGrid.appendChild(button);
   }
   panel.appendChild(actionGrid);
+
+  // Apparitions: call one up of a chosen kind, now, whatever the phantom director thinks of it.
+  panel.appendChild(createDebugElement('h3', 'debug-heading', 'Apparition'));
+  const phantomRow = createDebugElement('div', 'debug-row');
+  const phantomSelect = document.createElement('select');
+  phantomSelect.id = 'debug-phantom-kind';
+  for (const kindKey of PHANTOM_KIND_KEYS) {
+    const option = document.createElement('option');
+    option.value = kindKey;
+    option.textContent = PHANTOM_KINDS[kindKey].label;
+    phantomSelect.appendChild(option);
+  }
+  const phantomButton = createDebugElement('button', 'button-quiet', 'Summon');
+  phantomButton.type = 'button';
+  phantomButton.id = 'debug-phantom-summon';
+  phantomButton.addEventListener('click', function () { debugSummonPhantom(phantomSelect.value); phantomButton.blur(); });
+  phantomRow.appendChild(phantomSelect);
+  phantomRow.appendChild(phantomButton);
+  panel.appendChild(phantomRow);
 
   // Teleport.
   panel.appendChild(createDebugElement('h3', 'debug-heading', 'Go to'));
