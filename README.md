@@ -190,6 +190,14 @@ docker build --build-arg LAST_RETURN_BUILD_NUMBER=$(git rev-list --count HEAD) -
 
 Without them the game shows the version alone.
 
+A server can say what it is called, and the game then puts that in front of "How you played" in the report. Give the container `LAST_RETURN_SERVER_NAME`, or the Helm chart `serverName`:
+
+```bash
+helm upgrade last-return ./chart --namespace last-return --reset-then-reuse-values --set serverName="Official server"
+```
+
+The name is written into the page when the container starts. Left out, a report gives the address alone.
+
 ## Debug mode
 
 ![Debug mode in the calibration store](docs/screenshots/debug-mode.jpg)

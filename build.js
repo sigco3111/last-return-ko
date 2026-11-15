@@ -122,6 +122,9 @@ function build(options) {
       '<meta charset="utf-8">',
       '<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">',
       '<meta name="description" content="A first-person horror game where a handheld LiDAR scanner is the only way to see.">',
+      // What the server this page is on calls itself, for bug reports. Empty as built: docker/40-server-name.sh
+      // fills it in when the container starts, and it looks for this line exactly as it is written here.
+      '<meta name="last-return-server" content="">',
       '<style>' + pageReset + '</style>',
       headMarkup,
       '<style>\n' + styles + '</style>',

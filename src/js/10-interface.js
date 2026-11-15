@@ -717,16 +717,26 @@ function describeBuild() {
 // with what the game knows already filled in. Each name here is the `id` of a field in that form, so a field
 // renamed there must be renamed here. GitHub fills in text fields only, never a list to pick from, which is why
 // those fields are text in the form. Nothing is sent anywhere: the player sees the form and decides.
+// What the server this page came from calls itself, such as "Official server", or '' if it does not say.
+// A server says it by filling in the page's `last-return-server` line (see docker/40-server-name.sh).
+function readServerName() {
+  const tag = document.querySelector('meta[name="last-return-server"]');
+  return tag ? tag.content.trim().slice(0, 40) : '';
+}
+
 // Where this page came from, as far as a page can tell: the dev build, a file opened from disk, a server on this
 // computer (which is also what Docker looks like), or a page online. Only the host and the path are given, and
-// for a file nothing at all, because its path has the player's user name in it.
+// for a file nothing at all, because its path has the player's user name in it. A server that names itself goes
+// in front, and what the page can tell still follows, because a page saved from that server keeps the name.
 function describeHowThePageIsServed() {
   if (BUILD_STAMP.isDevBuild) return 'The dev build (npm run dev)';
   const protocol = window.location.protocol, host = window.location.host;
-  if (protocol === 'file:') return 'index.html opened from disk';
-  if (protocol !== 'http:' && protocol !== 'https:') return 'Inside another page';
-  if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) return 'Served from this computer (' + host + ')';
-  return 'Online at ' + host + window.location.pathname;
+  let served = 'Online at ' + host + window.location.pathname;
+  if (protocol === 'file:') served = 'index.html opened from disk';
+  else if (protocol !== 'http:' && protocol !== 'https:') served = 'Inside another page';
+  else if (/^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(host)) served = 'Served from this computer (' + host + ')';
+  const serverName = readServerName();
+  return serverName ? serverName + ' · ' + served : served;
 }
 
 const REPORT_PROBLEM_ADDRESS = 'https://github.com/StefanKnol/Last-Return/issues/new';

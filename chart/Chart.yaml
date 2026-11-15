@@ -3,6 +3,6 @@ name: last-return
 description: Last Return, served as one static page by nginx.
 type: application
 # The chart's own version. Bump it when the templates change.
-version: 0.1.0
+version: 0.2.0
 # The game version this chart was written against. The image tag is what decides what runs.
 appVersion: "1.14.0"

@@ -13,6 +13,12 @@ imagePullSecrets: []
 
 replicaCount: 1
 
+# What this server calls itself in the bug reports filed from the game: with "Official server", a report's
+# "How you played" reads "Official server · Online at <host>/". Empty, it gives the address alone.
+# Letters, digits, spaces, dots, underscores and hyphens, 40 at most. Needs an image from build.js with the
+# `last-return-server` line in its page; an older image ignores it.
+serverName: ""
+
 service:
   # ClusterIP when an ingress controller fronts the game.
   # LoadBalancer to get a public address without one (plain http on port 80).

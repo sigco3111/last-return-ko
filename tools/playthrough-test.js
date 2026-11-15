@@ -28,6 +28,18 @@ function check(description, condition, detail) {
     title.address === 'https://github.com/StefanKnol/Last-Return/issues/new' && title.fields.template === '1-bug.yml' &&
     'Version: ' + title.fields.version === title.buildLine && title.fields.station === 'Title screen' && title.fields.threat === 'Standard' &&
     title.fields.where === undefined && title.fields.seed === undefined && title.fields.build.length > 0, title);
+  // --- a server that names itself is named in the report, in front of what the page can tell by itself ---
+  const named = await inGame(() => {
+    const tag = document.querySelector('meta[name="last-return-server"]'), link = document.getElementById('link-report-problem-title');
+    const read = () => { link.dispatchEvent(new Event('pointerdown')); return new URL(link.href).searchParams.get('build'); };
+    const result = { asBuilt: tag ? tag.content : null, unnamed: read() };
+    tag.content = 'Official server';
+    result.named = read();
+    tag.content = '';
+    return result;
+  });
+  check('the page is built naming no server, and one that names itself goes in front of "How you played" in the report',
+    named.asBuilt === '' && named.unnamed.length > 0 && named.unnamed.indexOf('Official') < 0 && named.named === 'Official server · ' + named.unnamed, named);
   await startGame(page, false);
 
   // --- walking out of the lift ---

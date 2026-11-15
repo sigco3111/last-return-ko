@@ -22,6 +22,14 @@ spec:
         - name: web
           image: "{{ required "image.repository is not set. Pass --set image.repository=<registry-host>/last-return" .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.serverName }}
+          {{- if not (regexMatch "^[A-Za-z0-9 ._-]{1,40}$" .) }}
+          {{- fail "serverName may only hold letters, digits, spaces, dots, underscores and hyphens, 40 at most." }}
+          {{- end }}
+          env:
+            - name: LAST_RETURN_SERVER_NAME
+              value: {{ . | quote }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 80
