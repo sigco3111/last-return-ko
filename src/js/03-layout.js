@@ -10,11 +10,18 @@ const OBJECT_GENERATOR = 2;
 const OBJECT_SPOOL_1 = 3;
 const OBJECT_SPOOL_2 = 4;
 const OBJECT_SPOOL_3 = 5;
-const OBJECT_KEYCARD = 6;
+const OBJECT_KEYCARD = 6;      // keycard 1
 const OBJECT_NOTE_SECURITY = 7;
 const OBJECT_NOTE_LOCKER = 8;
 const OBJECT_NOTE_LAB = 9;
 const OBJECT_NOTE_ARCHIVE = 10;
+const OBJECT_KEYCARD_2 = 11;
+const OBJECT_KEYCARD_3 = 12;
+const KEYCARD_OBJECT_IDS = [0, OBJECT_KEYCARD, OBJECT_KEYCARD_2, OBJECT_KEYCARD_3]; // by card number
+const OBJECT_FUEL_CAN = 13;
+const OBJECT_WINCH_BREAKER = 14;
+const OBJECT_CORE_FIRST = 20;   // core samples are numbered 20, 21, 22 ...
+const MAXIMUM_CORE_SAMPLES = 6;
 
 // Where things are in the station that is loaded. The rooms below fill these in as they are built,
 // so they are right for the classic station and for generated ones.
@@ -43,10 +50,39 @@ function addSurveySpool(objectId, x, y, z, label) {
 }
 
 
-function addKeycard(x, y, z) {
+// `cardLevel` is 1, 2 or 3. Left out, it is card 1.
+function addKeycard(x, y, z, cardLevel) {
+  cardLevel = cardLevel || 1;
   const keycard = addBoxProp(x, y, z, 0.07, 0.01, 0.045, { yaw: 0.5, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const keycardLanyard = addBoxProp(x + 0.15, y - 0.003, z + 0.1, 0.1, 0.006, 0.012, { yaw: 1.1, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(OBJECT_KEYCARD, x, y + 0.025, z, 'Take keycard', [keycard, keycardLanyard], { removeWhenUsed: true, mapLabel: 'KEYCARD' });
+  const cardName = level.keycardCount > 1 ? 'keycard ' + cardLevel : 'keycard';
+  registerInteractable(KEYCARD_OBJECT_IDS[cardLevel], x, y + 0.025, z, 'Take ' + cardName, [keycard, keycardLanyard], { removeWhenUsed: true, mapLabel: cardName.toUpperCase() });
+}
+
+// ---- Things for the extra jobs. Each stands on a spot the planner has checked is clear all round. ----
+
+// A fuel can on a low crate.
+function addFuelCan(x, z) {
+  addBoxBetween(x - 0.3, 0, z - 0.3, x + 0.3, 0.3, z + 0.3);
+  const body = addBoxProp(x, 0.3 + 0.19, z, 0.16, 0.19, 0.11, { yaw: 0.4, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  const spout = addBoxProp(x + 0.07, 0.3 + 0.42, z + 0.03, 0.03, 0.04, 0.03, { yaw: 0.4, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  registerInteractable(OBJECT_FUEL_CAN, x, 0.55, z, 'Take the fuel can', [body, spout], { removeWhenUsed: true, mapLabel: 'FUEL' });
+}
+
+// A core sample: a grey tube as long as your forearm, lying in a cradle.
+function addCoreSample(objectId, x, z, yaw) {
+  addBoxBetween(x - 0.28, 0, z - 0.28, x + 0.28, 0.42, z + 0.28);
+  const tube = addBoxProp(x, 0.42 + 0.06, z, 0.22, 0.05, 0.05, { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  const cap = addBoxProp(x, 0.42 + 0.06, z, 0.03, 0.065, 0.065, { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  registerInteractable(objectId, x, 0.5, z, 'Take the core sample', [tube, cap], { removeWhenUsed: true, mapLabel: 'CORE' });
+}
+
+// The winch breaker: a floor-standing cabinet with one big handle.
+function addWinchBreaker(x, z) {
+  addBoxBetween(x - 0.3, 0, z - 0.2, x + 0.3, 1.75, z + 0.2, { surfaceClass: SURFACE_METAL });
+  const handle = addBoxBetween(x - 0.05, 1.05, z + 0.2, x + 0.05, 1.4, z + 0.27, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  const handleBack = addBoxBetween(x - 0.05, 1.05, z - 0.27, x + 0.05, 1.4, z - 0.2, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  registerInteractable(OBJECT_WINCH_BREAKER, x, 1.2, z, 'Close the winch breaker', [handle, handleBack], { mapLabel: 'WINCH BREAKER' });
 }
 
 // A generated station may move the first spool or the keycard out of its usual room (see 03-levelgen.js).
@@ -467,6 +503,8 @@ function buildFacilityLayout() {
   level.kind = 'classic';
   level.description = 'Kessel-9 (classic)';
   level.keycardRoomText = 'the laboratory';
+  level.keycardCount = 1;
+  level.mission.needsFuel = false; level.mission.coreCount = 0; level.mission.needsBreaker = false;
   level.stillZones.length = 0;
   level.stillZones.push(ZONE_CALIBRATION_STORE, ZONE_ARCHIVE);
   level.unlabelledZones.length = 0;

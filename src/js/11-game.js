@@ -11,10 +11,17 @@ const game = {
   flags: {
     hasLeftLift: false,
     powerOn: false,
-    hasKeycard: false,
+    hasKeycard: false,   // holds at least keycard 1
+    keycardLevel: 0,     // the number of the best keycard held: 0 none, then 1, 2, 3
     spoolsCollected: 0,
     uploadStarted: false,
-    liftArrived: false
+    liftArrived: false,
+    // The extra jobs (level.mission says which of them this station has):
+    hasFuel: false,          // carrying the fuel can
+    knowsAboutFuel: false,   // has tried the generator and found the tank empty
+    coresCollected: 0,
+    spoolsUploaded: false,   // the upload is done but the lift has not been called, because the winch breaker is open
+    breakerClosed: false
   },
   objectiveText: '',
   liftCountdown: -1,
@@ -39,7 +46,7 @@ const workshopHooks = { update: null, buildFrameData: null };
 const ATTRACT_CAMERA = level.attractCamera; // set by whichever lift lobby is loaded
 const renderCamera = { x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, fieldOfViewDegrees: 72 };
 const frameState = {
-  time: 0, realTime: 0, interference: 0, danger: 0, fade: 1, powerOn: false, hasKeycard: false, palette: 0,
+  time: 0, realTime: 0, interference: 0, danger: 0, fade: 1, powerOn: false, hasKeycard: false, keycardLevel: 0, palette: 0,
   showViewmodel: false, viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0, scannerActivity: 0, scannerHeat: 0,
   debug: null
 };
@@ -59,8 +66,17 @@ function saveCheckpoint() {
   game.checkpoint.x = player.x; game.checkpoint.z = player.z; game.checkpoint.yaw = player.yaw;
 }
 
+function setKeycardLevel(cardLevel) {
+  game.flags.keycardLevel = cardLevel;
+  game.flags.hasKeycard = cardLevel >= 1;
+}
+
 function setObjective(text) {
   game.objectiveText = text;
+}
+
+function areCoresMissing() {
+  return game.flags.coresCollected < level.mission.coreCount;
 }
 
 function refreshObjective() {
@@ -68,8 +84,14 @@ function refreshObjective() {
   if (!flags.hasLeftLift) setObjective(OBJECTIVE_TEXT.leaveLift);
   else if (flags.liftArrived) setObjective(OBJECTIVE_TEXT.boardLift);
   else if (flags.uploadStarted) setObjective(OBJECTIVE_TEXT.surviveLift);
-  else if (!flags.powerOn) setObjective(OBJECTIVE_TEXT.findGenerator);
-  else if (flags.spoolsCollected < 3) setObjective(OBJECTIVE_TEXT.collectSpools);
+  else if (!flags.powerOn) {
+    if (level.mission.needsFuel && flags.hasFuel) setObjective(OBJECTIVE_TEXT.bringFuel);
+    else if (level.mission.needsFuel && flags.knowsAboutFuel) setObjective(OBJECTIVE_TEXT.findFuel);
+    else setObjective(OBJECTIVE_TEXT.findGenerator);
+  }
+  else if (flags.spoolsUploaded && !flags.breakerClosed) setObjective(OBJECTIVE_TEXT.closeBreaker);
+  else if (flags.spoolsCollected < 3) setObjective(OBJECTIVE_TEXT.collectSpools + (areCoresMissing() ? ' ' + OBJECTIVE_TEXT.collectCores : ''));
+  else if (areCoresMissing()) setObjective(OBJECTIVE_TEXT.collectCores.replace('also wants', 'still wants'));
   else setObjective(OBJECTIVE_TEXT.returnToLift);
 }
 
@@ -79,8 +101,9 @@ function refreshObjective() {
 
 function resetWorldState() {
   const flags = game.flags;
-  flags.hasLeftLift = false; flags.powerOn = false; flags.hasKeycard = false;
+  flags.hasLeftLift = false; flags.powerOn = false; setKeycardLevel(0);
   flags.spoolsCollected = 0; flags.uploadStarted = false; flags.liftArrived = false;
+  flags.hasFuel = false; flags.knowsAboutFuel = false; flags.coresCollected = 0; flags.spoolsUploaded = false; flags.breakerClosed = false;
   game.liftCountdown = -1;
   game.scheduledEvents.length = 0;
   game.statistics.elapsed = 0; game.statistics.distanceWalked = 0; game.statistics.deaths = 0;
@@ -316,11 +339,25 @@ function collectSpool(interactable, logEntry) {
   openReader(logEntry);
   const collected = game.flags.spoolsCollected;
   if (collected >= 3) scheduleEvent(1.5, function () { playRadioLine('allSpools'); });
-  else if (collected === 1) scheduleEvent(1.5, function () { playRadioLine('firstSpool'); });
+  else if (collected === 1) {
+    scheduleEvent(1.5, function () { playRadioLine('firstSpool'); });
+    // If this station has core samples to find, this is when dispatch mentions them.
+    if (level.mission.coreCount > 0) scheduleEvent(12, function () { playRadioLine('coresWanted'); });
+  }
 }
 
 function useInteractable(interactable) {
   const flags = game.flags;
+  if (interactable.objectId >= OBJECT_CORE_FIRST && interactable.objectId < OBJECT_CORE_FIRST + MAXIMUM_CORE_SAMPLES) {
+    removeInteractableFromWorld(interactable);
+    flags.coresCollected++;
+    playPickupSound();
+    emitNoise(player.x, player.z, TUNING.noiseRadiusPickup);
+    saveCheckpoint();
+    showMessage('Core sample ' + flags.coresCollected + ' of ' + level.mission.coreCount + '.', 3, 'info');
+    refreshObjective();
+    return;
+  }
   switch (interactable.objectId) {
     case OBJECT_LIFT_TERMINAL:
       if (!flags.powerOn) {
@@ -329,8 +366,23 @@ function useInteractable(interactable) {
       } else if (flags.spoolsCollected < 3) {
         playDeniedSound();
         showMessage('LIFT CONTROL: upload locked. Survey spools loaded: ' + flags.spoolsCollected + ' of 3.', 5, 'warning');
+      } else if (areCoresMissing()) {
+        playDeniedSound();
+        showMessage('LIFT CONTROL: manifest incomplete. Core samples loaded: ' + flags.coresCollected + ' of ' + level.mission.coreCount + '.', 5, 'warning');
+      } else if (!flags.uploadStarted && level.mission.needsBreaker && !flags.breakerClosed) {
+        // The upload goes through, but the car will not move until the winch breaker is closed.
+        if (!flags.spoolsUploaded) {
+          flags.spoolsUploaded = true;
+          playPickupSound();
+          saveCheckpoint();
+          const breaker = findInteractableByObjectId(OBJECT_WINCH_BREAKER);
+          if (breaker) breaker.isDiscovered = true; // dispatch marks it on the map
+          playRadioLine('winchBreakerOpen');
+          refreshObjective();
+        }
+        showMessage('LIFT CONTROL: upload received. Car not responding: winch breaker open.', 5, 'warning');
       } else if (!flags.uploadStarted) {
-        startLiftCall();
+        startLiftCall('uploadStarted');
       } else if (!flags.liftArrived) {
         showMessage('LIFT CONTROL: car descending.', 3, 'info');
       } else {
@@ -338,7 +390,45 @@ function useInteractable(interactable) {
       }
       break;
     case OBJECT_GENERATOR:
-      if (!flags.powerOn) startGenerator(interactable);
+      if (flags.powerOn) break;
+      if (level.mission.needsFuel && !flags.hasFuel) {
+        playDeniedSound();
+        showMessage('GENERATOR 2: day tank empty. It will not start without fuel.', 5, 'warning');
+        if (!flags.knowsAboutFuel) {
+          flags.knowsAboutFuel = true;
+          scheduleEvent(1.5, function () { playRadioLine('generatorNoFuel'); });
+        }
+        refreshObjective();
+        break;
+      }
+      if (flags.hasFuel) { flags.hasFuel = false; showMessage('Fuel can emptied into the day tank.', 3, 'info'); }
+      startGenerator(interactable);
+      break;
+    case OBJECT_FUEL_CAN:
+      removeInteractableFromWorld(interactable);
+      flags.hasFuel = true;
+      playPickupSound();
+      emitNoise(player.x, player.z, TUNING.noiseRadiusPickup);
+      saveCheckpoint();
+      showMessage('Fuel can taken.', 3, 'info');
+      refreshObjective();
+      break;
+    case OBJECT_WINCH_BREAKER:
+      if (flags.breakerClosed) { showMessage('WINCH BREAKER: closed.', 3, 'info'); break; }
+      if (!flags.powerOn) { playDeniedSound(); showMessage('WINCH BREAKER: no mains power. It will not hold.', 4, 'warning'); break; }
+      flags.breakerClosed = true;
+      interactable.isAvailable = false;
+      playDeniedSound(); // the same heavy clunk
+      emitNoise(player.x, player.z, TUNING.noiseRadiusDoor * 1.5);
+      saveCheckpoint();
+      if (flags.spoolsUploaded) {
+        // The upload was already in: the car starts down at once, and you are a long way from the lobby.
+        showMessage('Winch breaker closed. The lift is coming.', 4, 'info');
+        startLiftCall('breakerClosed');
+      } else {
+        showMessage('Winch breaker closed.', 3, 'info');
+        refreshObjective();
+      }
       break;
     case OBJECT_SPOOL_1:
       collectSpool(interactable, LOG_ENTRIES.spool1);
@@ -352,13 +442,19 @@ function useInteractable(interactable) {
       collectSpool(interactable, LOG_ENTRIES.spool3);
       break;
     case OBJECT_KEYCARD:
+    case OBJECT_KEYCARD_2:
+    case OBJECT_KEYCARD_3: {
+      const cardLevel = KEYCARD_OBJECT_IDS.indexOf(interactable.objectId);
       removeInteractableFromWorld(interactable);
-      flags.hasKeycard = true;
+      setKeycardLevel(Math.max(flags.keycardLevel, cardLevel));
       playPickupSound();
       saveCheckpoint();
-      showMessage('Keycard taken.', 3, 'info');
-      scheduleEvent(1.5, function () { playRadioLine('keycardTaken'); });
+      showMessage(level.keycardCount > 1 ? 'Keycard ' + cardLevel + ' taken.' : 'Keycard taken.', 3, 'info');
+      // The last card is the one that opens the way to the shaft; an earlier one only gets you further in.
+      const isLastCard = cardLevel >= level.keycardCount;
+      scheduleEvent(1.5, function () { playRadioLine(isLastCard ? 'keycardTaken' : 'lowerKeycardTaken'); });
       break;
+    }
     case OBJECT_NOTE_SECURITY: playInterfaceBlip(620); openReader(LOG_ENTRIES.noteSecurity); break;
     case OBJECT_NOTE_LOCKER: playInterfaceBlip(620); openReader(LOG_ENTRIES.noteLocker); break;
     case OBJECT_NOTE_LAB: playInterfaceBlip(620); openReader(LOG_ENTRIES.noteLab); break;
@@ -385,7 +481,8 @@ function startGenerator(interactable) {
   }
 }
 
-function startLiftCall() {
+// `radioKey` is what dispatch says as the car starts down.
+function startLiftCall(radioKey) {
   const flags = game.flags;
   flags.uploadStarted = true;
   game.liftCountdown = game.difficulty.hollowEnabled ? TUNING.liftArrivalSeconds : TUNING.liftArrivalSecondsWithoutHollow;
@@ -393,7 +490,7 @@ function startLiftCall() {
   refreshObjective();
   playPickupSound();
   setLiftMachinerySound(0.85);
-  playRadioLine('uploadStarted');
+  playRadioLine(radioKey || 'uploadStarted');
   if (hollow.isActive) {
     scheduleEvent(4, function () {
       if (game.flags.uploadStarted && !game.flags.liftArrived) hollow.knowsPlayerPositionAlways = true;
@@ -708,6 +805,7 @@ function runFrame(timestamp) {
   frameState.fade = game.mode === 'intro' || game.mode === 'dead' || game.mode === 'ending' ? 0 : game.fade;
   frameState.powerOn = game.flags.powerOn;
   frameState.hasKeycard = game.flags.hasKeycard;
+  frameState.keycardLevel = game.flags.keycardLevel;
   frameState.palette = settings.palette;
   frameState.scannerActivity = player.scannerActivity;
   frameState.scannerHeat = player.heat;
@@ -791,7 +889,9 @@ function startApplication() {
     },
     teleport: function (x, z, yaw) { player.x = x; player.z = z; if (yaw !== undefined) player.yaw = yaw; },
     grantPower: function () { game.flags.powerOn = true; refreshObjective(); },
-    grantKeycard: function () { game.flags.hasKeycard = true; },
+    grantKeycard: function () { setKeycardLevel(3); },
+    keycardObjectIds: KEYCARD_OBJECT_IDS,
+    missionObjectIds: { fuelCan: OBJECT_FUEL_CAN, winchBreaker: OBJECT_WINCH_BREAKER, firstCore: OBJECT_CORE_FIRST },
     grantSpools: function () { game.flags.spoolsCollected = 3; refreshObjective(); },
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
     use: function (objectId) { useInteractable(findInteractableByObjectId(objectId)); },

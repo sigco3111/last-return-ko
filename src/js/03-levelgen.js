@@ -18,10 +18,13 @@ const ZONE_GENERATED_ROOM = 250; // stand-in zone for rooms that only exist in g
 // TWEAK: how big each size of station is. "fillers" are the extra rooms per tier (no power, power, keycard).
 const GENERATED_SIZE_PRESETS = {
   // vents: crawl-height tunnels between rooms. loops: full-height service ducts. Both join places far apart on foot.
-  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, spineLength: [10, 14] },
-  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 5, spineLength: [18, 26] },
+  // extraJobs: the fewest and the most extra jobs a station of this size is given (see EXTRA_JOBS below).
+  // keycards: 1 to 3. Each card opens one more ring of doors, and the next card is somewhere inside that ring;
+  //           Shaft 9 is behind the last. The third number of "fillers" is shared out between the rings.
+  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], spineLength: [10, 14] },
+  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], spineLength: [13, 18] },
+  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], spineLength: [16, 22] },
+  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 5, keycards: 3, extraJobs: [2, 3], spineLength: [18, 26] },
 };
 
 // TWEAK: how spread out a station is.
@@ -34,6 +37,14 @@ const GENERATED_LAYOUT_PRESETS = {
   sprawling: { label: 'Sprawling', corridorChance: 0.7, corridorLength: [5, 12], spread: 60 },
   sparse: { label: 'Sparse', corridorChance: 0.9, corridorLength: [7, 16], spread: 70 },
 };
+
+// TWEAK: the extra jobs a generated station can be given on top of "power, three spools, lift".
+//   fuel     Generator 2 will not start until you bring it the fuel can, which is somewhere you can reach without power.
+//   cores    The lift terminal will not take the upload until you also hold every core sample (2 to 4 of them).
+//   breaker  After the upload the lift does not come: you must close the winch breaker, somewhere behind a powered
+//            door, and then get back to the lobby with the lift already on its way and the Hollow told where you are.
+// Remove a name from the list and no station will get that job.
+const EXTRA_JOBS = ['fuel', 'cores', 'breaker'];
 
 // How many levels a station has. With two, everything behind the keycard (Shaft 9 included) is down a flight of stairs.
 const GENERATED_LEVEL_PRESETS = {
@@ -428,8 +439,12 @@ function isPlanRectangleFree(plan, rectangle) {
   return true;
 }
 
+// Tiers: 0 is open from the start, 1 needs mains power, 2 needs keycard 1, 3 needs keycard 2, 4 needs keycard 3.
 function doorKindForTier(tier) {
-  return tier === 2 ? DOOR_KIND_KEYCARD : (tier === 1 ? DOOR_KIND_POWERED : DOOR_KIND_AUTOMATIC);
+  return tier >= 2 ? DOOR_KIND_KEYCARD : (tier === 1 ? DOOR_KIND_POWERED : DOOR_KIND_AUTOMATIC);
+}
+function cardLevelForTier(tier) {
+  return tier >= 2 ? tier - 1 : 0;
 }
 
 // Tries to put a catalogue room against a socket, wall to wall, sharing the socket's door. Returns the room or null.
@@ -438,7 +453,11 @@ function doorKindForTier(tier) {
 function tryPlanRoomAtSocket(plan, roomKey, socket, tier, onlyOwnSocketIndex) {
   const definition = ROOM_CATALOGUE[roomKey];
   const facing = (socket.wall + 2) % 4; // the new room's socket must face back toward the socket's owner
-  let candidates = definition.sockets.slice().sort(function () { return plan.random() - 0.5; });
+  // Shuffled by giving each doorway a random number and sorting on that. Never put the random number inside the
+  // comparison itself: a sort may ask the same question any number of times, and browsers ask a different number
+  // once the code has warmed up, so the same seed would stop giving the same station.
+  let candidates = definition.sockets.map(function (ownSocket) { return [plan.random(), ownSocket]; })
+    .sort(function (first, second) { return first[0] - second[0]; }).map(function (pair) { return pair[1]; });
   if (onlyOwnSocketIndex !== undefined) candidates = [definition.sockets[onlyOwnSocketIndex]];
   const drops = definition.socketDrops;
   for (const ownSocket of candidates) {
@@ -463,7 +482,8 @@ function tryPlanRoomAtSocket(plan, roomKey, socket, tier, onlyOwnSocketIndex) {
         floorY: floorY + (drops ? drops[socketIndex] : 0) });
     }
     socket.isUsed = true;
-    plan.doors.push({ tileX: socket.tileX, tileZ: socket.tileZ, kind: doorKindForTier(tier > socket.owner.tier ? tier : 0), roomA: socket.owner, roomB: room });
+    plan.doors.push({ tileX: socket.tileX, tileZ: socket.tileZ, kind: doorKindForTier(tier > socket.owner.tier ? tier : 0),
+      cardLevel: cardLevelForTier(tier > socket.owner.tier ? tier : 0), roomA: socket.owner, roomB: room });
     clearPlacement();
     return room;
   }
@@ -484,12 +504,13 @@ function tryPlanCorridorAtSocket(plan, socket, length, tier) {
     key: 'corridor', name: 'CORRIDOR', tier: tier, isCorridor: true, runsAlongX: direction[0] !== 0,
     startX: Math.min(laneAX, laneBX), startZ: Math.min(laneAZ, laneBZ),
     endX: Math.max(laneAX, laneBX) + 1, endZ: Math.max(laneAZ, laneBZ) + 1,
-    floorY: socket.floorY, ceiling: tier === 2 ? 2.5 : 2.8, zone: 0, isFlooded: tier === 2 && plan.random() < 0.45
+    floorY: socket.floorY, ceiling: tier >= 2 ? 2.5 : 2.8, zone: 0, isFlooded: tier >= 2 && plan.random() < 0.45
   };
   if (!isPlanRectangleFree(plan, corridor)) return null;
   plan.rooms.push(corridor);
   socket.isUsed = true;
-  plan.doors.push({ tileX: socket.tileX, tileZ: socket.tileZ, kind: doorKindForTier(tier > socket.owner.tier ? tier : 0), roomA: socket.owner, roomB: corridor });
+  plan.doors.push({ tileX: socket.tileX, tileZ: socket.tileZ, kind: doorKindForTier(tier > socket.owner.tier ? tier : 0),
+    cardLevel: cardLevelForTier(tier > socket.owner.tier ? tier : 0), roomA: socket.owner, roomB: corridor });
   // Sockets: one at the far end, and one on each side every three tiles.
   const endLane = plan.random() < 0.5 ? 0 : 1;
   plan.sockets.push({
@@ -518,7 +539,7 @@ function planRoom(plan, roomKey, tier, floorY, onlyOwnSocketIndex) {
     if (socket.owner.tier === tier) weight *= 1.6;
     // Rooms like to be near the lift; what is behind the keycard likes to be far from it.
     const distanceFromLift = Math.abs(socket.tileX - plan.centerX) + Math.abs(socket.tileZ - plan.centerZ);
-    if (tier === 2) weight *= 1 + distanceFromLift / 8;
+    if (tier >= 2) weight *= 1 + distanceFromLift / 8;
     else weight *= Math.exp(-distanceFromLift / plan.layout.spread);
     if (definition.prefers && socket.owner.key === definition.prefers) weight = 1000;
     weighted.push({ socket: socket, order: Math.pow(plan.random(), 1 / weight) });
@@ -538,9 +559,11 @@ function planRoom(plan, roomKey, tier, floorY, onlyOwnSocketIndex) {
     const corridorLength = plan.layout.corridorLength[0] + Math.floor(plan.random() * (plan.layout.corridorLength[1] - plan.layout.corridorLength[0] + 1));
     const corridor = tryPlanCorridorAtSocket(plan, socket, corridorLength, tier);
     if (!corridor) continue;
-    const corridorSockets = plan.sockets.slice(savedSockets).sort(function (first, second) {
-      return (second.isCorridorEnd ? 1 : 0) - (first.isCorridorEnd ? 1 : 0) + (plan.random() - 0.5);
-    });
+    // The corridor's far end is usually tried before its sides. (Each doorway's random number is drawn once,
+    // before sorting: see the note in tryPlanRoomAtSocket.)
+    const corridorSockets = plan.sockets.slice(savedSockets)
+      .map(function (corridorSocket) { return [(corridorSocket.isCorridorEnd ? 1 : 0) + plan.random() * 1.5, corridorSocket]; })
+      .sort(function (first, second) { return second[0] - first[0]; }).map(function (pair) { return pair[1]; });
     let placed = null;
     for (const corridorSocket of corridorSockets) {
       placed = tryPlanRoomAtSocket(plan, roomKey, corridorSocket, tier, onlyOwnSocketIndex);
@@ -664,9 +687,11 @@ function tryPlanDuct(plan, blocked, first, second, isVent) {
     first.isUsed = true; second.isUsed = true;
     return true;
   }
-  const lockedKind = doorKindForTier(higherTier);
-  plan.doors.push({ tileX: first.tileX, tileZ: first.tileZ, kind: first.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC, roomA: first.owner, roomB: duct });
-  plan.doors.push({ tileX: second.tileX, tileZ: second.tileZ, kind: second.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC, roomA: duct, roomB: second.owner });
+  const lockedKind = doorKindForTier(higherTier), lockedCardLevel = cardLevelForTier(higherTier);
+  plan.doors.push({ tileX: first.tileX, tileZ: first.tileZ, kind: first.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC,
+    cardLevel: first.owner.tier > lowerTier ? lockedCardLevel : 0, roomA: first.owner, roomB: duct });
+  plan.doors.push({ tileX: second.tileX, tileZ: second.tileZ, kind: second.owner.tier > lowerTier ? lockedKind : DOOR_KIND_AUTOMATIC,
+    cardLevel: second.owner.tier > lowerTier ? lockedCardLevel : 0, roomA: duct, roomB: second.owner });
   first.isUsed = true; second.isUsed = true;
   return true;
 }
@@ -719,14 +744,14 @@ function planSecondStair(plan) {
     for (let socketIndex = 0; socketIndex < savedSockets; socketIndex++) plan.sockets[socketIndex].isUsed = wasUsed[socketIndex];
     return false;
   };
-  const stair = planRoom(plan, 'stairwell', 2, plan.deepFloorY, 1); // entered at the foot
+  const stair = planRoom(plan, 'stairwell', plan.finalTier, plan.deepFloorY, 1); // entered at the foot
   if (!stair) return undo();
   const top = plan.sockets.find(function (socket) { return socket.owner === stair && !socket.isUsed; });
   if (!top) return undo();
   // Join the top to the nearest free doorway on the upper level that is not part of the keycard area.
   const blocked = createDuctBlockGrid(plan);
   const candidates = plan.sockets.filter(function (socket) {
-    return !socket.isUsed && socket.owner !== stair && socket.owner.tier < 2 && socket.floorY === top.floorY && socket.owner.key !== 'calibrationStore';
+    return !socket.isUsed && socket.owner !== stair && socket.owner.tier < plan.finalTier && socket.floorY === top.floorY && socket.owner.key !== 'calibrationStore';
   }).sort(function (a, b) {
     return Math.abs(a.tileX - top.tileX) + Math.abs(a.tileZ - top.tileZ) - Math.abs(b.tileX - top.tileX) - Math.abs(b.tileZ - top.tileZ);
   });
@@ -742,7 +767,10 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   plan.layout = GENERATED_LAYOUT_PRESETS[layoutKey] || GENERATED_LAYOUT_PRESETS.mixed;
   const hasLowerLevel = (GENERATED_LEVEL_PRESETS[levelsKey] || GENERATED_LEVEL_PRESETS.two).hasLowerLevel;
   chooseStairShape(seed);
-  plan.deepFloorY = hasLowerLevel ? -stairDrop : 0; // the level everything behind the keycard is built on
+  plan.deepFloorY = hasLowerLevel ? -stairDrop : 0; // the level everything behind the last keycard is built on
+  plan.cardCount = clampNumber(Math.round(size.keycards || 1), 1, 3);
+  plan.finalTier = 1 + plan.cardCount; // the tier Shaft 9 is in
+  plan.cardHosts = [];                 // by tier: the room in that tier where the next keycard is left
   plan.random = createSeededRandomGenerator((seed * 7919 + attempt * 104729) >>> 0);
   const random = plan.random;
   const shuffle = function (list) { return list.map(function (item) { return [random(), item]; }).sort(function (a, b) { return a[0] - b[0]; }).map(function (pair) { return pair[1]; }); };
@@ -776,11 +804,13 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   // Which rooms, in which tier. Every station has the same thirteen; the extra rooms vary.
   const fillerKeys = Object.keys(ROOM_CATALOGUE).filter(function (key) { return ROOM_CATALOGUE[key].isFiller; });
   const timesFillerUsed = {};
-  const pickFillers = function (tier, count) {
+  const pickFillers = function (tier, count, mustHaveItemSpot) {
     // No extra room appears more than twice in one station.
     const picked = [];
-    const allowed = fillerKeys.filter(function (key) { return ROOM_CATALOGUE[key].tiers.indexOf(tier) >= 0; });
-    for (let guard = 0; picked.length < count && guard < 60; guard++) {
+    // In the catalogue, tier 2 means "behind a keycard", whichever card that is.
+    const catalogueTier = Math.min(tier, 2);
+    const allowed = fillerKeys.filter(function (key) { return ROOM_CATALOGUE[key].tiers.indexOf(catalogueTier) >= 0 && (!mustHaveItemSpot || ROOM_CATALOGUE[key].itemSpot); });
+    for (let guard = 0; allowed.length > 0 && picked.length < count && guard < 60; guard++) {
       const key = allowed[Math.floor(random() * allowed.length)];
       if ((timesFillerUsed[key] || 0) >= 2) continue;
       timesFillerUsed[key] = (timesFillerUsed[key] || 0) + 1;
@@ -788,20 +818,40 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
     }
     return picked;
   };
+  // The rooms that will hold keycard 2 and 3 are chosen first, while every kind of room is still available:
+  // they need somewhere to leave a card, and not every room has that.
+  const cardHostKeys = [];
+  for (let tier = 2; tier < plan.finalTier; tier++) {
+    cardHostKeys[tier] = pickFillers(tier, 1, true)[0];
+    if (!cardHostKeys[tier]) return null;
+  }
   const tiers = [
     ['pumpHall', 'generatorRoom'].concat(shuffle(['controlRoom', 'securityOffice', 'lockerRoom', 'messRoom', 'storeCloset'].concat(pickFillers(0, size.fillers[0])))),
-    ['archive', 'calibrationStore', 'laboratory', 'coldRoom'].concat(shuffle(pickFillers(1, size.fillers[1]))),
-    shuffle(pickFillers(2, size.fillers[2])).concat(['shaftChamber'])
+    ['archive', 'calibrationStore', 'laboratory', 'coldRoom'].concat(shuffle(pickFillers(1, size.fillers[1])))
   ];
+  // One ring of rooms per keycard. Every ring but the last starts with a room that has somewhere to leave the
+  // next card; the last ring ends with Shaft 9. The extra rooms are shared out, the last ring getting the odd ones.
+  const fillersPerRing = Math.floor(size.fillers[2] / plan.cardCount);
+  for (let tier = 2; tier <= plan.finalTier; tier++) {
+    if (tier < plan.finalTier) tiers.push([cardHostKeys[tier]].concat(shuffle(pickFillers(tier, fillersPerRing))));
+    else tiers.push(shuffle(pickFillers(tier, size.fillers[2] - fillersPerRing * (plan.cardCount - 1))).concat(['shaftChamber']));
+  }
   const requiredKeys = ['pumpHall', 'generatorRoom', 'controlRoom', 'archive', 'calibrationStore', 'laboratory', 'shaftChamber'];
-  for (let tier = 0; tier < 3; tier++) {
-    // With two levels, the keycard area starts with the stairs down (entered at the top, from the upper level).
-    if (tier === 2 && hasLowerLevel && !planRoom(plan, 'stairwell', 2, 0, 0)) return null;
-    for (const roomKey of tiers[tier]) {
-      const room = planRoom(plan, roomKey, tier, tier === 2 ? plan.deepFloorY : 0);
+  for (let tier = 0; tier <= plan.finalTier; tier++) {
+    // With two levels, the last ring starts with the stairs down (entered at the top, from the upper level).
+    if (tier === plan.finalTier && hasLowerLevel && !planRoom(plan, 'stairwell', tier, 0, 0)) return null;
+    for (let roomIndex = 0; roomIndex < tiers[tier].length; roomIndex++) {
+      const roomKey = tiers[tier][roomIndex];
+      const room = planRoom(plan, roomKey, tier, tier === plan.finalTier ? plan.deepFloorY : 0);
       if (!room && requiredKeys.indexOf(roomKey) >= 0) return null;
+      // The first room of a middle ring is the one that holds the next card: without it the station cannot be finished.
+      if (tier >= 2 && tier < plan.finalTier && roomIndex === 0) {
+        if (!room) return null;
+        plan.cardHosts[tier] = room;
+      }
     }
   }
+
   plan.stairCount = hasLowerLevel ? 1 : 0;
   // Medium and large stations try several times to fit a second stair; a failed try leaves nothing behind.
   for (let stairAttempt = 0; stairAttempt < 8 && hasLowerLevel && sizeKey !== 'small' && plan.stairCount < 2; stairAttempt++) {
@@ -811,6 +861,12 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   plan.ventCount = planLoops(plan, size.vents || 0, true, false);
   if (plan.ventCount < (size.vents || 0)) plan.ventCount += planLoops(plan, size.vents - plan.ventCount, true, true);
   plan.loopCount = planLoops(plan, size.loops, false);
+  // The extra jobs, drawn by the seed like everything else. They are drawn last, so adding a job to the
+  // list above does not change the rooms and corridors an existing seed gives.
+  const jobRange = size.extraJobs || [0, 0];
+  const jobCount = Math.min(EXTRA_JOBS.length, jobRange[0] + Math.floor(random() * (jobRange[1] - jobRange[0] + 1)));
+  const jobs = EXTRA_JOBS.map(function (job) { return [random(), job]; }).sort(function (a, b) { return a[0] - b[0]; }).slice(0, jobCount).map(function (pair) { return pair[1]; });
+  plan.mission = { needsFuel: jobs.indexOf('fuel') >= 0, coreCount: jobs.indexOf('cores') >= 0 ? 2 + Math.floor(random() * 3) : 0, needsBreaker: jobs.indexOf('breaker') >= 0 };
   return plan;
 }
 
@@ -873,6 +929,92 @@ function addCorridorWallSign(corridor, wall, firstTile, tilesUsed, text, options
   options.alongOffset = center - (tile + 0.5);
   if (corridor.runsAlongX) addWallSign(text, tile, wall === WALL_NORTH ? corridor.startZ : corridor.endZ - 1, wall, options);
   else addWallSign(text, wall === WALL_WEST ? corridor.startX : corridor.endX - 1, tile, wall, options);
+}
+
+// A place in a room to stand something on: floor that can be walked on, with walkable floor on all eight sides
+// (so whatever is put there blocks no path) and no door within two tiles. Returns [x, z] or null.
+function findDropSpot(room, random, takenSpots) {
+  const candidates = [];
+  for (let tileZ = room.startZ; tileZ < room.endZ; tileZ++) {
+    for (let tileX = room.startX; tileX < room.endX; tileX++) {
+      if (tileZone[tileIndexAt(tileX, tileZ)] !== room.zone) continue;
+      let isClear = true;
+      for (let offsetZ = -2; offsetZ <= 2 && isClear; offsetZ++) {
+        for (let offsetX = -2; offsetX <= 2 && isClear; offsetX++) {
+          const nearX = tileX + offsetX, nearZ = tileZ + offsetZ;
+          const isRing = Math.abs(offsetX) <= 1 && Math.abs(offsetZ) <= 1;
+          if (isRing && (!isWalkableAt(nearX, nearZ) || tileFloorHeight[tileIndexAt(nearX, nearZ)] !== tileFloorHeight[tileIndexAt(tileX, tileZ)])) isClear = false;
+          if (isInsideGrid(nearX, nearZ) && (tileFlags[tileIndexAt(nearX, nearZ)] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT))) isClear = false;
+        }
+      }
+      for (const taken of takenSpots) if (Math.abs(taken[0] - tileX - 0.5) < 3 && Math.abs(taken[1] - tileZ - 0.5) < 3) isClear = false;
+      // Nothing may already stand or lie on the tile itself, not even something low enough to walk over
+      // (a pallet, a heap of planks): the thing put here would be standing in it. What hangs overhead is fine.
+      const propsOnTile = tilePropLists[tileIndexAt(tileX, tileZ)];
+      if (isClear && propsOnTile) {
+        for (const prop of propsOnTile) {
+          if (!prop.isRemoved && prop.minimumY < tileFloorHeight[tileIndexAt(tileX, tileZ)] + 2) { isClear = false; break; }
+        }
+      }
+      if (isClear) candidates.push([tileX + 0.5, tileZ + 0.5]);
+    }
+  }
+  return candidates.length > 0 ? candidates[Math.floor(random() * candidates.length)] : null;
+}
+
+// Puts out whatever the station's extra jobs need. A job that finds no room for its things is dropped,
+// so the station is never left asking for something that is not there.
+function placeMissionObjects(plan, random) {
+  const mission = level.mission;
+  mission.needsFuel = false; mission.coreCount = 0; mission.needsBreaker = false;
+  const takenSpots = [];
+  const roomsOfTiers = function (lowestTier, highestTier) {
+    const rooms = plan.rooms.filter(function (room) {
+      return !room.isCorridor && room.tier >= lowestTier && room.tier <= highestTier &&
+        ['liftLobby', 'generatorRoom', 'calibrationStore', 'shaftChamber', 'stairwell'].indexOf(room.key) < 0;
+    });
+    return rooms.map(function (room) { return [random(), room]; }).sort(function (a, b) { return a[0] - b[0]; }).map(function (pair) { return pair[1]; });
+  };
+  const placeIn = function (rooms, place) {
+    for (const room of rooms) {
+      const spot = findDropSpot(room, random, takenSpots);
+      if (!spot) continue;
+      takenSpots.push(spot);
+      clearPlacement();
+      placement.offsetY = room.floorY;
+      place(spot[0], spot[1], room);
+      clearPlacement();
+      return room;
+    }
+    return null;
+  };
+  if (plan.mission.needsFuel) {
+    // Somewhere you can get to before the power is on.
+    mission.needsFuel = placeIn(roomsOfTiers(0, 0), function (x, z) { addFuelCan(x, z); }) !== null;
+  }
+  if (plan.mission.coreCount > 0) {
+    // Scattered through everything short of the last ring, one to a room.
+    const rooms = roomsOfTiers(0, plan.finalTier - 1);
+    for (let core = 0; core < Math.min(plan.mission.coreCount, MAXIMUM_CORE_SAMPLES); core++) {
+      const room = placeIn(rooms, function (x, z) { addCoreSample(OBJECT_CORE_FIRST + mission.coreCount, x, z, random() * 3); });
+      if (!room) break;
+      rooms.splice(rooms.indexOf(room), 1);
+      mission.coreCount++;
+    }
+    if (mission.coreCount < 2) {
+      // One sample is not a job. Take it back out.
+      for (let index = interactables.length - 1; index >= 0; index--) {
+        if (interactables[index].objectId >= OBJECT_CORE_FIRST) { for (const prop of interactables[index].props) prop.isRemoved = true; interactables.splice(index, 1); }
+      }
+      mission.coreCount = 0;
+    }
+  }
+  if (plan.mission.needsBreaker) {
+    // Behind a powered door, so it cannot be dealt with before the Hollow is awake.
+    mission.needsBreaker = placeIn(roomsOfTiers(1, 1), function (x, z) { addWinchBreaker(x, z); }) !== null;
+  }
+  // The crates and the cabinet stand on the floor: work out again where things can walk.
+  computeNavigationGrid();
 }
 
 // Direction signs, like the ones in Kessel-9: which way to the lift, and which way to where you are probably going.
@@ -1043,6 +1185,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   relocatedObjectives.keycard = keycardHost !== null;
   // The security office note says where the card is kept, so it has to name the right room.
   level.keycardRoomText = keycardHost ? 'the ' + keycardHost.name.toLowerCase() : 'the laboratory';
+  level.keycardCount = plan.cardCount;
 
   const placeRoom = function (room) {
     placement.turns = room.turns; placement.offsetX = room.offsetX; placement.offsetZ = room.offsetZ;
@@ -1074,7 +1217,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
 
   // Hang the doors.
   clearPlacement();
-  for (const door of plan.doors) addDoor(door.tileX, door.tileZ, door.kind);
+  for (const door of plan.doors) addDoor(door.tileX, door.tileZ, door.kind, door.cardLevel);
 
   // Furnish.
   for (const room of plan.rooms) {
@@ -1089,7 +1232,9 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
     const definition = ROOM_CATALOGUE[room.key];
     definition.furnish(random, room.name);
     if (room === spoolHost) addSurveySpool(OBJECT_SPOOL_1, definition.itemSpot[0], definition.itemSpot[1], definition.itemSpot[2], 'SPOOL');
-    if (room === keycardHost) addKeycard(definition.itemSpot[0], definition.itemSpot[1] + 0.005, definition.itemSpot[2]);
+    if (room === keycardHost) addKeycard(definition.itemSpot[0], definition.itemSpot[1] + 0.005, definition.itemSpot[2], 1);
+    // Card 2 is left in the ring that card 1 opens (tier 2), card 3 in the ring that card 2 opens.
+    if (room.tier >= 2 && plan.cardHosts[room.tier] === room) addKeycard(definition.itemSpot[0], definition.itemSpot[1] + 0.005, definition.itemSpot[2], room.tier);
     // Apparitions travel with their rooms.
     if (room.key === 'coldRoom') pushPhantom(10.7, 24.2, Math.PI + 0.7, room.zone, false);
     if (room.key === 'pumpHall') pushPhantom(62.5, 55.5, -1.9, room.zone, true);
@@ -1142,6 +1287,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   placement.isGenerating = false;
   computeNavigationGrid();
   computeLevelBounds();
+  placeMissionObjects(plan, random);
   addCorridorDirectionSigns(plan);
 
   // Places for the Hollow to wander between: the middle of every room and corridor.
@@ -1193,10 +1339,11 @@ function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
 function auditLevelProgression() {
   const problems = [];
   const field = new Int16Array(TILE_COUNT);
-  const reach = function (lockedKinds) {
+  // `isShut` says which doors are locked in the situation being checked.
+  const reach = function (isShut) {
     const closed = [];
     for (const door of doors) {
-      if (lockedKinds.indexOf(door.kind) < 0) continue;
+      if (!isShut(door)) continue;
       const index = tileIndexAt(door.tileX, door.tileZ);
       if (tileIsWalkable[index]) { tileIsWalkable[index] = 0; closed.push(index); }
     }
@@ -1209,23 +1356,50 @@ function auditLevelProgression() {
     const index = findNearestWalkableTileIndex(interactable.x, interactable.z);
     return index >= 0 && field[index] < NAVIGATION_UNREACHABLE;
   };
-  for (const objectId of [OBJECT_LIFT_TERMINAL, OBJECT_GENERATOR, OBJECT_SPOOL_1, OBJECT_SPOOL_2, OBJECT_SPOOL_3, OBJECT_KEYCARD]) {
+  const cardIds = KEYCARD_OBJECT_IDS.slice(1, level.keycardCount + 1);
+  const mustExistOnce = [OBJECT_LIFT_TERMINAL, OBJECT_GENERATOR, OBJECT_SPOOL_1, OBJECT_SPOOL_2, OBJECT_SPOOL_3].concat(cardIds);
+  for (const objectId of mustExistOnce) {
     if (interactables.filter(function (interactable) { return interactable.objectId === objectId; }).length !== 1) problems.push('object ' + objectId + ' does not exist exactly once');
   }
-  reach([DOOR_KIND_POWERED, DOOR_KIND_KEYCARD]);
+  // No power: every powered and keycard door is shut.
+  reach(function (door) { return door.kind === DOOR_KIND_POWERED || door.kind === DOOR_KIND_KEYCARD; });
   if (!canReach(OBJECT_GENERATOR)) problems.push('the generator cannot be reached without power');
   if (!canReach(OBJECT_SPOOL_1)) problems.push('the first spool cannot be reached without power');
   if (!canReach(OBJECT_LIFT_TERMINAL)) problems.push('the lift terminal cannot be reached');
   if (canReach(OBJECT_SPOOL_3)) problems.push('the shaft can be reached without power or keycard');
-  reach([DOOR_KIND_KEYCARD]);
-  if (!canReach(OBJECT_KEYCARD)) problems.push('the keycard cannot be reached with power alone');
-  if (!canReach(OBJECT_SPOOL_2)) problems.push('the second spool cannot be reached with power alone');
-  if (canReach(OBJECT_SPOOL_3)) problems.push('the shaft can be reached without the keycard');
-  reach([]);
-  if (!canReach(OBJECT_SPOOL_3)) problems.push('the third spool cannot be reached at all');
+  // Power on, holding cards 1 to `held`: the next card must be in reach, later ones and the shaft must not be.
+  for (let held = 0; held <= level.keycardCount; held++) {
+    reach(function (door) { return door.kind === DOOR_KIND_KEYCARD && door.cardLevel > held; });
+    if (held === 0 && !canReach(OBJECT_SPOOL_2)) problems.push('the second spool cannot be reached with power alone');
+    if (held < level.keycardCount) {
+      if (!canReach(cardIds[held])) problems.push('keycard ' + (held + 1) + ' cannot be reached ' + (held === 0 ? 'with power alone' : 'with keycard ' + held));
+      if (canReach(OBJECT_SPOOL_3)) problems.push('the shaft can be reached with ' + (held === 0 ? 'no keycard' : 'only keycard ' + held));
+      for (let later = held + 1; later < level.keycardCount; later++) {
+        if (canReach(cardIds[later])) problems.push('keycard ' + (later + 1) + ' can be reached before keycard ' + later + ' is held');
+      }
+    } else if (!canReach(OBJECT_SPOOL_3)) problems.push('the third spool cannot be reached at all');
+  }
+  // The extra jobs: each thing they need must exist, and be where its job says it is.
+  const mission = level.mission;
+  if (mission.needsFuel) {
+    reach(function (door) { return door.kind === DOOR_KIND_POWERED || door.kind === DOOR_KIND_KEYCARD; });
+    if (!canReach(OBJECT_FUEL_CAN)) problems.push('the fuel can cannot be reached without power');
+    mustExistOnce.push(OBJECT_FUEL_CAN);
+  }
+  if (mission.needsBreaker) {
+    reach(function (door) { return door.kind === DOOR_KIND_KEYCARD; });
+    if (!canReach(OBJECT_WINCH_BREAKER)) problems.push('the winch breaker cannot be reached with power alone');
+    mustExistOnce.push(OBJECT_WINCH_BREAKER);
+  }
+  reach(function () { return false; });
+  for (let core = 0; core < mission.coreCount; core++) {
+    if (!canReach(OBJECT_CORE_FIRST + core)) problems.push('core sample ' + (core + 1) + ' cannot be reached at all');
+    mustExistOnce.push(OBJECT_CORE_FIRST + core);
+  }
+  if (mission.coreCount === 1) problems.push('a station asks for exactly one core sample');
   if (!level.storeZone) problems.push('there is no calibration store');
   // Everything you must use has to be within arm's reach of somewhere you can stand.
-  for (const objectId of [OBJECT_LIFT_TERMINAL, OBJECT_GENERATOR, OBJECT_SPOOL_1, OBJECT_SPOOL_2, OBJECT_SPOOL_3, OBJECT_KEYCARD]) {
+  for (const objectId of mustExistOnce) {
     const interactable = findInteractableByObjectId(objectId);
     if (!interactable) continue;
     const index = findNearestWalkableTileIndex(interactable.x, interactable.z);

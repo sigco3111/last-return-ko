@@ -64,6 +64,8 @@ const SURFACE_HOLLOW = 10;
 const SURFACE_STILL = 11;
 const SURFACE_HAZARD = 12;
 const SURFACE_METAL = 13;
+const SURFACE_DOOR_KEYCARD_2 = 14; // a door that needs keycard 2
+const SURFACE_DOOR_KEYCARD_3 = 15; // a door that needs keycard 3
 
 const WALL_NORTH = 0;
 const WALL_EAST = 1;
@@ -154,6 +156,9 @@ const level = {
   stairCount: 0,          // flights of stairs between the levels (0 in a one-level station)
   ventCount: 0,           // crawl-height vents (generated stations only)
   keycardRoomText: 'the laboratory', // filled into the security office note
+  // Extra jobs on top of "power, three spools, lift". Kessel-9 has none; a generated station may have some.
+  mission: { needsFuel: false, coreCount: 0, needsBreaker: false },
+  keycardCount: 1,        // how many keycards this station has. Card 1 opens "card 1" doors, card 2 the next ring in, and so on.
   loopCount: 0,
   storeZone: 0,           // the calibration store: the Hollow will not enter it
   stillZones: [],         // zones the Stills may walk in
@@ -749,7 +754,9 @@ const DOOR_KIND_LIFT = 3;
 const DOOR_TRAVEL_HEIGHT = 2.28;
 const DOOR_OPENING_HEIGHT = 2.3;
 
-function addDoor(tileX, tileZ, kind) {
+// `cardLevel` only matters for keycard doors: which card (1, 2 or 3) the door needs. Left out, it is card 1.
+function addDoor(tileX, tileZ, kind, cardLevel) {
+  const doorCardLevel = kind === DOOR_KIND_KEYCARD ? (cardLevel || 1) : 0;
   const placedTile = placeTile(tileX, tileZ);
   tileX = placedTile[0]; tileZ = placedTile[1];
   // The slab and frame below are given in final map coordinates, so placement is set aside while they are built.
@@ -771,7 +778,7 @@ function addDoor(tileX, tileZ, kind) {
   if (!tileZone[index]) tileZone[index] = passageRunsAlongX ? tileZone[tileIndexAt(tileX + 1, tileZ)] : tileZone[tileIndexAt(tileX, tileZ - 1)];
   let surfaceClass = SURFACE_DOOR_AUTOMATIC;
   if (kind === DOOR_KIND_POWERED) surfaceClass = SURFACE_DOOR_POWERED;
-  if (kind === DOOR_KIND_KEYCARD) surfaceClass = SURFACE_DOOR_KEYCARD;
+  if (kind === DOOR_KIND_KEYCARD) surfaceClass = doorCardLevel >= 3 ? SURFACE_DOOR_KEYCARD_3 : (doorCardLevel === 2 ? SURFACE_DOOR_KEYCARD_2 : SURFACE_DOOR_KEYCARD);
   if (kind === DOOR_KIND_LIFT) surfaceClass = SURFACE_DOOR_POWERED;
   const slab = addBoxProp(tileX + 0.5, 1.15, tileZ + 0.5,
     passageRunsAlongX ? 0.07 : 0.5, 1.15, passageRunsAlongX ? 0.5 : 0.07,
@@ -797,6 +804,7 @@ function addDoor(tileX, tileZ, kind) {
     tileX: tileX, tileZ: tileZ,
     centerX: tileX + 0.5, centerZ: tileZ + 0.5,
     kind: kind,
+    cardLevel: doorCardLevel, // 0 for anything but a keycard door
     slab: slab,
     baseY: baseY, // height of the floor the door stands on
     openFraction: 0,

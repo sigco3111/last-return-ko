@@ -539,7 +539,7 @@ function openWorkshop() {
   workshop.stored.isOpen = true;
   workshop.isLit = workshop.stored.isLit;
   game.mode = 'workshop';
-  game.flags.powerOn = true; game.flags.hasKeycard = true; // every door answers
+  game.flags.powerOn = true; setKeycardLevel(3); // every door answers
   hideDebugPanel();
   showOnlyScreen(null);
   setHudVisible(false);

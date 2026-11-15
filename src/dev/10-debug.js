@@ -132,10 +132,12 @@ function debugRestorePower() {
 
 function debugGiveKeycard() {
   markDebugUsed();
-  game.flags.hasKeycard = true;
-  const keycard = findInteractableByObjectId(OBJECT_KEYCARD);
-  if (keycard && keycard.isAvailable) removeInteractableFromWorld(keycard);
-  showMessage('Debug: keycard given.', 3, 'info');
+  setKeycardLevel(3); // every card there could be
+  for (const objectId of KEYCARD_OBJECT_IDS) {
+    const keycard = objectId ? findInteractableByObjectId(objectId) : null;
+    if (keycard && keycard.isAvailable) removeInteractableFromWorld(keycard);
+  }
+  showMessage(level.keycardCount > 1 ? 'Debug: all ' + level.keycardCount + ' keycards given.' : 'Debug: keycard given.', 3, 'info');
 }
 
 function debugGiveAllSpools() {

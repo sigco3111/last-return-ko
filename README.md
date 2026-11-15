@@ -40,21 +40,22 @@ The title screen offers two places to go down into.
 
 **Kessel-9** is the annex as it was built by hand. It is the same every time, and it is the best first descent.
 
-**Uncharted annex** is built fresh for every descent, so knowing the last one does not help you. The lift lobby, the pump hall, the generator, the archive, the calibration store and the shaft are always there, but where they are, what lies between them and which doors need power or the keycard change each time. Fourteen further kinds of room (boiler house, workshop, crew quarters, infirmary, drying room, battery room, sump, old workings and more) fill it out.
+**Uncharted annex** is built fresh for every descent, so knowing the last one does not help you. The lift lobby, the pump hall, the generator, the archive, the calibration store and the shaft are always there, but where they are, what lies between them and which doors need power or a keycard, and what else you are asked to do down there, change each time. Fourteen further kinds of room (boiler house, workshop, crew quarters, infirmary, drying room, battery room, sump, old workings and more) fill it out.
 
 ![One generated station, drawn in full with debug mode](docs/screenshots/uncharted-map.jpg)
 
-- **Size** is small, medium or large: roughly 24, 32 or 41 rooms and corridors. Kessel-9 has 19.
+- **Size** is small, medium, large or massive: roughly 25, 33, 45 or 60 rooms and corridors. Kessel-9 has 19. Size also sets the number of keycards (one, one, two, three) and how many extra jobs dispatch gives you (see below).
 - **Layout** is tight (rooms open straight into rooms), mixed, or sprawling (long corridors).
-- **Levels** is one or two. With two, everything behind the keycard, Shaft 9 included, is further down, at the foot of a flight of stairs; how long and how steep the flight is depends on the seed. Medium and large stations usually get a second, back stair, so the lower level is not a dead end.
-- **Seed** decides the station. Leave it empty for a different one every descent. Type a number or a word to get the same station again, or to give a friend the one you played. The seed of the station you are in is shown on the pause and ending screens.
+- **Levels** is one or two. With two, everything behind the last keycard, Shaft 9 included, is further down, at the foot of a flight of stairs; how long and how steep the flight is depends on the seed. Medium and large stations usually get a second, back stair, so the lower level is not a dead end.
+- **Seed** decides the station, its locks and its jobs. Leave it empty for a different one every descent. Type a number or a word to get the same station again, or to give a friend the one you played. The seed of the station you are in is shown on the pause and ending screens.
 
 What stays true in every station, so the radio and the notes never lie:
 
 - Generator 2 is always in a room off Pump Hall B, and can be reached without power.
-- The keycard is always behind a powered door, and Shaft 9 is always behind a keycard door. In a two-level station that door is at the head of the stairs.
+- The first keycard is always behind a powered door, and Shaft 9 is always behind the last keycard's door. In a two-level station that door is at the head of the stairs.
+- With more than one keycard the station is a set of rings: keycard 1 opens the first ring of doors and is how you reach keycard 2, and so on inwards. A higher card opens the lower doors too, and a locked door tells you which card it wants. Dispatch tells you when the card you picked up is not the last one, and the map shows how many you hold.
 - Doors carry the name of the room behind them above the frame, and long corridors have arrows to the lift and to the pump hall or the shaft.
-- The first spool and the keycard are sometimes left in a different room. The note in the security office says where the card is kept.
+- The first spool and the first keycard are sometimes left in a different room. The note in the security office says where that card is kept.
 - Service ducts, one person wide, link parts of the station that are far apart on foot. They are a way out, and a way to be cut off.
 - Vents do the same at crawl height: a low opening in a wall with the grille lying on the floor in front of it. You only fit crouched (hold `C` and walk in), you are slow in there, and sheet metal is loud. The Hollow uses them too, on its knees and hands, and you can hear it doing so from a long way off. A vent never leads past a lock: both ends are always behind the same doors.
 
@@ -125,6 +126,14 @@ The screen is quiet by default: there is the dark, the points and the aiming rin
 - A scan shows where each one stood at that moment. Their old outlines linger for a while, so a room can look more crowded, or less, than it is.
 
 **The lift** takes forty seconds to arrive once the spools are uploaded, and the Hollow can hear it from anywhere in the station.
+
+**Extra jobs** only come up in the Uncharted annex. The seed decides which of the three a station has: a small station has none or one, a medium one, a large one or two, a massive two or all three.
+
+- **No fuel.** Generator 2 will not start: the day tank is empty. A fuel can stands somewhere you can reach without power. You find out at the generator, so the walk for the can is a walk back through rooms you thought you were done with.
+- **Core samples.** Dispatch wants the grey sample tubes Crew 2 pulled, two to four of them, one to a room, anywhere short of the last keycard's doors. The lift terminal refuses the upload until you carry them all.
+- **The winch breaker.** The upload goes through, but the lift does not come: its breaker has tripped. The panel is somewhere behind a powered door, dispatch marks it on your map, and it needs mains power to hold. Close it and the forty seconds start there, a long way from the lobby. If you find the panel earlier and close it then, the upload calls the lift as usual.
+
+What you are carrying for these jobs is listed on the map with the spools and the keycards.
 
 Three threat levels are offered on the title screen. "Survey only" removes everything that hunts you.
 
@@ -247,6 +256,7 @@ A few details worth knowing if you change things:
 - Each room is described once, at its place in Kessel-9. A generated station moves and turns the same descriptions, so a room is the same room wherever it ends up.
 - The two levels of a generated station lie side by side on the plan, not one above the other, joined by stairs that really go down. That keeps the map a single flat drawing and the path finding simple. Every tile has its own floor height; anything that walks can take a step of up to 45 cm, and stands on whatever floor is under it.
 - A generated station is planned as rectangles first: rooms are attached to free doorways of rooms already placed, either wall to wall or at the end of a new corridor. Rooms that need power are only ever attached to what can be reached without it or to each other, and likewise for the keycard, so the locks always come in an order that can be finished. Only then is anything built.
+- Everything in a generated station follows from its seed through one numbered sequence of random draws. A shuffle is done by giving each item a drawn number and sorting on that number. The shorter way, sorting with a coin toss as the comparison, makes the result depend on how the browser happens to run the sort, and then one seed gives different stations on different days.
 - Walls, floors and props are drawn into the depth buffer only, never in colour. Creatures are not drawn at all.
 - Creatures are built from capsules (rods with rounded ends): 25 for the Hollow, down to three long fingers on each hand, and 24 for a dummy. The Hollow's pose follows its mood: hunched when wandering, reaching when it hunts, drawn up to its full height when it stops to listen.
 - Sound is synthesised live, mostly from noise shaped by filters. The Hollow's growl is a recorded-in-code rattle of clicks pushed through three resonances, the way a throat and chest shape a voice.
@@ -277,7 +287,7 @@ npm test
 
 plays the whole objective chain in a headless browser and checks each step: leaving the lift, the generator, the Hollow's path finding, the beam holding it, the director's fairness rules (never steered closer than its floor, never called off mid-chase, a real breather afterwards, noise still brings it), both ways to die, checkpoints, powered and keycard doors, the Stills, the lift call, the ending, that the game itself has no debug mode in it, every debug mode switch in the dev build, and the turn-your-phone-sideways screen.
 
-It then builds 120 generated stations (40 of each size, across the three layouts, half with one level and half with two) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, the keycard with power only, and the shaft only with the card. It checks that a seed always gives the same station, walks down a flight of stairs on foot, tries a vent standing (no) and crouched (yes), sends the Hollow through it, and plays one two-level station from lift to lift, which includes the Hollow climbing the stairs from the shaft. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
+It then builds 120 generated stations (40 of each size, across the three layouts, half with one level and half with two) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, each keycard only with the one before it, the shaft only with the last, and the fuel can, the core samples and the winch breaker where their rules say they must be. It checks that a seed always gives the same station (also after the browser has warmed up, which is what once broke it), plays the rules of each extra job, builds eight massive stations with three keycards each, walks down a flight of stairs on foot, tries a vent standing (no) and crouched (yes), sends the Hollow through it, and plays one two-level station from lift to lift, whatever extra job that station has, which includes the Hollow climbing the stairs from the shaft. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
 
 It ends with the workshop: on a copy of `src/` in a temporary folder it builds a room by clicking and dragging, saves it, finds it again in generated stations, changes a creature's proportions and writes them to the file, and checks that the page survives a source file that does not parse.
 
@@ -312,3 +322,5 @@ The rules are covered by the scripted test above. The test teleports between obj
 The director's rules are checked, and its rhythm was measured with scripted players who cannot hear or scan, which is not the same as playing against it. Whether a breather feels like relief or like the game going slack is for a real playthrough to decide.
 
 Generated stations are proven finishable, not proven good. Nobody has yet walked one from end to end with the Hollow hunting. They have more doors than Kessel-9, and every door you open makes noise, so they may play harder. The stairs and the vents are checked for being passable, by you and by what hunts you, but how a chase through them feels is untested. Vents are only in generated stations. Kessel-9 itself is still one level.
+
+The extra jobs and the stations with two or three keycards are checked the same way: they can always be finished, and the rules do what this page says. Whether a second walk for a fuel can is dread or a chore has not been played. Dispatch's five new lines for them (`lowerKeycardTaken`, `generatorNoFuel`, `coresWanted`, `winchBreakerOpen`, `breakerClosed`) have no recordings yet and show as text.
