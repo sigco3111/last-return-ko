@@ -54,7 +54,7 @@ const player = {
 const settings = {
   sensitivity: 1.0,
   volume: 0.8,
-  quality: 'medium',
+  quality: 'high',
   palette: 0,
   difficulty: 'standard',   // a key of DIFFICULTY_PRESETS, or 'custom'
   customDifficulty: createCustomDifficultyValues('standard'), // what 'custom' means: one value for each of CUSTOM_DIFFICULTY_OPTIONS
