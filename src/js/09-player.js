@@ -511,6 +511,8 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
   const quality = QUALITY_PRESETS[settings.quality];
   computeScannerBasis(player.yaw, player.pitch);
   const basis = scannerBasis;
+  // Roughly where the scanner is held. While the scanner is on screen the renderer moves the start of the
+  // laser lines onto its lens (moveBeamLineOriginsToViewmodelLens); this is what is left when it is not.
   resetBeamLines(
     eyeX + basis.rightX * 0.2 + basis.upX * -0.16 + basis.forwardX * 0.55,
     eyeY + basis.rightY * 0.2 + basis.upY * -0.16 + basis.forwardY * 0.55,

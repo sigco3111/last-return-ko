@@ -851,6 +851,8 @@ function startApplication() {
     game: game, player: player, hollow: hollow, renderer: renderer, renderCamera: renderCamera, audio: audio,
     playHollowRoar: playHollowRoar, playHollowSnarl: playHollowSnarl, playHollowLostHiss: playHollowLostHiss, playHollowSniff: playHollowSniff, playHollowCuriousTrill: playHollowCuriousTrill,
     playStinger: playStinger, playSweepSound: playSweepSound, playInterfaceBlip: playInterfaceBlip, playRadioBlip: playRadioBlip, playDeniedSound: playDeniedSound, stills: stills, doors: doors, pointCloud: pointCloud, settings: settings,
+    beamLines: beamLines,
+    viewmodelLensCenter: [VIEWMODEL_LENS_CENTER_X * VIEWMODEL_MODEL_SCALE, VIEWMODEL_LENS_CENTER_Y * VIEWMODEL_MODEL_SCALE, VIEWMODEL_LENS_CENTER_Z * VIEWMODEL_MODEL_SCALE],
     auditLayout: auditFacilityLayout,
     auditProgression: auditLevelProgression,
     level: level, interactables: interactables, zoneNames: ZONE_NAMES,

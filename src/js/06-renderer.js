@@ -6,6 +6,15 @@
 const POINT_STRIDE_BYTES = 20; // x, y, z, birthTime as floats, then 4 data bytes
 const POINT_STRIDE_FLOATS = 5;
 const MAXIMUM_BEAM_LINES = 72;
+// The scanner in the player's hand is drawn with its own, narrower field of view, so it looks the same
+// whatever the field of view of the station behind it.
+const VIEWMODEL_FIELD_OF_VIEW_DEGREES = 55;
+const VIEWMODEL_MODEL_SCALE = 0.85;
+// The glowing lens at the front of the scanner, in the model's own measurements (before VIEWMODEL_MODEL_SCALE).
+const VIEWMODEL_LENS_CENTER_X = 0, VIEWMODEL_LENS_CENTER_Y = 0.005, VIEWMODEL_LENS_CENTER_Z = -0.187;
+// How far in front of the eye the laser lines start. Only where on the screen they start is fixed (the lens);
+// this distance decides how soon a wall right in front of the player hides their first stretch.
+const BEAM_ORIGIN_DISTANCE = 0.55;
 const DEAD_POINT_BIRTH_TIME = -1e9;
 
 const renderer = {
@@ -30,7 +39,8 @@ const renderer = {
   viewProjectionMatrix: new Float32Array(16),
   modelMatrix: new Float32Array(16),
   scratchMatrix: new Float32Array(16),
-  viewmodelProjectionMatrix: new Float32Array(16)
+  viewmodelProjectionMatrix: new Float32Array(16),
+  viewmodelMatrix: new Float32Array(16)
 };
 
 const pointCloud = {
@@ -386,7 +396,7 @@ function buildViewmodelGeometry() {
       const order = [face[0], face[1], face[2], face[0], face[2], face[3]];
       for (const cornerIndex of order) {
         const corner = corners[cornerIndex];
-        vertices.push(corner[0] * 0.85, corner[1] * 0.85, corner[2] * 0.85, red * shade, green * shade, blue * shade);
+        vertices.push(corner[0] * VIEWMODEL_MODEL_SCALE, corner[1] * VIEWMODEL_MODEL_SCALE, corner[2] * VIEWMODEL_MODEL_SCALE, red * shade, green * shade, blue * shade);
       }
     }
   };
@@ -404,7 +414,7 @@ function buildViewmodelGeometry() {
   }
   ranges.body = [start, beginRange() - start];
   start = beginRange();
-  pushColoredBox(0, 0.005, -0.187, 0.03, 0.026, 0.003, 1, 1, 1);
+  pushColoredBox(VIEWMODEL_LENS_CENTER_X, VIEWMODEL_LENS_CENTER_Y, VIEWMODEL_LENS_CENTER_Z, 0.03, 0.026, 0.003, 1, 1, 1);
   ranges.lens = [start, beginRange() - start];
   start = beginRange();
   pushColoredBox(0, 0.056, 0.085, 0.036, 0.001, 0.034, 1, 1, 1);
@@ -652,6 +662,42 @@ function writeViewmodelMatrix(out, x, y, z, yaw, pitch) {
   return out;
 }
 
+// Where the scanner in the player's hand sits in front of the eye this frame.
+function writeViewmodelPlacementMatrix(out, aspectRatio, frameState) {
+  const narrowScreenShift = aspectRatio < 1 ? (1 - aspectRatio) * 0.16 : 0;
+  return writeViewmodelMatrix(out,
+    0.27 - narrowScreenShift + frameState.viewmodelSwayX, -0.215 + frameState.viewmodelSwayY, -0.55 + frameState.viewmodelKick,
+    0.1, 0.06 + frameState.viewmodelSwayY * 0.6);
+}
+
+// Moves the near end of every laser line to the place in the station that is drawn exactly behind the lens of
+// the scanner in the player's hand. The scanner is drawn with its own field of view and sways with the player's
+// steps, so a fixed offset from the eye does not land on the lens: the lines then start in the air beside it.
+function moveBeamLineOriginsToViewmodelLens(camera, eyeX, eyeY, eyeZ) {
+  const placement = renderer.viewmodelMatrix;
+  const lensX = VIEWMODEL_LENS_CENTER_X * VIEWMODEL_MODEL_SCALE, lensY = VIEWMODEL_LENS_CENTER_Y * VIEWMODEL_MODEL_SCALE, lensZ = VIEWMODEL_LENS_CENTER_Z * VIEWMODEL_MODEL_SCALE;
+  // The lens as the viewmodel camera sees it: x to the right, y up, z toward the eye.
+  const lensViewX = placement[0] * lensX + placement[4] * lensY + placement[8] * lensZ + placement[12];
+  const lensViewY = placement[1] * lensX + placement[5] * lensY + placement[9] * lensZ + placement[13];
+  const lensViewZ = placement[2] * lensX + placement[6] * lensY + placement[10] * lensZ + placement[14];
+  // The same place on the screen, seen with the field of view the station is drawn with.
+  const fieldOfViewRatio = Math.tan(camera.fieldOfViewDegrees * DEGREES_TO_RADIANS / 2) / Math.tan(VIEWMODEL_FIELD_OF_VIEW_DEGREES * DEGREES_TO_RADIANS / 2);
+  const originViewX = lensViewX / -lensViewZ * fieldOfViewRatio * BEAM_ORIGIN_DISTANCE;
+  const originViewY = lensViewY / -lensViewZ * fieldOfViewRatio * BEAM_ORIGIN_DISTANCE;
+  const originViewZ = -BEAM_ORIGIN_DISTANCE;
+  // From in front of the eye to a place in the station: the view matrix holds right, up and backward in its rows.
+  const view = renderer.viewMatrix;
+  const originX = eyeX + view[0] * originViewX + view[1] * originViewY + view[2] * originViewZ;
+  const originY = eyeY + view[4] * originViewX + view[5] * originViewY + view[6] * originViewZ;
+  const originZ = eyeZ + view[8] * originViewX + view[9] * originViewY + view[10] * originViewZ;
+  beamLines.originX = originX; beamLines.originY = originY; beamLines.originZ = originZ;
+  const vertices = beamLines.vertices;
+  for (let lineIndex = 0; lineIndex < beamLines.count; lineIndex++) {
+    const offset = lineIndex * 8;
+    vertices[offset] = originX; vertices[offset + 1] = originY; vertices[offset + 2] = originZ;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Frame
 // ---------------------------------------------------------------------------
@@ -726,8 +772,14 @@ function renderFrame(camera, frameState) {
   writePerspectiveMatrix(renderer.projectionMatrix, fieldOfView, aspectRatio, 0.06, 160);
   // A hair of offset keeps the eye from ever sitting exactly on a tile edge while looking exactly
   // along an axis; some drivers mishandle depth offset for polygons with a vertex at zero depth.
-  writeViewMatrix(renderer.viewMatrix, camera.x + 0.00037, camera.y, camera.z + 0.00053, camera.yaw + 0.00011, camera.pitch);
+  const eyeX = camera.x + 0.00037, eyeY = camera.y, eyeZ = camera.z + 0.00053;
+  writeViewMatrix(renderer.viewMatrix, eyeX, eyeY, eyeZ, camera.yaw + 0.00011, camera.pitch);
   multiplyMatrices(renderer.viewProjectionMatrix, renderer.projectionMatrix, renderer.viewMatrix);
+  if (frameState.showViewmodel) {
+    writePerspectiveMatrix(renderer.viewmodelProjectionMatrix, VIEWMODEL_FIELD_OF_VIEW_DEGREES * DEGREES_TO_RADIANS, aspectRatio, 0.03, 4);
+    writeViewmodelPlacementMatrix(renderer.viewmodelMatrix, aspectRatio, frameState);
+    moveBeamLineOriginsToViewmodelLens(camera, eyeX, eyeY, eyeZ);
+  }
 
   flushPointUploads();
 
@@ -845,12 +897,7 @@ function renderFrame(camera, frameState) {
   // 4. The scanner in the player's hand.
   if (frameState.showViewmodel) {
     gl.clear(gl.DEPTH_BUFFER_BIT);
-    writePerspectiveMatrix(renderer.viewmodelProjectionMatrix, 55 * DEGREES_TO_RADIANS, aspectRatio, 0.03, 4);
-    const narrowScreenShift = aspectRatio < 1 ? (1 - aspectRatio) * 0.16 : 0;
-    writeViewmodelMatrix(renderer.modelMatrix,
-      0.27 - narrowScreenShift + frameState.viewmodelSwayX, -0.215 + frameState.viewmodelSwayY, -0.55 + frameState.viewmodelKick,
-      0.1, 0.06 + frameState.viewmodelSwayY * 0.6);
-    multiplyMatrices(renderer.scratchMatrix, renderer.viewmodelProjectionMatrix, renderer.modelMatrix);
+    multiplyMatrices(renderer.scratchMatrix, renderer.viewmodelProjectionMatrix, renderer.viewmodelMatrix);
     gl.useProgram(renderer.solidProgram);
     gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.scratchMatrix);
     gl.bindVertexArray(renderer.viewmodelVertexArray);
