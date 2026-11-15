@@ -43,6 +43,34 @@ const labSource = String(function () {
     d.hollow.graceTimer = 999; // it senses nothing: this is about the door, not about the player
     for (let elapsed = 0; elapsed < seconds; elapsed += 0.1) { d.hollow.state = 4; d.hollow.listenTimer = 5; d.hollow.figure.x = x; d.hollow.figure.z = z; d.simulate(0.1); }
   };
+  lab.takeCardsAway = function () { d.game.flags.keycardLevel = 0; d.game.flags.hasKeycard = false; };
+  // The player six metres beyond one side of a door, the Hollow three metres from the other, knowing where the player is.
+  lab.faceOffAcross = function (door) {
+    const sides = d.getDoorSides(door);
+    const awayX = Math.sign(sides[0].x - door.centerX), awayZ = Math.sign(sides[0].z - door.centerZ);
+    const playerSpot = d.findWalkableSpotNear(door.centerX + awayX * 6, door.centerZ + awayZ * 6);
+    const hollowSpot = d.findWalkableSpotNear(door.centerX - awayX * 3, door.centerZ - awayZ * 3);
+    d.teleport(playerSpot.x, playerSpot.z, 0); d.player.velocityX = 0; d.player.velocityZ = 0; d.simulate(0.2);
+    d.spawnHollow(hollowSpot.x, hollowSpot.z);
+    d.hollow.graceTimer = 0; d.hollow.knowsPlayerPositionAlways = true;
+  };
+  // Runs one meeting at a door until the Hollow has reached the player, taken to the crawlspace, or the time is up.
+  // Returns what happened: how long it pounded, whether it went up, whether it got to the player.
+  lab.watchAtDoor = function (door, mostSeconds) {
+    const seen = { poundingSeconds: 0, walkedToDoor: false, wentToCrawlspace: false, reachedPlayer: false, doorWasOpen: false, seconds: 0, mostBlows: 0, otherDoorsPounded: 0 };
+    for (let time = 0; time < mostSeconds; time += 0.1) {
+      d.simulate(0.1);
+      seen.seconds = Math.round((time + 0.1) * 10) / 10;
+      const bang = d.hollow.doorBang;
+      if (bang && bang.door !== door) { seen.otherDoorsPounded++; break; } // it has moved on to another door: this meeting is over
+      if (bang && !bang.isPounding) seen.walkedToDoor = true;
+      if (bang && bang.isPounding) { seen.poundingSeconds = Math.round((seen.poundingSeconds + 0.1) * 10) / 10; seen.mostBlows = Math.max(seen.mostBlows, bang.hits); }
+      if (door.openFraction > 0 && !door.isBroken) seen.doorWasOpen = true;
+      if (d.hollow.crawlspace) { seen.wentToCrawlspace = true; break; }
+      if (lab.hasReachedPlayer()) { seen.reachedPlayer = true; break; }
+    }
+    return seen;
+  };
   lab.far = function () { d.teleport(d.playerStart.x, d.playerStart.z, 0); d.simulate(0.1); };
   window.lab = lab;
 });
@@ -96,7 +124,8 @@ const labSource = String(function () {
   const wayRound = await inGame(() => {
     const d = window.noReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
     lab.fresh();
-    d.game.flags.powerOn = true; d.grantKeycard();
+    d.game.flags.powerOn = true;
+    lab.takeCardsAway(); // without the card it leaves the door alone (pounding on doors has its own checks below)
     const found = lab.findDoor(kinds.keycard);
     const door = found.door;
     // The player well inside on one side (too far for the door to open for them), the Hollow at the door on the other.
@@ -256,6 +285,134 @@ const labSource = String(function () {
   check('with the lift door shut it cannot get into the car, and goes somewhere else instead of standing at the door',
     !liftCar.wasInCarWithDoorShut && liftCar.doorStayedShut && liftCar.wentSomewhereElseInstead, liftCar);
   check('once the lift has come and its door is open, it can', liftCar.wasInCarWithDoorOpen, liftCar);
+
+  // --- pounding on a door, and breaking it down ---
+  const pounding = await inGame(() => {
+    const d = window.noReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
+    lab.fresh();
+    d.game.flags.powerOn = true; d.grantKeycard();
+    const door = lab.findDoor(kinds.keycard).door, doorIndex = door.tileZ * 256 + door.tileX;
+    result.numbers = { seconds: tuning.hollowDoorBangSeconds, perBout: tuning.hollowDoorDamagePerBout, cooldown: tuning.hollowDoorBangCooldownSeconds };
+    // First meeting: it pounds, the door holds, it leaves the door alone and goes round.
+    lab.faceOffAcross(door);
+    result.first = lab.watchAtDoor(door, 12);
+    result.damageAfterFirst = door.damage; result.brokenAfterFirst = door.isBroken; result.cooldownAfterFirst = door.bangCooldown;
+    // Straight back to the same door, with no time passed: it does not go at it again yet.
+    lab.faceOffAcross(door);
+    const tooSoon = lab.watchAtDoor(door, 4);
+    result.poundedAgainAtOnce = tooSoon.poundingSeconds > 0;
+    // Second meeting, as if twenty seconds later.
+    door.bangCooldown = 0;
+    lab.faceOffAcross(door);
+    result.second = lab.watchAtDoor(door, 12);
+    result.damageAfterSecond = door.damage; result.brokenAfterSecond = door.isBroken;
+    // Third: the door gives way, and it comes straight through.
+    door.bangCooldown = 0;
+    lab.faceOffAcross(door);
+    result.third = lab.watchAtDoor(door, 12);
+    result.brokenAfterThird = door.isBroken;
+    result.blockedAfterThird = d.tileBlocksHollow[doorIndex];
+    result.slab = { halfHeight: door.slab.halfY, blocksMovement: door.slab.blocksMovement, removed: door.slab.isRemoved };
+    result.dispatchToldYou = d.game.flags.hasHeardOfBrokenDoor && d.radioLineKeys.indexOf('doorBroken') >= 0;
+    // It stays open with nobody near it.
+    d.hollow.isActive = false; lab.far(); d.simulate(4);
+    result.stillOpenLater = door.openFraction === 1 && door.isBroken;
+    // And the player can walk through the doorway: start on one side, walk at the other.
+    const sides = d.getDoorSides(door);
+    d.teleport(sides[0].x, sides[0].z, Math.atan2(sides[1].x - sides[0].x, -(sides[1].z - sides[0].z))); d.simulate(0.1);
+    result.sides = sides;
+    return result;
+  });
+  await page.keyboard.down('KeyW');
+  const walkedThrough = await inGame(([sides]) => {
+    const d = window.noReturnDebug; d.simulate(1.6);
+    return { x: d.player.x, z: d.player.z, gotAcross: Math.hypot(d.player.x - sides[1].x, d.player.z - sides[1].z) < Math.hypot(d.player.x - sides[0].x, d.player.z - sides[0].z) };
+  }, [pounding.sides]);
+  await page.keyboard.up('KeyW');
+  const numbers = pounding.numbers;
+  check('a keycard door shut in its face while it hunts: it goes to the door and pounds on it for one bout, and the door holds',
+    pounding.first.walkedToDoor && Math.abs(pounding.first.poundingSeconds - numbers.seconds) < 0.7 && !pounding.first.doorWasOpen && !pounding.brokenAfterFirst &&
+    Math.abs(pounding.damageAfterFirst - numbers.perBout) < 0.03, { first: pounding.first, damage: pounding.damageAfterFirst });
+  check('after a bout that did not break it, it leaves that door alone for a while',
+    pounding.cooldownAfterFirst > numbers.cooldown - 12 && !pounding.poundedAgainAtOnce && !pounding.first.reachedPlayer, { cooldown: pounding.cooldownAfterFirst, againAtOnce: pounding.poundedAgainAtOnce });
+  check('the damage stays: the second bout adds to it, and the third breaks the door',
+    Math.abs(pounding.damageAfterSecond - 2 * numbers.perBout) < 0.05 && !pounding.brokenAfterSecond && pounding.brokenAfterThird, [pounding.damageAfterFirst, pounding.damageAfterSecond, pounding.brokenAfterThird]);
+  check('through the broken door it comes straight at you, with no trip through the crawlspace',
+    pounding.third.reachedPlayer && !pounding.third.wentToCrawlspace && pounding.third.seconds < 9 && pounding.blockedAfterThird === 0, pounding.third);
+  check('a broken door stays open for good, its slab lies flat in the doorway, and you can walk over it',
+    pounding.stillOpenLater && pounding.slab.halfHeight < 0.1 && pounding.slab.blocksMovement === false && pounding.slab.removed === false && walkedThrough.gotAcross, { slab: pounding.slab, walked: walkedThrough });
+  check('dispatch tells you, the first time', pounding.dispatchToldYou, pounding.dispatchToldYou);
+
+  const poundingRules = await inGame(() => {
+    const d = window.noReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
+    // Without the card for that door, it does not go at it: a door it broke would let you past a lock.
+    lab.fresh();
+    d.game.flags.powerOn = true; lab.takeCardsAway();
+    let door = lab.findDoor(kinds.keycard).door;
+    lab.faceOffAcross(door);
+    result.withoutCard = lab.watchAtDoor(door, 10);
+    result.damageWithoutCard = door.damage;
+    // Angry, it hits harder: one bout at nine tenths of full anger.
+    lab.fresh();
+    d.game.flags.powerOn = true; d.grantKeycard();
+    door = lab.findDoor(kinds.keycard).door;
+    lab.faceOffAcross(door);
+    for (let time = 0; time < 12 && door.bangCooldown === 0 && !door.isBroken; time += 0.1) { d.hollow.anger = 0.9; d.simulate(0.1); }
+    result.damageWhenAngry = door.damage;
+    result.expectedWhenAngry = tuning.hollowDoorDamagePerBout * (1 + tuning.hollowDoorDamageAngerBonus * 0.9);
+    // The door opens while it is pounding (you came back to it): it stops and comes through.
+    lab.fresh();
+    d.game.flags.powerOn = true; d.grantKeycard();
+    door = lab.findDoor(kinds.keycard).door;
+    lab.faceOffAcross(door);
+    let wasPounding = false;
+    for (let time = 0; time < 6 && !wasPounding; time += 0.1) { d.simulate(0.1); wasPounding = Boolean(d.hollow.doorBang && d.hollow.doorBang.isPounding && d.hollow.doorBang.hits >= 1); }
+    const sides = d.getDoorSides(door);
+    const playerSide = Math.hypot(sides[0].x - d.player.x, sides[0].z - d.player.z) < Math.hypot(sides[1].x - d.player.x, sides[1].z - d.player.z) ? sides[0] : sides[1];
+    d.teleport(playerSide.x, playerSide.z, 0);
+    let stoppedAfter = -1;
+    for (let time = 0; time < 3 && stoppedAfter < 0; time += 0.1) { d.simulate(0.1); if (!d.hollow.doorBang) stoppedAfter = Math.round((time + 0.1) * 10) / 10; }
+    result.openedWhilePounding = { wasPounding: wasPounding, stoppedAfter: stoppedAfter, broken: door.isBroken, damage: door.damage };
+    // The lift door: you in the car, it outside, knowing where you are. It never goes at that one.
+    lab.fresh();
+    d.game.flags.powerOn = true; d.grantKeycard();
+    const lift = d.getLiftDoor();
+    lift.forcedState = false; lift.openFraction = 0;
+    d.teleport(d.playerStart.x, d.playerStart.z, 0); d.simulate(0.2);
+    const outside = d.findWalkableSpotNear(lift.centerX + 2, lift.centerZ);
+    d.spawnHollow(outside.x, outside.z); d.hollow.graceTimer = 0; d.hollow.knowsPlayerPositionAlways = true;
+    let poundedOnLift = false, inCar = false;
+    for (let time = 0; time < 10; time += 0.1) {
+      d.simulate(0.1);
+      if (d.hollow.doorBang) poundedOnLift = true;
+      if (d.zoneNames[d.getZoneAt(d.hollow.figure.x, d.hollow.figure.z)] === 'LIFT CAR') inCar = true;
+    }
+    result.lift = { pounded: poundedOnLift, damage: lift.damage, open: lift.openFraction, gotIntoCar: inCar };
+    d.hollow.isActive = false;
+    // A new descent has all its doors back.
+    lab.fresh();
+    door = lab.findDoor(kinds.keycard).door;
+    const standingHalfHeight = door.slab.halfY;
+    d.breakDoor(door);
+    const flat = door.slab.halfY;
+    d.mendDoor(door);
+    result.mended = { standing: standingHalfHeight, flat: flat, after: door.slab.halfY, broken: door.isBroken, damage: door.damage, blocksMovement: door.slab.blocksMovement };
+    lab.fresh();
+    return result;
+  });
+  check('it only goes at a door you hold the card for: without it there is no pounding, and it goes round',
+    poundingRules.withoutCard.poundingSeconds === 0 && !poundingRules.withoutCard.walkedToDoor && poundingRules.damageWithoutCard === 0 &&
+    poundingRules.withoutCard.wentToCrawlspace, poundingRules.withoutCard);
+  check('angry, it hits harder: a bout does as much more as the numbers say',
+    Math.abs(poundingRules.damageWhenAngry - poundingRules.expectedWhenAngry) < 0.04, [poundingRules.damageWhenAngry, poundingRules.expectedWhenAngry]);
+  check('if the door opens while it is pounding, it stops at once and the door is not broken',
+    poundingRules.openedWhilePounding.wasPounding && poundingRules.openedWhilePounding.stoppedAfter > 0 && poundingRules.openedWhilePounding.stoppedAfter <= 1.2 &&
+    !poundingRules.openedWhilePounding.broken, poundingRules.openedWhilePounding);
+  check('the lift door is never pounded on and never breaks: in the car you are out of its reach until the door opens',
+    !poundingRules.lift.pounded && poundingRules.lift.damage === 0 && poundingRules.lift.open === 0 && !poundingRules.lift.gotIntoCar, poundingRules.lift);
+  check('a broken door can be put back as it was (a new descent has all its doors)',
+    poundingRules.mended.flat < 0.1 && poundingRules.mended.after === poundingRules.mended.standing && !poundingRules.mended.broken && poundingRules.mended.damage === 0 &&
+    poundingRules.mended.blocksMovement === true, poundingRules.mended);
 
   // --- the hatches: every locked-off part has one, the same station always gets the same ones ---
   const hatches = await inGame(() => {

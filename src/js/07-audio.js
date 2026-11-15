@@ -58,6 +58,8 @@ const SOUND_LEVELS = {
   hollowVentStep: 1,      // crawling in a vent
   hollowCeilingStep: 1,   // crawling above the ceiling, on its way round a locked door
   hatchRattle: 1,         // a ceiling hatch: it has gone in, or it is about to come out
+  doorBang: 1,            // one blow of it pounding on a door
+  doorBreak: 1,           // a door giving way
   hollowRumble: 1,
   hollowBreath: 1,
 
@@ -1137,6 +1139,32 @@ function playHatchRattle(x, z, weight) {
     const delay = knock * (0.09 + Math.random() * 0.05);
     playResonantNoise({ frequency: 380 + Math.random() * 160, resonance: 22, duration: 0.28, gain: 1.6 * level, attack: 0.002, delay: delay, destination: panner });
     playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 2600, gain: 0.9 * level, delay: delay, destination: panner });
+  }
+}
+
+// One blow of the Hollow pounding on a door, from the door. Heavy, low, with the slab ringing after it.
+// TWEAK: `weight` comes from the game (it hits harder when it is angry and when the door is nearly done).
+function playDoorBang(x, z, weight) {
+  const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 1.3, z);
+  if (!panner) return;
+  const level = weight * SOUND_LEVELS.doorBang;
+  playNoiseBurst({ duration: 0.3, frequency: 210, gain: 3.4 * level, useBrownNoise: true, playbackRate: 0.75, reverbAmount: 0.5, destination: panner });
+  playTone({ waveform: 'triangle', frequency: 74, frequencyEnd: 46, duration: 0.34, gain: 2.2 * level, attack: 0.004, destination: panner });
+  if (audio.metalStruck) playMetalStrike({ shape: 'plate', frequency: 96 + Math.random() * 20, duration: 0.9, hardness: 0.45, bend: 0.03, gain: 1.6 * level, destination: panner });
+  else playResonantNoise({ frequency: 190 + Math.random() * 40, resonance: 16, duration: 0.5, gain: 1.5 * level, attack: 0.003, destination: panner });
+}
+
+// A door giving way: the last blow, the slab tearing out of its track, and the clatter of it landing.
+function playDoorBreak(x, z) {
+  const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 1.0, z);
+  if (!panner) return;
+  const level = SOUND_LEVELS.doorBreak;
+  playNoiseBurst({ duration: 0.5, frequency: 260, gain: 4.2 * level, useBrownNoise: true, playbackRate: 0.7, reverbAmount: 0.7, destination: panner });
+  playNoiseBurst({ duration: 0.9, filterType: 'bandpass', frequency: 2600, frequencyEnd: 700, resonance: 2.2, gain: 1.8 * level, attack: 0.02, delay: 0.08, reverbAmount: 0.6, destination: panner });
+  playTone({ waveform: 'triangle', frequency: 62, frequencyEnd: 34, duration: 0.7, gain: 2.6 * level, attack: 0.005, destination: panner });
+  for (let clatter = 0; clatter < 4; clatter++) {
+    const delay = 0.55 + clatter * (0.16 + Math.random() * 0.08);
+    playResonantNoise({ frequency: 240 + Math.random() * 260, resonance: 20, duration: 0.3, gain: (1.4 - clatter * 0.25) * level, attack: 0.002, delay: delay, destination: panner });
   }
 }
 

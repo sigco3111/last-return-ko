@@ -103,6 +103,7 @@ function resetWorldState() {
   const flags = game.flags;
   flags.hasLeftLift = false; flags.powerOn = false; setKeycardLevel(0);
   flags.spoolsCollected = 0; flags.uploadStarted = false; flags.liftArrived = false;
+  flags.hasHeardOfBrokenDoor = false;
   flags.hasFuel = false; flags.knowsAboutFuel = false; flags.coresCollected = 0; flags.spoolsUploaded = false; flags.breakerClosed = false;
   game.liftCountdown = -1;
   game.scheduledEvents.length = 0;
@@ -117,6 +118,7 @@ function resetWorldState() {
     for (const prop of interactable.props) prop.isRemoved = false;
   }
   for (const door of doors) {
+    mendDoor(door); // a door broken down in the last descent is whole again
     door.openFraction = 0; door.closeDelay = 0; door.forcedState = null; door.deniedMessageCooldown = 0;
     door.slab.centerY = door.baseY + 1.15; door.slab.isRemoved = false;
     door.slab.minimumY = door.baseY; door.slab.maximumY = door.baseY + 2.3;
@@ -897,6 +899,8 @@ function startApplication() {
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
     // The Hollow and locked doors: its ceiling hatches, what is shut to it right now, and its way round.
     hollowHatches: hollowHatches, tileBlocksHollow: tileBlocksHollow, auditHollowRoutes: auditHollowRoutes,
+    findDoorWorthBreaking: findDoorWorthBreaking, breakDoor: breakDoor, mendDoor: mendDoor, getDoorSides: getDoorSides,
+    playDoorBang: playDoorBang, playDoorBreak: playDoorBreak,
     doorKinds: { automatic: DOOR_KIND_AUTOMATIC, powered: DOOR_KIND_POWERED, keycard: DOOR_KIND_KEYCARD, lift: DOOR_KIND_LIFT },
     canHollowOpenDoor: canHollowOpenDoor, isDoorPassableToHollow: isDoorPassableToHollow, isHollowInCrawlspace: isHollowInCrawlspace,
     getHollowPartAt: function (x, z) { return isInsideGrid(Math.floor(x), Math.floor(z)) ? tileHollowPart[tileIndexAt(Math.floor(x), Math.floor(z))] : 0; },

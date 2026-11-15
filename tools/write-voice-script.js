@@ -17,6 +17,7 @@ const dispatchDirections = {
   coresWanted: 'An afterthought, as if someone has just handed him a note. Only in stations with the core sample job.',
   winchBreakerOpen: 'The first two sentences flat. Then a beat. Then quicker: he knows what this means for you. Only with the breaker job.',
   breakerClosed: 'Fast and low. The last sentence is an order. Only with the breaker job.',
+  doorBroken: 'Shaken, and trying not to sound it. The second sentence is disbelief. The last is advice, quietly. Heard the first time it breaks a door down.',
   lowerKeycardTaken: 'Helpful, brief, a little apologetic. Only heard in large stations, which have more than one card.',
   secondSpool: 'First sentence normal. Second sentence a little too quick.',
   allSpools: 'Relief he is trying not to show.',

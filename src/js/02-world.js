@@ -813,7 +813,10 @@ function addDoor(tileX, tileZ, kind, cardLevel) {
     isOpening: false,
     closeDelay: 0,
     deniedMessageCooldown: 0,
-    forcedState: null
+    forcedState: null,
+    damage: 0,          // how much of the door the Hollow's pounding has used up, 0 to 1 (see 08-crawlspace.js)
+    isBroken: false,    // it has given way: open for good, the slab lying in the doorway
+    bangCooldown: 0     // seconds until the Hollow will go at this door again
   };
   doors.push(door);
   placement.turns = savedPlacement.turns; placement.offsetX = savedPlacement.offsetX; placement.offsetZ = savedPlacement.offsetZ;
