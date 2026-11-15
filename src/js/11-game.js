@@ -895,6 +895,19 @@ function startApplication() {
     missionObjectIds: { fuelCan: OBJECT_FUEL_CAN, winchBreaker: OBJECT_WINCH_BREAKER, firstCore: OBJECT_CORE_FIRST },
     grantSpools: function () { game.flags.spoolsCollected = 3; refreshObjective(); },
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
+    // The Hollow and locked doors: its ceiling hatches, what is shut to it right now, and its way round.
+    hollowHatches: hollowHatches, tileBlocksHollow: tileBlocksHollow, auditHollowRoutes: auditHollowRoutes,
+    doorKinds: { automatic: DOOR_KIND_AUTOMATIC, powered: DOOR_KIND_POWERED, keycard: DOOR_KIND_KEYCARD, lift: DOOR_KIND_LIFT },
+    canHollowOpenDoor: canHollowOpenDoor, isDoorPassableToHollow: isDoorPassableToHollow, isHollowInCrawlspace: isHollowInCrawlspace,
+    getHollowPartAt: function (x, z) { return isInsideGrid(Math.floor(x), Math.floor(z)) ? tileHollowPart[tileIndexAt(Math.floor(x), Math.floor(z))] : 0; },
+    getHollowPartCount: function () { return hollowPartCount; },
+    getHollowStepsTo: function (x, z) {
+      // How far the Hollow has to go from where it is to (x, z), in steps, crawlspace included.
+      const field = new Int16Array(TILE_COUNT);
+      computeHollowDistanceField(field, findNearestWalkableTileIndex(x, z), true);
+      return field[findNearestWalkableTileIndex(hollow.figure.x, hollow.figure.z)];
+    },
+    playHollowCeilingStep: playHollowCeilingStep, playHatchRattle: playHatchRattle,
     // Threat levels: the presets, the player's settings, and what the custom one comes to.
     settings: settings, difficultyPresets: DIFFICULTY_PRESETS, customDifficultyOptions: CUSTOM_DIFFICULTY_OPTIONS,
     getChosenDifficulty: getChosenDifficulty, buildCustomDifficulty: buildCustomDifficulty, createCustomDifficultyValues: createCustomDifficultyValues,

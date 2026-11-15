@@ -56,6 +56,8 @@ const SOUND_LEVELS = {
   hollowEnraged: 1,       // the beam stops slowing it
   hollowFootstep: 1,
   hollowVentStep: 1,      // crawling in a vent
+  hollowCeilingStep: 1,   // crawling above the ceiling, on its way round a locked door
+  hatchRattle: 1,         // a ceiling hatch: it has gone in, or it is about to come out
   hollowRumble: 1,
   hollowBreath: 1,
 
@@ -1110,6 +1112,32 @@ function playVentCrawlSound() {
   }
   playResonantNoise({ frequency: 190 + Math.random() * 60, resonance: 16, duration: 0.5, gain: 0.1 * SOUND_LEVELS.ventCrawl, attack: 0.004, reverbAmount: 0.7 });
   playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 1700, gain: 0.05 * SOUND_LEVELS.ventCrawl });
+}
+
+// The Hollow above the ceiling, on its way round a door it cannot open. A dull, heavy thump from overhead,
+// from where it is at that moment, so that you can hear which way it is going.
+// TWEAK: `gain` is how loud each layer is. The first is the weight coming down, the second the ceiling panel giving under it.
+function playHollowCeilingStep(x, z, weight) {
+  const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + getHeadroomAt(x, z) + 0.3, z);
+  if (!panner) return;
+  const level = weight * SOUND_LEVELS.hollowCeilingStep;
+  playNoiseBurst({ duration: 0.34, frequency: 170, gain: 2.8 * level, useBrownNoise: true, playbackRate: 0.7, destination: panner });
+  playResonantNoise({ frequency: 92 + Math.random() * 26, resonance: 14, duration: 0.6, gain: 1.4 * level, attack: 0.005, destination: panner });
+  playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 1300, gain: 0.5 * level, delay: 0.05, destination: panner });
+}
+
+// A ceiling hatch shaken in its frame: the Hollow has just gone up through it, or it is right above it and
+// about to come down. Two or three loose metal knocks.
+// TWEAK: `weight` is passed in by the game (it grows as the drop gets nearer); the gains are each knock's layers.
+function playHatchRattle(x, z, weight) {
+  const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + getHeadroomAt(x, z), z);
+  if (!panner) return;
+  const level = weight * SOUND_LEVELS.hatchRattle, knocks = 2 + Math.floor(Math.random() * 2);
+  for (let knock = 0; knock < knocks; knock++) {
+    const delay = knock * (0.09 + Math.random() * 0.05);
+    playResonantNoise({ frequency: 380 + Math.random() * 160, resonance: 22, duration: 0.28, gain: 1.6 * level, attack: 0.002, delay: delay, destination: panner });
+    playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 2600, gain: 0.9 * level, delay: delay, destination: panner });
+  }
 }
 
 // The Hollow in a vent. Louder and longer than its footsteps, and it carries: this is the warning you get.

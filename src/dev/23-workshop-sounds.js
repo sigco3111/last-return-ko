@@ -167,6 +167,9 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'The Hollow', key: 'hollowVentRoam', level: 'hollowVentStep', label: 'It crawls in a vent, roaming', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.8); } },
   ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hollowVentHunt', level: 'hollowVentStep', label: 'It crawls in a vent, hunting', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } }),
 
+  { group: 'The Hollow', key: 'hollowCeilingStep', level: 'hollowCeilingStep', label: 'It crawls above the ceiling', hint: 'On its way round a door it cannot open. One thump, from where it is.', seconds: 0.8, hasPlace: true, play: function () { playHollowCeilingStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
+  { group: 'The Hollow', key: 'hatchRattle', level: 'hatchRattle', label: 'A ceiling hatch rattles', hint: 'It has gone up through it, or it is about to drop out of it. This is the warning.', seconds: 0.7, hasPlace: true, play: function () { playHatchRattle(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
+
   // ---- the Stills ----
   { group: 'The Stills', key: 'stillShuffle', level: 'stillShuffle', label: 'A Still moves', seconds: 0.4, hasPlace: true, play: function () { playStillShuffleSound(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
 

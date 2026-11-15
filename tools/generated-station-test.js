@@ -59,7 +59,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
       for (let seed = 1; seed <= seedCount; seed++) {
         const layout = layouts[seed % 3], levels = seed % 2 === 0 ? 'two' : 'one';
         const wasBuilt = debug.loadStation('generated', seed, size, layout, levels);
-        const found = wasBuilt ? debug.auditLayout().concat(debug.auditProgression()) : ['no plan could be made'];
+        const found = wasBuilt ? debug.auditLayout().concat(debug.auditProgression()).concat(debug.auditHollowRoutes()) : ['no plan could be made'];
         // A two-level station must have its shaft a flight of stairs down; a one-level station must be flat.
         const shaftFloor = debug.getFloorHeightAt(debug.findInteractable(5).x, debug.findInteractable(5).z);
         if (wasBuilt && levels === 'two' && !(shaftFloor < 0 && debug.level.stairCount >= 1)) found.push('two levels were asked for but the shaft is at ' + shaftFloor);
@@ -130,7 +130,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   const classicAgain = await inGame(() => {
     const debug = window.noReturnDebug;
     debug.loadStation('classic', 0);
-    return { kind: debug.level.kind, problems: debug.auditLayout().concat(debug.auditProgression()), start: [debug.playerStart.x, debug.playerStart.z], zone: debug.zoneNames[3] };
+    return { kind: debug.level.kind, problems: debug.auditLayout().concat(debug.auditProgression()).concat(debug.auditHollowRoutes()), start: [debug.playerStart.x, debug.playerStart.z], zone: debug.zoneNames[3] };
   });
   check('loading Kessel-9 again after generated stations gives the classic station back',
     classicAgain.kind === 'classic' && classicAgain.problems.length === 0 && classicAgain.start[0] === 6.5 && classicAgain.zone === 'MAIN CORRIDOR A', classicAgain);
@@ -464,7 +464,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     let cardTotal = 0;
     for (let seed = 1; seed <= 8; seed++) {
       const wasBuilt = debug.loadStation('generated', seed, 'massive', ['tight', 'mixed', 'sprawling'][seed % 3], seed % 2 === 0 ? 'two' : 'one');
-      const found = wasBuilt ? debug.auditLayout().concat(debug.auditProgression()) : ['no plan could be made'];
+      const found = wasBuilt ? debug.auditLayout().concat(debug.auditProgression()).concat(debug.auditHollowRoutes()) : ['no plan could be made'];
       if (found.length > 0) bad.push({ seed: seed, problems: found.slice(0, 4) });
       cardTotal += debug.level.keycardCount;
     }

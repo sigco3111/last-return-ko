@@ -119,6 +119,10 @@ The screen is quiet by default: there is the dark, the points and the aiming rin
 - It crawls through vents. It is slower in them, and the metal booms under it, which is the warning you get.
 - It is taller than most of the station's ceilings. It bends to fit under whatever is over it, ducks through doorways, and draws itself up to the ceiling when it stops to listen.
 - It will not enter the calibration store.
+- It has no keycard. A door that opens by itself opens for it, and so does a powered door once the mains is on. A keycard door never opens for it, and neither does the lift door. It gets through one of those only while it stands open for you, so a keycard door closing behind you is a real way to break a chase.
+- It has its own way round: the **crawlspace** above the ceilings. Every part of the station that keycard doors close off has at least one ceiling hatch, which shows in a scan as a square frame with its cover hanging down, in the warning colour. The Hollow reaches up into one, crawls, and drops out of another.
+- That way round is slow and loud. You hear it thumping overhead, from where it is, all the way. The hatch it is about to come out of rattles for two and a half seconds before it drops, and for its first second on the floor it cannot catch you. Up there a scan finds nothing, and it cannot reach down.
+- It only goes up when walking is much further or impossible. In Kessel-9, getting round one shut keycard door to a player nine metres away on the other side takes it a little under forty seconds.
 
 **The Stills** are the calibration dummies in store C4.
 
@@ -281,6 +285,7 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/05-raycast.js` | What one laser pulse hits, and how far away |
 | `src/js/06-renderer.js` | Point cloud, depth-only world, scanner model, post-processing |
 | `src/js/07-audio.js` | Every sound, synthesised with the Web Audio API |
+| `src/js/08-crawlspace.js` | The Hollow and locked doors: which doors are shut to it, the ceiling hatches, its way round above the ceilings |
 | `src/js/08-entities.js` | Doors, the Hollow and its director, the Stills |
 | `src/js/08-phantoms.js` | The apparitions: each kind, and the part that decides when one comes |
 | `src/js/09-difficulty.js` | Threat levels: turns the "Custom" settings into the same kind of record a preset is |
@@ -332,6 +337,8 @@ plays the whole objective chain in a headless browser and checks each step: leav
 
 It then builds 120 generated stations (40 of each size, across the three layouts, half with one level and half with two) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, each keycard only with the one before it, the shaft only with the last, and the fuel can, the core samples and the winch breaker where their rules say they must be. It checks that a seed always gives the same station (also after the browser has warmed up, which is what once broke it), plays the rules of each extra job, builds eight massive stations with three keycards each, walks down a flight of stairs on foot, tries a vent standing (no) and crouched (yes), sends the Hollow through it, and plays one two-level station from lift to lift, whatever extra job that station has, which includes the Hollow climbing the stairs from the shaft. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
 
+Then the Hollow and locked doors: each kind of door with the Hollow standing at it (the keycard door and the lift door stay shut, even with every card in your pocket), a keycard door shut between it and you (it never walks through, goes round through the crawlspace, and takes the time the numbers say: the climb, the metres, the full warning), a look from straight underneath it (a scan finds nothing and it cannot reach down), the landing (under the hatch that rattled, harmless for its first second), a keycard door held open by you (it simply walks through), short walks from under a hatch (it never takes to the ceiling for those), the lift car, and the hatches themselves. The 120 generated stations are each checked too: every locked-off part has a hatch, the Hollow can reach everywhere it may go, and without the crawlspace it really is shut in.
+
 Then the Custom threat level: the panel opens and closes, a moved control changes the setting and the sentence beside it, the values survive closing the page, bad stored values are put right, a descent plays by what was set, heat, temper, stamina and apparitions each change by the factor asked for, one life really offers no checkpoint, and the ending names the descent as custom and keeps its best time apart.
 
 Then the apparitions. Where and when they come is chance, so nothing there trusts one lucky try: each kind is summoned from about two thousand standing places in three stations and every one must be where its rules allow (in range, in sight, on good floor, never popping into the beam). Each kind is then played through: the watcher scanned, approached and ignored; the one behind you turned on and not turned on; the dummy coming closer and going; the crosser waiting, walking and vanishing; the crawler in its vent; the one in your face with loaded dice, with its limit, and switched off. Two long quiet walks check the timing (none too soon, never two at once, never the same kind twice running, never more than the descent is allowed), and a last part checks that none comes while the Hollow hunts or is near, and that one that is out goes when a hunt starts.
@@ -375,6 +382,8 @@ The rules are covered by the scripted test above. The test teleports between obj
 The director's rules are checked, and its rhythm was measured with scripted players who cannot hear or scan, which is not the same as playing against it. Whether a breather feels like relief or like the game going slack is for a real playthrough to decide.
 
 Generated stations are proven finishable, not proven good. Nobody has yet walked one from end to end with the Hollow hunting. They have more doors than Kessel-9, and every door you open makes noise, so they may play harder. The stairs and the vents are checked for being passable, by you and by what hunts you, but how a chase through them feels is untested. Vents are only in generated stations. Kessel-9 itself is still one level.
+
+The locked doors and the crawlspace are checked for their rules and their timings. Whether half a minute overhead is the right price for a door, whether the thumps tell you enough about where it is going, and whether the rattle is enough warning, need ears and play. The numbers are in `src/js/00-config.js` under "The crawlspace", and the two sounds are on the sound board. Not done: you cannot lock or bar a door yourself, and it never breaks one down. The Stills still open the doors of their own rooms.
 
 The apparitions keep to their rules, which is what the test can show. How often is right, whether the dummy that comes closer frightens or annoys, and whether the one in your face reads as a face or only as a mass of points a metre away, need playing. All their numbers are in `src/js/00-config.js` under "Apparitions", and debug mode can summon each kind where you stand.
 

@@ -1314,6 +1314,13 @@ function pushPhantom(x, z, yaw, triggerZone, onlyBeforePower) {
 
 // Empties the map and builds either the classic station or a generated one.
 function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
+  const wasBuiltAsAsked = buildStationRooms(kind, seed, sizeKey, layoutKey, levelsKey);
+  // Last of all, the ceiling hatches of the Hollow's crawlspace: they depend on where the locked doors ended up.
+  placeHollowHatches();
+  return wasBuiltAsAsked;
+}
+
+function buildStationRooms(kind, seed, sizeKey, layoutKey, levelsKey) {
   resetWorldForNewLevel();
   stillSpawnPoints.length = 0; lateStillSpawnPoints.length = 0; phantomDefinitions.length = 0;
   liftDoor = null;

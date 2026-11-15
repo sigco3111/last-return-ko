@@ -437,6 +437,13 @@ function buildDebugReadout() {
     lines.push('  in beam   ' + (hollow.wasInBeam ? 'yes' : 'no') + '   anger ' + hollow.anger.toFixed(2) + ' (notices at ' + TUNING.hollowAngerNoticeLevel + ')');
     if (hollow.doubleBackTimer > 0) lines.push('  feint     doubling back in ' + hollow.doubleBackTimer.toFixed(1) + ' s');
     lines.push('  sensed    ' + (hollow.timeSinceSensed < 90 ? hollow.timeSinceSensed.toFixed(1) + ' s ago' : 'never'));
+    if (isHollowInCrawlspace()) {
+      const crawl = hollow.crawlspace;
+      const secondsLeft = crawl.phase === CRAWL_PHASE_CLIMBING ? TUNING.hollowCrawlClimbSeconds - crawl.timer :
+        (crawl.phase === CRAWL_PHASE_TRAVELLING ? crawl.travelSeconds - crawl.timer : TUNING.hollowCrawlDropWarningSeconds - crawl.timer);
+      lines.push('  CRAWLSPACE ' + CRAWL_PHASE_NAMES[crawl.phase] + ', ' + Math.max(0, secondsLeft).toFixed(1) + ' s more; it comes out ' +
+        distanceBetweenPoints(crawl.to.x, crawl.to.z, player.x, player.z).toFixed(0) + ' m from you');
+    }
     lines.push('DIRECTOR    ' + (isDirectorOverruled() ? 'OVERRULED (the ending)' : DIRECTOR_PHASE_NAMES[director.phase]) + '   menace ' + director.menace.toFixed(2) + (director.hasPeaked ? ' (breather owed)' : '') + '   pace x' + getDirectorPaceFactor().toFixed(2));
     lines.push('  steering  to rooms ' + director.ringMinimumSteps + ' to ' + (director.ringMaximumSteps > 9000 ? 'any' : director.ringMaximumSteps) + ' steps from you; it is ' +
       (director.stepsToPlayer >= NAVIGATION_UNREACHABLE ? 'unreachable' : director.stepsToPlayer + ' steps') + ' away');
@@ -444,6 +451,8 @@ function buildDebugReadout() {
     lines.push('HOLLOW      not in the station');
   }
   lines.push('station     ' + level.description);
+  lines.push('crawlspace  ' + hollowHatches.length + ' hatches in ' + hollowPartCount + ' locked-off part' + (hollowPartCount === 1 ? '' : 's') + '; you are in part ' +
+    (isInsideGrid(Math.floor(player.x), Math.floor(player.z)) ? tileHollowPart[tileIndexAt(Math.floor(player.x), Math.floor(player.z))] : 0));
   let presentStills = 0, nearestStill = Infinity;
   for (const still of stills) {
     if (!still.isPresent) continue;
