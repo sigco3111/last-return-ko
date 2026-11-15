@@ -167,7 +167,7 @@ function beginNewGame() {
   initializeAudioEngine();
   setMasterVolume(settings.volume);
   suspendAudio(false);
-  game.difficulty = DIFFICULTY_PRESETS[settings.difficulty];
+  game.difficulty = getChosenDifficulty();
   const quality = QUALITY_PRESETS[settings.quality];
   if (pointCloud.capacity !== quality.maximumPoints) allocatePointCloud(quality.maximumPoints);
   if (settings.station === 'generated') loadStation('generated', chooseSeedFromText(settings.seedText), settings.stationSize, settings.stationLayout, settings.stationLevels);
@@ -560,6 +560,7 @@ function updateDying(dt) {
 
 function retryFromCheckpoint() {
   if (game.mode !== 'dead') return;
+  if (!game.difficulty.checkpointsEnabled) return; // one life: the only way on is to start over
   player.x = game.checkpoint.x; player.z = game.checkpoint.z; player.yaw = game.checkpoint.yaw;
   player.pitch = 0; player.velocityX = 0; player.velocityZ = 0;
   player.heat = 0; player.isOverheated = false; player.stamina = 1; player.isStaminaLocked = false;
@@ -894,6 +895,11 @@ function startApplication() {
     missionObjectIds: { fuelCan: OBJECT_FUEL_CAN, winchBreaker: OBJECT_WINCH_BREAKER, firstCore: OBJECT_CORE_FIRST },
     grantSpools: function () { game.flags.spoolsCollected = 3; refreshObjective(); },
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
+    // Threat levels: the presets, the player's settings, and what the custom one comes to.
+    settings: settings, difficultyPresets: DIFFICULTY_PRESETS, customDifficultyOptions: CUSTOM_DIFFICULTY_OPTIONS,
+    getChosenDifficulty: getChosenDifficulty, buildCustomDifficulty: buildCustomDifficulty, createCustomDifficultyValues: createCustomDifficultyValues,
+    sanitizeCustomDifficultyValues: sanitizeCustomDifficultyValues, describeCustomDifficulty: describeCustomDifficulty,
+    explainCustomDifficultyValue: explainCustomDifficultyValue, retryFromCheckpoint: retryFromCheckpoint,
     // Apparitions: the list of those that exist, the part that decides when the chance ones come, and a way to call one up.
     phantoms: phantoms, phantomDirector: phantomDirector, phantomKindKeys: PHANTOM_KIND_KEYS, phantomVentMouths: phantomVentMouths,
     summonPhantom: summonPhantom, getPhantomHoldReason: getPhantomHoldReason, isRealThreatNearPlayer: isRealThreatNearPlayer,

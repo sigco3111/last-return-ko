@@ -152,6 +152,22 @@ What you are carrying for these jobs is listed on the map with the spools and th
 
 Three threat levels are offered on the title screen. "Survey only" removes everything that hunts you.
 
+A fourth, **Custom**, lets you set each thing yourself. Choose it and a panel opens (the **Adjust** button opens it again). It starts as a copy of Standard, and "Start from" copies one of the other two.
+
+| Setting | What it changes |
+|---|---|
+| The Hollow, The Stills | On or off. |
+| Hollow speed | 70 to 140 %. Above about 130 % it hunts faster than you sprint, and the panel says so. |
+| Hollow hearing | 50 to 160 %: from how far it hears a step, a sweep, a door. |
+| How hard it presses | 50 to 200 %: how soon it closes in again after a breather, and how short the breather is. |
+| Its temper in the beam | 50 to 200 %: how fast the beam angers it, so how long you can hold it before it knows where you are. |
+| Scanner heat | 50 to 200 %: how fast the scanner heats up. |
+| Your stamina | 50 to 200 %: how long a full bar lasts. |
+| Apparitions | None, few, normal or many. "None" also removes the ones that stand at fixed places. |
+| Checkpoints | Off is one life: being caught ends the descent. |
+
+Each row says what its value comes to in play ("It hunts at 3.9 m/s. You sprint at 4.6."), worked out from the numbers in `src/js/00-config.js`, and rows that differ from Standard are lit. The title screen and the ending screen name the differences in one line. Best times are kept apart for every different set of values. A threat level, custom or not, never changes what a station looks like: a seed builds the same station on all of them.
+
 </details>
 
 ## Debug mode
@@ -267,6 +283,7 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/07-audio.js` | Every sound, synthesised with the Web Audio API |
 | `src/js/08-entities.js` | Doors, the Hollow and its director, the Stills |
 | `src/js/08-phantoms.js` | The apparitions: each kind, and the part that decides when one comes |
+| `src/js/09-difficulty.js` | Threat levels: turns the "Custom" settings into the same kind of record a preset is |
 | `src/js/09-player.js` | Keyboard, mouse and touch input, movement, the scanner |
 | `src/js/10-interface.js` | HUD, map, messages and overlay screens |
 | `src/js/11-game.js` | Objectives, checkpoints, death, ending and the main loop |
@@ -314,6 +331,8 @@ npm test
 plays the whole objective chain in a headless browser and checks each step: leaving the lift, the generator, the Hollow's path finding, the beam holding it, the director's fairness rules (never steered closer than its floor, never called off mid-chase, a real breather afterwards, noise still brings it), both ways to die, checkpoints, powered and keycard doors, the Stills, the lift call, the ending, that the game itself has no debug mode in it, every debug mode switch in the dev build, and the turn-your-phone-sideways screen.
 
 It then builds 120 generated stations (40 of each size, across the three layouts, half with one level and half with two) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, each keycard only with the one before it, the shaft only with the last, and the fuel can, the core samples and the winch breaker where their rules say they must be. It checks that a seed always gives the same station (also after the browser has warmed up, which is what once broke it), plays the rules of each extra job, builds eight massive stations with three keycards each, walks down a flight of stairs on foot, tries a vent standing (no) and crouched (yes), sends the Hollow through it, and plays one two-level station from lift to lift, whatever extra job that station has, which includes the Hollow climbing the stairs from the shaft. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
+
+Then the Custom threat level: the panel opens and closes, a moved control changes the setting and the sentence beside it, the values survive closing the page, bad stored values are put right, a descent plays by what was set, heat, temper, stamina and apparitions each change by the factor asked for, one life really offers no checkpoint, and the ending names the descent as custom and keeps its best time apart.
 
 Then the apparitions. Where and when they come is chance, so nothing there trusts one lucky try: each kind is summoned from about two thousand standing places in three stations and every one must be where its rules allow (in range, in sight, on good floor, never popping into the beam). Each kind is then played through: the watcher scanned, approached and ignored; the one behind you turned on and not turned on; the dummy coming closer and going; the crosser waiting, walking and vanishing; the crawler in its vent; the one in your face with loaded dice, with its limit, and switched off. Two long quiet walks check the timing (none too soon, never two at once, never the same kind twice running, never more than the descent is allowed), and a last part checks that none comes while the Hollow hunts or is near, and that one that is out goes when a hunt starts.
 

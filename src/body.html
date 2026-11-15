@@ -89,6 +89,8 @@
           <label class="pill"><input type="radio" name="difficulty" id="difficulty-survey" value="survey"><span>Survey only</span></label>
           <label class="pill"><input type="radio" name="difficulty" id="difficulty-standard" value="standard" checked><span>Standard</span></label>
           <label class="pill"><input type="radio" name="difficulty" id="difficulty-nightmare" value="nightmare"><span>Nightmare</span></label>
+          <label class="pill"><input type="radio" name="difficulty" id="difficulty-custom" value="custom"><span>Custom</span></label>
+          <button type="button" id="button-custom-difficulty" class="button-quiet" hidden>Adjust</button>
         </fieldset>
         <p id="difficulty-description" class="difficulty-description"></p>
         <div class="station-row">
@@ -167,6 +169,25 @@
           </select>
         </div>
       </aside>
+    </div>
+  </section>
+
+  <section id="screen-custom" class="screen screen-dim" hidden>
+    <div class="panel panel-wide">
+      <p class="eyebrow">THREAT LEVEL</p>
+      <h2 class="panel-title">Custom</h2>
+      <p class="panel-text panel-text-small">Set each thing yourself. None of this changes what a station looks like: a seed builds the same station on every threat level. Best times are kept apart for every different set of values.</p>
+      <div class="button-row custom-start-row">
+        <span class="custom-start-label">Start from</span>
+        <button type="button" id="custom-from-survey" class="button-quiet">Survey only</button>
+        <button type="button" id="custom-from-standard" class="button-quiet">Standard</button>
+        <button type="button" id="custom-from-nightmare" class="button-quiet">Nightmare</button>
+      </div>
+      <div id="custom-options" class="custom-options"></div>
+      <p id="custom-summary" class="panel-text panel-text-small"></p>
+      <div class="button-row">
+        <button type="button" id="button-custom-done" class="button-primary">Done</button>
+      </div>
     </div>
   </section>
 

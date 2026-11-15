@@ -229,7 +229,8 @@ function endPhantom(phantom, withStinger) {
     // (The one in your face is counted when it is put out, against a limit of its own.)
     if (phantom.wasEverSeen && phantom.kind !== 'face') phantomDirector.used++;
     if (phantom.wasEverSeen) phantomDirector.seenByKind[phantom.kind] = (phantomDirector.seenByKind[phantom.kind] || 0) + 1;
-    phantomDirector.timer = randomBetween(waitShortest, waitLongest);
+    // More of them also means less of a wait between them, and fewer means more.
+    phantomDirector.timer = randomBetween(waitShortest, waitLongest) / Math.max(0.25, game.difficulty.phantomFactor);
     if (phantomDirector.current === phantom) phantomDirector.current = null;
     const position = phantoms.indexOf(phantom);
     if (position >= 0) phantoms.splice(position, 1);
@@ -612,7 +613,7 @@ function updatePhantomFaceDice() {
   const isScanning = player.isPainting || player.sweepTimeRemaining > 0;
   const hasScanJustBegun = isScanning && !phantomDirector.wasScanning;
   phantomDirector.wasScanning = isScanning;
-  if (!hasScanJustBegun || TUNING.phantomFaceChancePerScan <= 0) return false;
+  if (!hasScanJustBegun || TUNING.phantomFaceChancePerScan <= 0 || game.difficulty.phantomFactor <= 0) return false;
   if (phantomDirector.faceUsed >= TUNING.phantomFaceMostPerDescent) return false;
   if (game.time - phantomDirector.startTime < TUNING.phantomFaceNotBeforeSeconds) return false;
   if (game.time - phantomDirector.lastEndTime < 30) return false; // not right on top of another apparition
@@ -704,7 +705,8 @@ function updatePhantomDirector(dt) {
 }
 
 function resetPhantomDirector() {
-  phantomDirector.budget = Math.round(TUNING.phantomBudgetBase + (level.roomCount || 19) / TUNING.phantomRoomsPerExtra);
+  // The threat level can ask for more of them, fewer, or none (phantomFactor, see 00-config.js).
+  phantomDirector.budget = getPhantomBudgetForRooms(level.roomCount || 19, game.difficulty.phantomFactor);
   phantomDirector.used = 0;
   phantomDirector.timer = TUNING.phantomFirstAfterSeconds + Math.random() * 30;
   phantomDirector.retryTimer = 0;
@@ -727,7 +729,8 @@ function resetPhantomDirector() {
 function createPhantoms() {
   for (const phantom of phantoms) setFigureRaycastable(phantom.figure, false);
   phantoms.length = 0;
-  for (const definition of phantomDefinitions) {
+  // A threat level with apparitions switched off has none at all: not the placed ones either.
+  for (const definition of (game.difficulty.phantomFactor > 0 ? phantomDefinitions : [])) {
     const figure = createPhantomFigure(FIGURE_PROPORTIONS_HOLLOW);
     figure.x = definition.x; figure.z = definition.z; figure.yaw = definition.yaw;
     poseStandingPhantom(figure);

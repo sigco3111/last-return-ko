@@ -35,6 +35,8 @@ function initializeInterface() {
     'meter-heat', 'meter-stamina', 'meter-interference', 'map-objective', 'map-status', 'reticle-ring', 'hud-prompt', 'hud-countdown', 'hud-messages', 'hud-caption',
     'touch-controls', 'map-overlay', 'map-canvas', 'map-close', 'screen-title', 'screen-intro', 'screen-pause',
     'screen-reader', 'screen-death', 'screen-ending', 'screen-rotate', 'button-play-upright', 'fatal-error', 'title-range', 'title-returns',
+    'screen-custom', 'button-custom-difficulty', 'custom-options', 'custom-summary', 'button-custom-done',
+    'custom-from-survey', 'custom-from-standard', 'custom-from-nightmare',
     'difficulty-description', 'button-begin', 'intro-lines', 'button-skip-intro', 'pause-objective', 'button-resume',
     'button-pause-restart', 'reader-source', 'reader-heading', 'reader-body', 'button-close-reader', 'death-title',
     'death-lines', 'button-retry', 'button-death-restart', 'ending-stats', 'ending-manifest', 'button-ending-restart',
@@ -100,14 +102,21 @@ function initializeInterface() {
   };
   const difficultyInputs = document.querySelectorAll('input[name="difficulty"]');
   const refreshDifficulty = function () {
+    const isCustom = settings.difficulty === 'custom';
     for (const radio of difficultyInputs) radio.checked = radio.value === settings.difficulty;
-    elements['difficulty-description'].textContent = difficultyDescriptions[settings.difficulty];
+    elements['difficulty-description'].textContent = isCustom ? describeCustomDifficulty(settings.customDifficulty) : difficultyDescriptions[settings.difficulty];
+    elements['button-custom-difficulty'].hidden = !isCustom;
   };
   for (const radio of difficultyInputs) {
     radio.addEventListener('change', function () {
-      if (radio.checked) { settings.difficulty = radio.value; saveSettings(); refreshDifficulty(); }
+      if (!radio.checked) return;
+      settings.difficulty = radio.value;
+      saveSettings();
+      refreshDifficulty();
+      if (radio.value === 'custom') openCustomDifficultyPanel(); // choosing Custom shows what there is to set
     });
   }
+  buildCustomDifficultyPanel(refreshDifficulty);
   refreshDifficulty();
 
   // Which station to go down into.
@@ -132,9 +141,98 @@ function initializeInterface() {
   interfaceState.refreshStationControls = refreshStationControls;
 }
 
+// ---------------------------------------------------------------------------
+// The "Custom" threat level panel. It lies over the title screen; the title screen stays where it is underneath.
+// ---------------------------------------------------------------------------
+
+// Builds one row for each of CUSTOM_DIFFICULTY_OPTIONS. `onChange` is called after any value has changed.
+function buildCustomDifficultyPanel(onChange) {
+  const elements = interfaceState.elements;
+  const rows = [];
+  // Puts what the settings hold into every row: the control, the value beside it, and the sentence under it.
+  const refreshRows = function () {
+    const values = settings.customDifficulty, standard = DIFFICULTY_PRESETS.standard;
+    for (const row of rows) {
+      const value = values[row.option.key];
+      if (row.option.kind === 'switch') row.control.checked = value;
+      else row.control.value = String(value);
+      row.valueElement.textContent = formatCustomDifficultyValue(row.option, value);
+      row.noteElement.textContent = explainCustomDifficultyValue(row.option.key, value);
+      row.element.classList.toggle('is-changed', value !== standard[row.option.key]); // lit up where it differs from Standard
+    }
+    elements['custom-summary'].textContent = describeCustomDifficulty(values);
+  };
+  for (const option of CUSTOM_DIFFICULTY_OPTIONS) {
+    const element = document.createElement('div');
+    element.className = 'custom-row';
+    const label = document.createElement('label');
+    label.className = 'custom-label';
+    label.textContent = option.label;
+    label.htmlFor = 'custom-' + option.key;
+    let control;
+    if (option.kind === 'choice') {
+      control = document.createElement('select');
+      for (const choice of option.choices) {
+        const choiceElement = document.createElement('option');
+        choiceElement.value = String(choice[0]);
+        choiceElement.textContent = choice[1];
+        control.appendChild(choiceElement);
+      }
+    } else {
+      control = document.createElement('input');
+      control.type = option.kind === 'switch' ? 'checkbox' : 'range';
+      if (option.kind === 'percent') { control.min = String(option.minimum); control.max = String(option.maximum); control.step = String(option.step); }
+    }
+    control.id = 'custom-' + option.key;
+    const valueElement = document.createElement('span');
+    valueElement.className = 'custom-value';
+    const noteElement = document.createElement('p');
+    noteElement.className = 'custom-note';
+    element.appendChild(label); element.appendChild(control); element.appendChild(valueElement); element.appendChild(noteElement);
+    elements['custom-options'].appendChild(element);
+    rows.push({ option: option, element: element, control: control, valueElement: valueElement, noteElement: noteElement });
+    const applyControl = function () {
+      const raw = option.kind === 'switch' ? control.checked : Number(control.value);
+      settings.customDifficulty[option.key] = sanitizeCustomDifficultyValue(option, raw, settings.customDifficulty[option.key]);
+      saveSettings();
+      refreshRows();
+      onChange();
+    };
+    control.addEventListener('input', applyControl);
+    control.addEventListener('change', applyControl);
+  }
+  for (const presetKey of ['survey', 'standard', 'nightmare']) {
+    elements['custom-from-' + presetKey].addEventListener('click', function () {
+      settings.customDifficulty = createCustomDifficultyValues(presetKey);
+      saveSettings();
+      refreshRows();
+      onChange();
+    });
+  }
+  elements['button-custom-difficulty'].addEventListener('click', function () { openCustomDifficultyPanel(); });
+  elements['button-custom-done'].addEventListener('click', function () { closeCustomDifficultyPanel(); });
+  elements['screen-custom'].addEventListener('keydown', function (event) {
+    if (event.code === 'Escape') { event.stopPropagation(); closeCustomDifficultyPanel(); }
+  });
+  interfaceState.refreshCustomDifficultyRows = refreshRows;
+  refreshRows();
+}
+
+function openCustomDifficultyPanel() {
+  if (game.mode !== 'title') return;
+  interfaceState.refreshCustomDifficultyRows();
+  interfaceState.elements['screen-custom'].hidden = false;
+  interfaceState.elements['screen-custom'].scrollTop = 0; // on a low screen the panel is taller than the window: start at its top
+}
+
+function closeCustomDifficultyPanel() {
+  interfaceState.elements['screen-custom'].hidden = true;
+  interfaceState.elements['button-custom-difficulty'].focus();
+}
+
 function showOnlyScreen(screenId) {
   const elements = interfaceState.elements;
-  for (const candidate of ['screen-title', 'screen-intro', 'screen-pause', 'screen-reader', 'screen-death', 'screen-ending', 'screen-rotate']) {
+  for (const candidate of ['screen-title', 'screen-intro', 'screen-pause', 'screen-reader', 'screen-death', 'screen-ending', 'screen-rotate', 'screen-custom']) {
     elements[candidate].hidden = candidate !== screenId;
   }
 }
@@ -583,6 +681,13 @@ function showDeathScreen(kind) {
     paragraph.textContent = lineText;
     lines.appendChild(paragraph);
   }
+  // One life (a custom threat level can ask for it): there is no checkpoint to go back to.
+  if (!game.difficulty.checkpointsEnabled) {
+    const paragraph = document.createElement('p');
+    paragraph.textContent = 'One life. This descent is over.';
+    lines.appendChild(paragraph);
+  }
+  elements['button-retry'].hidden = !game.difficulty.checkpointsEnabled;
   setHudVisible(false);
   closeMapOverlay();
   showOnlyScreen('screen-death');
@@ -605,6 +710,7 @@ function showEndingScreen() {
   addRow('Distance walked', Math.round(game.statistics.distanceWalked) + ' m');
   addRow('Signal losses', String(game.statistics.deaths));
   addRow('Threat level', game.difficulty.label);
+  if (game.difficulty.isCustom) addRow('Custom settings', game.difficulty.description);
   addRow('Station', level.description);
   if (debugState.hasBeenUsedThisRun) addRow('Debug mode', 'used, so this run sets no best time');
   if (game.statistics.bestTime !== null) addRow('Best time', formatClockTime(game.statistics.bestTime));

@@ -475,7 +475,7 @@ function updateHollow(dt) {
 
   // ---- anger: the beam raises it, time lowers it. A tap is survivable; holding is not. ----
   if (isInBeam && !isEnraged) {
-    hollow.anger = Math.min(1, hollow.anger + dt * TUNING.hollowAngerPerBeamSecond);
+    hollow.anger = Math.min(1, hollow.anger + dt * TUNING.hollowAngerPerBeamSecond * game.difficulty.angerFactor);
     if (!hollow.wasInBeam && hollow.turnCaptionCooldown <= 0 && hollow.state !== HOLLOW_STATE_HUNT) {
       showCaption('[it turns toward the light]');
       hollow.turnCaptionCooldown = 12;
