@@ -25,7 +25,7 @@ async function openGame(options) {
   });
   page.on('pageerror', (error) => problems.push('page error: ' + error.message));
   await page.goto('file://' + (settings.dev ? devPagePath : gamePagePath));
-  await page.waitForFunction((needsDebugMode) => Boolean(window.noReturnDebug && (!needsDebugMode || window.noReturnDebug.setDebugOption)), settings.dev);
+  await page.waitForFunction((needsDebugMode) => Boolean(window.lastReturnDebug && (!needsDebugMode || window.lastReturnDebug.setDebugOption)), settings.dev);
   return { browser, page, problems };
 }
 
@@ -41,7 +41,7 @@ async function startGame(page, isPhone) {
     await page.keyboard.press('Enter');
   }
   // An upright phone goes straight to the "turn your phone sideways" screen instead of play.
-  await page.waitForFunction(() => ['playing', 'rotate'].includes(window.noReturnDebug.game.mode));
+  await page.waitForFunction(() => ['playing', 'rotate'].includes(window.lastReturnDebug.game.mode));
 }
 
 // Headless Chromium only draws new frames when asked, so this nudges it to draw a few.

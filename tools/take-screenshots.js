@@ -19,7 +19,7 @@ async function capture(page, name) {
 // Stands at each listed spot in turn and fires full sweeps in the listed directions.
 async function scanFrom(page, stops) {
   await page.evaluate((stopList) => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     for (const stop of stopList) {
       for (const yaw of stop.yaws) {
         debug.teleport(stop.x, stop.z, yaw);
@@ -34,7 +34,7 @@ async function scanFrom(page, stops) {
 
 async function paintFor(page, seconds, spreadDegrees) {
   await page.evaluate(([duration, spread]) => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.player.heat = 0; debug.player.isOverheated = false;
     debug.setScannerSpread(spread);
     debug.setScanHeld(true);
@@ -44,7 +44,7 @@ async function paintFor(page, seconds, spreadDegrees) {
 
 async function stand(page, x, z, yaw, pitch, settleSeconds) {
   await page.evaluate(([px, pz, pyaw, ppitch, settle]) => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.setScanHeld(false);
     debug.teleport(px, pz, pyaw);
     debug.player.pitch = ppitch;
@@ -118,7 +118,7 @@ const desktopShots = {
   'hollow': async (page) => {
     await scanFrom(page, corridorStops);
     await page.evaluate(([facing]) => {
-      const debug = window.noReturnDebug;
+      const debug = window.lastReturnDebug;
       debug.teleport(21.5, 53.0, facing);
       debug.player.pitch = 0.06;
       debug.spawnHollow(27.2, 52.8);
@@ -129,7 +129,7 @@ const desktopShots = {
     }, [east]);
     await paintFor(page, 0.7, 8);
     await capture(page, 'hollow');
-    await page.evaluate(() => { window.noReturnDebug.setScanHeld(false); window.noReturnDebug.hollow.isActive = false; });
+    await page.evaluate(() => { window.lastReturnDebug.setScanHeld(false); window.lastReturnDebug.hollow.isActive = false; });
   }
 };
 
@@ -148,7 +148,7 @@ async function takeDebugModeShot(page) {
   await page.waitForTimeout(500);
   await drawFrames(page, 2);
   await page.evaluate(([facing]) => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.setScanHeld(false);
     debug.simulate(0.05);
     debug.teleport(32.5, 22.4, facing);
@@ -164,7 +164,7 @@ async function takeDebugModeShot(page) {
 
   // ---- desktop, 1920 x 1080 ----
   const { browser, page, problems } = await openGame({ deviceScaleFactor: 1.5 });
-  await page.evaluate(() => { window.noReturnDebug.settings.hud = 'full'; }); // the pictures show the full instrument screen
+  await page.evaluate(() => { window.lastReturnDebug.settings.hud = 'full'; }); // the pictures show the full instrument screen
   if (wants('title')) {
     for (let pump = 0; pump < 45; pump++) await drawFrames(page, 1); // let the title screen scan the lobby for a while
     await page.screenshot({ path: path.join(outputDirectory, 'title.jpg'), type: 'jpeg', quality: 86 });
@@ -172,7 +172,7 @@ async function takeDebugModeShot(page) {
   }
   await startGame(page, false);
   await page.evaluate(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.game.difficulty = Object.assign({}, debug.game.difficulty, { stillsEnabled: false });
     debug.grantPower();
     debug.grantKeycard();
@@ -188,7 +188,7 @@ async function takeDebugModeShot(page) {
     const dev = await openGame({ deviceScaleFactor: 1.5, dev: true });
     await startGame(dev.page, false);
     await dev.page.evaluate(() => {
-      const debug = window.noReturnDebug;
+      const debug = window.lastReturnDebug;
       debug.game.difficulty = Object.assign({}, debug.game.difficulty, { stillsEnabled: false });
       debug.grantPower();
       debug.grantKeycard();
@@ -201,7 +201,7 @@ async function takeDebugModeShot(page) {
   // ---- a generated station, drawn in full with debug mode's "Reveal the whole map" ----
   if (wants('uncharted-map')) {
     const uncharted = await openGame({ deviceScaleFactor: 1.5, dev: true });
-    await uncharted.page.evaluate(() => { window.noReturnDebug.settings.hud = 'full'; }); // the dev build: debug mode is not in the game itself
+    await uncharted.page.evaluate(() => { window.lastReturnDebug.settings.hud = 'full'; }); // the dev build: debug mode is not in the game itself
     await uncharted.page.evaluate(() => document.getElementById('station-generated').click());
     await uncharted.page.selectOption('#title-station-size', 'medium');
     await uncharted.page.selectOption('#title-station-layout', 'mixed');
@@ -217,7 +217,7 @@ async function takeDebugModeShot(page) {
   // ---- phone ----
   if (wants('phone')) {
     const phone = await openGame({ width: 844, height: 390, deviceScaleFactor: 2, isPhone: true });
-    await phone.page.evaluate(() => { window.noReturnDebug.settings.hud = 'full'; }); // held sideways
+    await phone.page.evaluate(() => { window.lastReturnDebug.settings.hud = 'full'; }); // held sideways
     await startGame(phone.page, true);
     await scanFrom(phone.page, [
       { x: 14.0, z: 56.0, yaws: [-0.4, -1.1, 0.3], pitch: 0.1 },

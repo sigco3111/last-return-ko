@@ -1,4 +1,4 @@
-# No Return
+# Last Return
 
 A first-person horror game where a handheld LiDAR scanner is the only way to see.
 
@@ -23,11 +23,11 @@ then open `index.html` in a current desktop or mobile browser.
 With Docker, which builds the page and serves it:
 
 ```bash
-docker build -t no-return .
+docker build -t last-return .
 ```
 
 ```bash
-docker run --rm -p 8080:80 no-return
+docker run --rm -p 8080:80 last-return
 ```
 
 then open http://localhost:8080.
@@ -185,7 +185,7 @@ The pause screen says which build you are playing: the version, the build number
 A Docker build has no git to ask, so the image only carries the build number and the commit if you pass them in:
 
 ```bash
-docker build --build-arg NO_RETURN_BUILD_NUMBER=$(git rev-list --count HEAD) --build-arg NO_RETURN_BUILD_COMMIT=$(git rev-parse --short=7 HEAD) -t no-return .
+docker build --build-arg LAST_RETURN_BUILD_NUMBER=$(git rev-list --count HEAD) --build-arg LAST_RETURN_BUILD_COMMIT=$(git rev-parse --short=7 HEAD) -t last-return .
 ```
 
 Without them the game shows the version alone.

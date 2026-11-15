@@ -25,11 +25,11 @@ function check(description, condition, detail) {
   }, 'custom-' + key);
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
-  await page.waitForFunction(() => Boolean(window.noReturnDebug));
+  await page.waitForFunction(() => Boolean(window.lastReturnDebug));
 
   // --- the presets and the list of settings agree with each other ---
   const shape = await inGame(() => {
-    const d = window.noReturnDebug, missing = [];
+    const d = window.lastReturnDebug, missing = [];
     for (const presetKey in d.difficultyPresets) {
       for (const option of d.customDifficultyOptions) {
         const value = d.difficultyPresets[presetKey][option.key];
@@ -48,7 +48,7 @@ function check(description, condition, detail) {
   const opened = await page.evaluate(() => ({
     panelHidden: document.getElementById('screen-custom').hidden, adjustHidden: document.getElementById('button-custom-difficulty').hidden,
     rows: document.querySelectorAll('#custom-options .custom-row').length, titleStillThere: !document.getElementById('screen-title').hidden,
-    setting: window.noReturnDebug.settings.difficulty
+    setting: window.lastReturnDebug.settings.difficulty
   }));
   check('choosing Custom opens its panel over the title screen, with one row for each setting',
     beforeChoosing.panelHidden && beforeChoosing.adjustHidden && !opened.panelHidden && !opened.adjustHidden && opened.titleStillThere &&
@@ -58,7 +58,7 @@ function check(description, condition, detail) {
   await setControl('hearingFactor', 0.7);
   await setControl('checkpointsEnabled', false);
   await setControl('phantomFactor', 2);
-  const afterSetting = await inGame(() => JSON.parse(JSON.stringify(window.noReturnDebug.settings.customDifficulty)));
+  const afterSetting = await inGame(() => JSON.parse(JSON.stringify(window.lastReturnDebug.settings.customDifficulty)));
   const speedRow = await readRow('hollowSpeedFactor'), heatRow = await readRow('heatFactor'), lifeRow = await readRow('checkpointsEnabled');
   check('moving a control changes the setting, and the row says what it now comes to',
     afterSetting.hollowSpeedFactor === 1.35 && afterSetting.hearingFactor === 0.7 && afterSetting.checkpointsEnabled === false && afterSetting.phantomFactor === 2 &&
@@ -76,9 +76,9 @@ function check(description, condition, detail) {
 
   // --- it is remembered: close the page, open it again ---
   await page.reload();
-  await page.waitForFunction(() => Boolean(window.noReturnDebug));
+  await page.waitForFunction(() => Boolean(window.lastReturnDebug));
   const remembered = await inGame(() => ({
-    difficulty: window.noReturnDebug.settings.difficulty, values: window.noReturnDebug.settings.customDifficulty,
+    difficulty: window.lastReturnDebug.settings.difficulty, values: window.lastReturnDebug.settings.customDifficulty,
     pill: document.getElementById('difficulty-custom').checked, panelHidden: document.getElementById('screen-custom').hidden,
     description: document.getElementById('difficulty-description').textContent
   }));
@@ -93,7 +93,7 @@ function check(description, condition, detail) {
   const fromStandard = await page.evaluate(() => document.getElementById('custom-summary').textContent);
   check('"Start from" copies a preset exactly', fromNightmare === 'The same as Nightmare.' && fromStandard === 'The same as Standard.', [fromNightmare, fromStandard]);
   const repaired = await inGame(() => {
-    const d = window.noReturnDebug;
+    const d = window.lastReturnDebug;
     return d.sanitizeCustomDifficultyValues({ hollowEnabled: 'yes', hollowSpeedFactor: 99, hearingFactor: -3, heatFactor: 1.234, staminaFactor: 'fast', phantomFactor: 0.6, checkpointsEnabled: false, somethingElse: 5 });
   });
   check('stored values that are out of range, of the wrong kind or between steps are put right',
@@ -110,7 +110,7 @@ function check(description, condition, detail) {
   await page.evaluate(() => document.getElementById('button-custom-done').click());
   await startGame(page, false);
   const playing = await inGame(() => {
-    const d = window.noReturnDebug, difficulty = d.game.difficulty;
+    const d = window.lastReturnDebug, difficulty = d.game.difficulty;
     return { label: difficulty.label, key: difficulty.key, isCustom: difficulty.isCustom, speed: difficulty.hollowSpeedFactor, stamina: difficulty.staminaFactor,
       heat: difficulty.heatFactor, anger: difficulty.angerFactor, phantoms: difficulty.phantomFactor, checkpoints: difficulty.checkpointsEnabled, hearing: difficulty.hearingFactor,
       standardHearing: d.difficultyPresets.standard.hearingFactor, panelHidden: document.getElementById('screen-custom').hidden };
@@ -121,7 +121,7 @@ function check(description, condition, detail) {
 
   // --- each new setting changes the thing it says it changes (measured against the same thing at 100 %) ---
   const effects = await inGame(() => {
-    const d = window.noReturnDebug, tuning = d.tuning, result = {};
+    const d = window.lastReturnDebug, tuning = d.tuning, result = {};
     const withDifficulty = function (changes, measure) {
       const kept = d.game.difficulty;
       d.game.difficulty = Object.assign({}, d.difficultyPresets.standard, changes);
@@ -200,17 +200,17 @@ function check(description, condition, detail) {
   const staminaLeft = [];
   for (const factor of [0.5, 1, 2]) {
     await inGame((value) => {
-      const d = window.noReturnDebug;
+      const d = window.lastReturnDebug;
       d.game.difficulty = Object.assign({}, d.difficultyPresets.standard, { staminaFactor: value });
       d.teleport(10.5, 53.5, Math.PI / 2); d.player.stamina = 1; d.player.isStaminaLocked = false; d.simulate(0.1);
     }, factor);
     await page.keyboard.down('ShiftLeft');
     await page.keyboard.down('KeyW');
-    staminaLeft.push(await inGame(() => { const d = window.noReturnDebug; d.simulate(3); return d.player.stamina; }));
+    staminaLeft.push(await inGame(() => { const d = window.lastReturnDebug; d.simulate(3); return d.player.stamina; }));
     await page.keyboard.up('KeyW');
     await page.keyboard.up('ShiftLeft');
   }
-  const staminaSeconds = await inGame(() => window.noReturnDebug.tuning.staminaSeconds);
+  const staminaSeconds = await inGame(() => window.lastReturnDebug.tuning.staminaSeconds);
   const used = staminaLeft.map((left) => 1 - left);
   check('your stamina: three seconds of sprinting uses twice as much of the bar at 50 % and half as much at 200 %',
     // The page goes on running between the key going down and the measurement, so "three seconds" is three and a
@@ -220,7 +220,7 @@ function check(description, condition, detail) {
   // --- one life ---
   const die = async () => {
     await inGame(() => {
-      const d = window.noReturnDebug;
+      const d = window.lastReturnDebug;
       d.game.flags.hasLeftLift = true;
       // In the open, in the middle of the main corridor, with the Hollow two metres off and told where the player is.
       d.teleport(30.5, 52.5, Math.PI / 2); d.simulate(0.1);
@@ -228,14 +228,14 @@ function check(description, condition, detail) {
       d.hollow.graceTimer = 0; d.hollow.knowsPlayerPositionAlways = true;
       for (let step = 0; step < 100 && d.game.mode === 'playing'; step++) d.simulate(0.1);
     });
-    await page.waitForFunction(() => window.noReturnDebug.game.mode === 'dead', null, { timeout: 60000 });
+    await page.waitForFunction(() => window.lastReturnDebug.game.mode === 'dead', null, { timeout: 60000 });
   };
-  await inGame(() => { const d = window.noReturnDebug; d.game.difficulty = d.getChosenDifficulty(); }); // back to the custom values, which have checkpoints off
+  await inGame(() => { const d = window.lastReturnDebug; d.game.difficulty = d.getChosenDifficulty(); }); // back to the custom values, which have checkpoints off
   await die();
   const oneLife = await page.evaluate(() => {
     const before = { retryHidden: document.getElementById('button-retry').hidden, startOverThere: !document.getElementById('button-death-restart').hidden, text: document.getElementById('death-lines').textContent };
-    window.noReturnDebug.retryFromCheckpoint();
-    before.modeAfterTryingAnyway = window.noReturnDebug.game.mode;
+    window.lastReturnDebug.retryFromCheckpoint();
+    before.modeAfterTryingAnyway = window.lastReturnDebug.game.mode;
     return before;
   });
   check('one life: caught, there is no way to resume, only to start over',
@@ -249,12 +249,12 @@ function check(description, condition, detail) {
   await die();
   const withCheckpoints = await page.evaluate(() => ({ retryHidden: document.getElementById('button-retry').hidden, text: document.getElementById('death-lines').textContent }));
   await page.evaluate(() => document.getElementById('button-retry').click());
-  const resumed = await inGame(() => window.noReturnDebug.game.mode);
+  const resumed = await inGame(() => window.lastReturnDebug.game.mode);
   check('with checkpoints on, being caught offers the checkpoint as before', !withCheckpoints.retryHidden && !/One life/.test(withCheckpoints.text) && resumed === 'playing', { withCheckpoints: withCheckpoints, resumed: resumed });
 
   // --- the end of a custom descent: named as custom, with its own best time ---
   await inGame(() => {
-    const d = window.noReturnDebug;
+    const d = window.lastReturnDebug;
     d.hollow.isActive = false;
     d.game.flags.powerOn = true; d.game.flags.spoolsCollected = 3;
     d.teleport(10.2, 55.3, -Math.PI / 2); d.use(1);
@@ -263,27 +263,27 @@ function check(description, condition, detail) {
     d.hollow.isActive = false;
     d.teleport(6.5, 53.5, Math.PI / 2); d.simulate(0.2);
   });
-  await page.waitForFunction(() => window.noReturnDebug.game.mode === 'ending', null, { timeout: 90000 });
+  await page.waitForFunction(() => window.lastReturnDebug.game.mode === 'ending', null, { timeout: 90000 });
   await drawFrames(page, 1);
   const ending = await page.evaluate(() => {
     const rows = {};
     const terms = document.querySelectorAll('#ending-stats dt');
     for (const term of terms) rows[term.textContent] = term.nextElementSibling.textContent;
     const bestKeys = [];
-    for (let index = 0; index < window.localStorage.length; index++) if (/^no-return-best-/.test(window.localStorage.key(index))) bestKeys.push(window.localStorage.key(index));
-    return { rows: rows, bestKeys: bestKeys, key: window.noReturnDebug.game.difficulty.key };
+    for (let index = 0; index < window.localStorage.length; index++) if (/^last-return-best-/.test(window.localStorage.key(index))) bestKeys.push(window.localStorage.key(index));
+    return { rows: rows, bestKeys: bestKeys, key: window.lastReturnDebug.game.difficulty.key };
   });
   check('the ending screen says Custom and lists what was changed',
     ending.rows['Threat level'] === 'Custom' && /Hollow speed 80 %/.test(ending.rows['Custom settings'] || '') && /Your stamina 200 %/.test(ending.rows['Custom settings'] || ''), ending.rows);
   check('its best time is kept under its own values, apart from Standard',
-    ending.bestKeys.length === 1 && ending.bestKeys[0] === 'no-return-best-' + ending.key && ending.bestKeys[0] !== 'no-return-best-standard', ending.bestKeys);
+    ending.bestKeys.length === 1 && ending.bestKeys[0] === 'last-return-best-' + ending.key && ending.bestKeys[0] !== 'last-return-best-standard', ending.bestKeys);
 
   // --- the presets still work, and the panel stays out of the way ---
   await page.evaluate(() => document.getElementById('button-ending-restart').click());
   await page.evaluate(() => document.getElementById('difficulty-nightmare').click());
   const backOnPreset = await page.evaluate(() => ({ adjustHidden: document.getElementById('button-custom-difficulty').hidden, panelHidden: document.getElementById('screen-custom').hidden, description: document.getElementById('difficulty-description').textContent }));
   await startGame(page, false);
-  const nightmare = await inGame(() => ({ label: window.noReturnDebug.game.difficulty.label, same: window.noReturnDebug.game.difficulty === window.noReturnDebug.difficultyPresets.nightmare }));
+  const nightmare = await inGame(() => ({ label: window.lastReturnDebug.game.difficulty.label, same: window.lastReturnDebug.game.difficulty === window.lastReturnDebug.difficultyPresets.nightmare }));
   check('choosing a preset again hides Adjust, and the descent plays on that preset untouched',
     backOnPreset.adjustHidden && backOnPreset.panelHidden && !/Standard, but/.test(backOnPreset.description) && nightmare.label === 'Nightmare' && nightmare.same, { backOnPreset: backOnPreset, nightmare: nightmare });
 

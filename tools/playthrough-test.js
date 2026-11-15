@@ -13,44 +13,44 @@ function check(description, condition, detail) {
   const { browser, page, problems } = await openGame();
   const inGame = (callback, argument) => page.evaluate(callback, argument);
 
-  check('layout audit finds nothing unreachable', (await inGame(() => window.noReturnDebug.auditLayout())).length === 0);
+  check('layout audit finds nothing unreachable', (await inGame(() => window.lastReturnDebug.auditLayout())).length === 0);
   await startGame(page, false);
 
   // --- walking out of the lift ---
   await page.keyboard.down('KeyW');
-  await inGame(() => window.noReturnDebug.simulate(4));
+  await inGame(() => window.lastReturnDebug.simulate(4));
   await page.keyboard.up('KeyW');
-  const afterWalking = await inGame(() => ({ x: window.noReturnDebug.player.x, hasLeftLift: window.noReturnDebug.game.flags.hasLeftLift }));
+  const afterWalking = await inGame(() => ({ x: window.lastReturnDebug.player.x, hasLeftLift: window.lastReturnDebug.game.flags.hasLeftLift }));
   check('walking forward leaves the lift car', afterWalking.hasLeftLift && afterWalking.x > 10, afterWalking);
-  await inGame(() => window.noReturnDebug.simulate(4));
-  check('lift door closes behind the player', (await inGame(() => window.noReturnDebug.doors[0].openFraction)) === 0);
+  await inGame(() => window.lastReturnDebug.simulate(4));
+  check('lift door closes behind the player', (await inGame(() => window.lastReturnDebug.doors[0].openFraction)) === 0);
 
   // --- the pause screen says which build this is, and "Report a problem" carries it to the bug form ---
   await page.keyboard.press('Escape');
   const paused = await inGame(() => {
     const address = new URL(document.getElementById('link-report-problem').href);
-    return { mode: window.noReturnDebug.game.mode, buildLine: document.getElementById('pause-build').textContent, address: address.origin + address.pathname,
+    return { mode: window.lastReturnDebug.game.mode, buildLine: document.getElementById('pause-build').textContent, address: address.origin + address.pathname,
       fields: Object.fromEntries(address.searchParams) };
   });
   check('the pause screen shows the version, the build number and the commit', /^Version: \d+\.\d+\.\d+ · build \d+ · [0-9a-f]{7}\+?$/.test(paused.buildLine), paused.buildLine);
   check('"Report a problem" opens the bug form with the build, the station, the threat level and the room filled in',
-    paused.mode === 'paused' && paused.address === 'https://github.com/StefanKnol/No-Return/issues/new' && paused.fields.template === '1-bug.yml' &&
+    paused.mode === 'paused' && paused.address === 'https://github.com/StefanKnol/Last-Return/issues/new' && paused.fields.template === '1-bug.yml' &&
     'Version: ' + paused.fields.version === paused.buildLine && paused.fields.station === 'Kessel-9' && paused.fields.seed === undefined &&
     paused.fields.threat === 'Standard' && /^[A-Z0-9 ]+ \(x [\d.]+, z [\d.]+\)$/.test(paused.fields.where) && paused.fields.where.indexOf('UNSURVEYED') < 0 && paused.fields.device.length > 0, paused);
   await page.keyboard.press('Escape');
-  check('Escape resumes the descent', (await inGame(() => window.noReturnDebug.game.mode)) === 'playing');
+  check('Escape resumes the descent', (await inGame(() => window.lastReturnDebug.game.mode)) === 'playing');
 
   // --- the quiet screen: instruments stay out of the way until they have something to say ---
   await drawFrames(page, 2);
   const quiet = await inGame(() => {
-    const debug = window.noReturnDebug, faded = (id) => document.getElementById(id).classList.contains('is-faded');
+    const debug = window.lastReturnDebug, faded = (id) => document.getElementById(id).classList.contains('is-faded');
     const result = { setting: debug.settings.hud, readouts: faded('hud-readouts'), minimap: faded('hud-block-map'), heatCold: faded('meter-heat'), objectiveJustChanged: faded('hud-block-objective') };
     debug.player.heat = 0.6;
     return result;
   });
   await drawFrames(page, 2);
   const quietLater = await inGame(() => {
-    const debug = window.noReturnDebug, faded = (id) => document.getElementById(id).classList.contains('is-faded');
+    const debug = window.lastReturnDebug, faded = (id) => document.getElementById(id).classList.contains('is-faded');
     const result = { heatWarm: faded('meter-heat') };
     debug.player.heat = 0;
     debug.settings.hud = 'full';
@@ -60,7 +60,7 @@ function check(description, condition, detail) {
   const full = await inGame(() => {
     const faded = (id) => document.getElementById(id).classList.contains('is-faded');
     const result = { readouts: faded('hud-readouts'), minimap: faded('hud-block-map'), heatCold: faded('meter-heat') };
-    window.noReturnDebug.settings.hud = 'quiet';
+    window.lastReturnDebug.settings.hud = 'quiet';
     return result;
   });
   check('the quiet screen hides the readouts, the minimap and a cold heat meter, shows the objective when it has just changed, and shows the heat meter once the emitter is warm',
@@ -70,7 +70,7 @@ function check(description, condition, detail) {
   // --- voice recordings: a line with a recording is played, one without stays text only ---
   // Made-up line names are used, so this works whether or not real recordings are in assets/voice.
   const voice = await inGame(async () => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     const context = debug.audio.context;
     const before = { hasRecording: debug.hasVoiceLine('lineOnlyThisTestKnows') };
     if (!context) return { skipped: true };
@@ -91,7 +91,7 @@ function check(description, condition, detail) {
 
   // --- the real recordings in assets/voice, if there are any: each must be a sound file the browser can play ---
   const recordings = await inGame(async () => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     if (!debug.audio.context) return { skipped: true };
     const lengths = {}, broken = [];
     for (const key of debug.radioLineKeys.concat(['spool1', 'spool2', 'spool3'])) {
@@ -107,7 +107,7 @@ function check(description, condition, detail) {
 
   // --- nothing is ever drawn for a figure that has not been scanned ---
   const figureTrace = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.teleport(32.5, 21.6, 0);
     const returnsBefore = debug.pointCloud.totalReturns;
     debug.simulate(1);
@@ -116,25 +116,25 @@ function check(description, condition, detail) {
   check('standing among the dummies without scanning stores no points', figureTrace.returnsAdded === 0 && figureTrace.stillCount === 9, figureTrace);
 
   // --- first spool and the reader ---
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(53, 35.2, 0); debug.use(3); });
-  check('taking a spool opens its log', (await inGame(() => window.noReturnDebug.game.mode)) === 'reading');
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(53, 35.2, 0); debug.use(3); });
+  check('taking a spool opens its log', (await inGame(() => window.lastReturnDebug.game.mode)) === 'reading');
   await page.keyboard.press('KeyE');
-  check('closing the log returns to play', (await inGame(() => window.noReturnDebug.game.mode)) === 'playing');
+  check('closing the log returns to play', (await inGame(() => window.lastReturnDebug.game.mode)) === 'playing');
 
   // --- generator wakes the Hollow, which walks to the noise ---
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(69.2, 47.5, Math.PI / 2); debug.use(2); debug.teleport(14, 51, 0); debug.simulate(7); });
-  check('generator restores power and the Hollow appears', await inGame(() => window.noReturnDebug.game.flags.powerOn && window.noReturnDebug.hollow.isActive));
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(69.2, 47.5, Math.PI / 2); debug.use(2); debug.teleport(14, 51, 0); debug.simulate(7); });
+  check('generator restores power and the Hollow appears', await inGame(() => window.lastReturnDebug.game.flags.powerOn && window.lastReturnDebug.hollow.isActive));
   let closestToGenerator = Infinity;
   for (let step = 0; step < 30; step++) {
-    await inGame(() => window.noReturnDebug.simulate(1));
-    const position = await inGame(() => [window.noReturnDebug.hollow.figure.x, window.noReturnDebug.hollow.figure.z]);
+    await inGame(() => window.lastReturnDebug.simulate(1));
+    const position = await inGame(() => [window.lastReturnDebug.hollow.figure.x, window.lastReturnDebug.hollow.figure.z]);
     closestToGenerator = Math.min(closestToGenerator, Math.hypot(position[0] - 68.5, position[1] - 47.5));
   }
   check('the Hollow walks from the shaft to the generator room', closestToGenerator < 3, closestToGenerator);
 
   // --- the beam holds it; without the beam it catches the player ---
   await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.hollow.figure.x = 30.5; debug.hollow.figure.z = 52.5; debug.hollow.graceTimer = 0;
     debug.teleport(22.5, 52.5, Math.PI / 2);
     // A tap of the beam: it must not start a hunt.
@@ -153,10 +153,10 @@ function check(description, condition, detail) {
   const tap = await inGame(() => window.tapResult);
   check('a tap of the beam raises its anger without starting a hunt',
     tap.hits > 0 && tap.anger > 0.03 && tap.anger < 0.15 && tap.state !== 2 && tap.stateAfter !== 2, tap);
-  const held = await inGame(() => ({ held: window.noReturnDebug.hollow.heldAmount, speed: window.noReturnDebug.hollow.currentSpeed, state: window.noReturnDebug.hollow.state, anger: window.noReturnDebug.hollow.anger }));
+  const held = await inGame(() => ({ held: window.lastReturnDebug.hollow.heldAmount, speed: window.lastReturnDebug.hollow.currentSpeed, state: window.lastReturnDebug.hollow.state, anger: window.lastReturnDebug.hollow.anger }));
   check('holding the beam on it starts a hunt and slows it', held.state === 2 && held.held > 0.9 && held.speed < 1 && held.anger >= 0.3, held);
   const enraged = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.player.heat = 0;
     debug.hollow.figure.x = 30.5; debug.hollow.figure.z = 52.5;
     debug.simulate(3.2);
@@ -168,19 +168,19 @@ function check(description, condition, detail) {
     return result;
   });
   check('holding it until its anger is full enrages it', enraged.enragedTimer > 0, enraged);
-  await inGame(() => { window.noReturnDebug.setScanHeld(false); window.noReturnDebug.simulate(8); });
-  check('with the beam off it reaches the player', (await inGame(() => window.noReturnDebug.game.mode)) === 'dying');
-  await page.waitForFunction(() => window.noReturnDebug.game.mode === 'dead', null, { timeout: 60000 });
+  await inGame(() => { window.lastReturnDebug.setScanHeld(false); window.lastReturnDebug.simulate(8); });
+  check('with the beam off it reaches the player', (await inGame(() => window.lastReturnDebug.game.mode)) === 'dying');
+  await page.waitForFunction(() => window.lastReturnDebug.game.mode === 'dead', null, { timeout: 60000 });
   await page.evaluate(() => document.getElementById('button-retry').click());
   const afterRetry = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     return { mode: debug.game.mode, distance: Math.hypot(debug.hollow.figure.x - debug.player.x, debug.hollow.figure.z - debug.player.z) };
   });
   check('retry resumes at the checkpoint with the Hollow far away', afterRetry.mode === 'playing' && afterRetry.distance > 20, afterRetry);
 
   // --- suspense behaviour: it stops to listen, and it searches ahead of where it lost you ---
   const listening = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.teleport(14, 51, 0);
     debug.hollow.state = 0; debug.hollow.anger = 0; debug.hollow.graceTimer = 0;
     debug.hollow.figure.x = 24.5; debug.hollow.figure.z = 52.5;
@@ -194,7 +194,7 @@ function check(description, condition, detail) {
   check('wandering near the player it stops dead to listen, then moves on',
     listening.during.state === 4 && listening.during.speed === 0 && listening.stateAfter !== 4, listening);
   const searchLead = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     const hollow = debug.hollow;
     // It last sensed the player at x 22 walking east at 2.5 m/s, then lost them.
     hollow.state = 2; hollow.figure.x = 21.5; hollow.figure.z = 52.5;
@@ -210,7 +210,7 @@ function check(description, condition, detail) {
 
   // --- the director: it steers the Hollow's wandering, and it has to be fair about it ---
   const steering = await inGame(() => {
-    const debug = window.noReturnDebug, hollow = debug.hollow, director = debug.director;
+    const debug = window.lastReturnDebug, hollow = debug.hollow, director = debug.director;
     debug.teleport(14, 51, 0); // the player stands still in the lift lobby
     hollow.state = 0; hollow.anger = 0; hollow.graceTimer = 0; hollow.doubleBackTimer = 0;
     hollow.figure.x = 30.5; hollow.figure.z = 52.5;
@@ -239,7 +239,7 @@ function check(description, condition, detail) {
     steering.fullyClosedIn.nearest >= steering.floor && steering.fullyClosedIn.furthest <= steering.fullyClosedIn.band[1], steering);
 
   const breather = await inGame(() => {
-    const debug = window.noReturnDebug, hollow = debug.hollow, director = debug.director;
+    const debug = window.lastReturnDebug, hollow = debug.hollow, director = debug.director;
     const result = {};
     // Menace is full while it is still chasing something: it must not be called off.
     director.phase = 0; director.phaseTime = 50; director.menace = 1; director.hasPeaked = true;
@@ -283,27 +283,27 @@ function check(description, condition, detail) {
   check('noise during a breather still brings it', breather.afterNoise.state === 1 || breather.afterNoise.state === 2, breather.afterNoise);
   check('the breather ends by itself, after at least 25 seconds, and the closing-in starts again',
     breather.ended.phase === 0 && breather.ended.seconds >= 25 && breather.ended.seconds < 90 && breather.ended.mode === 'playing', breather.ended);
-  await inGame(() => { window.noReturnDebug.hollow.isActive = false; });
+  await inGame(() => { window.lastReturnDebug.hollow.isActive = false; });
 
   // --- doors ---
-  const doorFraction = (tileX, tileZ) => inGame(([x, z]) => window.noReturnDebug.doors.find((door) => door.tileX === x && door.tileZ === z).openFraction, [tileX, tileZ]);
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(31.5, 38.7, 0); debug.simulate(1.5); });
+  const doorFraction = (tileX, tileZ) => inGame(([x, z]) => window.lastReturnDebug.doors.find((door) => door.tileX === x && door.tileZ === z).openFraction, [tileX, tileZ]);
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(31.5, 38.7, 0); debug.simulate(1.5); });
   check('powered door opens once the mains is on', (await doorFraction(31, 37)) === 1);
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(41.3, 30.5, Math.PI / 2); debug.simulate(1.5); });
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(41.3, 30.5, Math.PI / 2); debug.simulate(1.5); });
   check('keycard door stays shut without the card', (await doorFraction(42, 30)) === 0);
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(17.3, 32.6, Math.PI); debug.use(6); debug.teleport(41.3, 30.5, Math.PI / 2); debug.simulate(1.5); });
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(17.3, 32.6, Math.PI); debug.use(6); debug.teleport(41.3, 30.5, Math.PI / 2); debug.simulate(1.5); });
   check('keycard door opens with the card', (await doorFraction(42, 30)) === 1);
 
   // --- the Stills ---
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(32, 12.6, Math.PI); debug.use(4); });
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(32, 12.6, Math.PI); debug.use(4); });
   await page.keyboard.press('KeyE');
-  const stillPositions = () => inGame(() => window.noReturnDebug.stills.map((still) => [still.figure.x, still.figure.z, still.isPresent]));
-  await inGame(() => window.noReturnDebug.simulate(1.2));
+  const stillPositions = () => inGame(() => window.lastReturnDebug.stills.map((still) => [still.figure.x, still.figure.z, still.isPresent]));
+  await inGame(() => window.lastReturnDebug.simulate(1.2));
   check('two extra dummies appear after the spool is taken', (await stillPositions()).filter((still) => still[2]).length === 11);
   // Watched: sweep the room continuously for a few seconds; nobody may move.
   const beforeWatched = await stillPositions();
   await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.teleport(32, 12.6, Math.PI);
     for (let step = 0; step < 150; step++) {
       debug.player.yaw = Math.PI + Math.sin(step * 0.35) * 1.3;
@@ -319,30 +319,30 @@ function check(description, condition, detail) {
   for (let index = 0; index < beforeWatched.length; index++) {
     watchedMovement += Math.hypot(afterWatched[index][0] - beforeWatched[index][0], afterWatched[index][1] - beforeWatched[index][1]);
   }
-  check('dummies in front of the player barely move while being scanned', watchedMovement < 9 && (await inGame(() => window.noReturnDebug.game.mode)) === 'playing', watchedMovement);
-  await inGame(() => window.noReturnDebug.simulate(25));
-  check('unwatched, the dummies reach the player', (await inGame(() => window.noReturnDebug.game.mode)) === 'dying');
-  await page.waitForFunction(() => window.noReturnDebug.game.mode === 'dead', null, { timeout: 60000 });
+  check('dummies in front of the player barely move while being scanned', watchedMovement < 9 && (await inGame(() => window.lastReturnDebug.game.mode)) === 'playing', watchedMovement);
+  await inGame(() => window.lastReturnDebug.simulate(25));
+  check('unwatched, the dummies reach the player', (await inGame(() => window.lastReturnDebug.game.mode)) === 'dying');
+  await page.waitForFunction(() => window.lastReturnDebug.game.mode === 'dead', null, { timeout: 60000 });
   await page.evaluate(() => document.getElementById('button-retry').click());
 
   // --- finale ---
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(59.5, 8.5, 0); debug.use(5); });
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(59.5, 8.5, 0); debug.use(5); });
   await page.keyboard.press('KeyE');
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(10.2, 55.3, -Math.PI / 2); debug.use(1); });
-  const upload = await inGame(() => ({ started: window.noReturnDebug.game.flags.uploadStarted, countdown: window.noReturnDebug.game.liftCountdown }));
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(10.2, 55.3, -Math.PI / 2); debug.use(1); });
+  const upload = await inGame(() => ({ started: window.lastReturnDebug.game.flags.uploadStarted, countdown: window.lastReturnDebug.game.liftCountdown }));
   check('uploading three spools calls the lift', upload.started && upload.countdown > 39 && upload.countdown <= 40, upload);
-  await inGame(() => { const debug = window.noReturnDebug; debug.hollow.isActive = false; debug.simulate(41); });
-  check('the lift arrives and opens', await inGame(() => window.noReturnDebug.game.flags.liftArrived && window.noReturnDebug.doors[0].openFraction === 1));
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(6.5, 53.5, Math.PI / 2); debug.simulate(0.2); });
-  check('boarding the lift starts the ascent', (await inGame(() => window.noReturnDebug.game.mode)) === 'ascending');
-  await page.waitForFunction(() => window.noReturnDebug.game.mode === 'ending', null, { timeout: 90000 });
+  await inGame(() => { const debug = window.lastReturnDebug; debug.hollow.isActive = false; debug.simulate(41); });
+  check('the lift arrives and opens', await inGame(() => window.lastReturnDebug.game.flags.liftArrived && window.lastReturnDebug.doors[0].openFraction === 1));
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(6.5, 53.5, Math.PI / 2); debug.simulate(0.2); });
+  check('boarding the lift starts the ascent', (await inGame(() => window.lastReturnDebug.game.mode)) === 'ascending');
+  await page.waitForFunction(() => window.lastReturnDebug.game.mode === 'ending', null, { timeout: 90000 });
   await drawFrames(page, 1);
   check('the ending screen is shown', await page.evaluate(() => !document.getElementById('screen-ending').hidden));
 
-  check('a normal run is not marked as a debug run', await inGame(() => !window.noReturnDebug.debugState.hasBeenUsedThisRun));
+  check('a normal run is not marked as a debug run', await inGame(() => !window.lastReturnDebug.debugState.hasBeenUsedThisRun));
   const plainGame = await inGame(() => ({
     panel: document.getElementById('debug-panel') !== null, button: document.getElementById('button-open-debug') !== null,
-    switches: Object.keys(window.noReturnDebug.debugState.options).length, fieldCard: document.querySelector('.controls-list').textContent.includes('Debug')
+    switches: Object.keys(window.lastReturnDebug.debugState.options).length, fieldCard: document.querySelector('.controls-list').textContent.includes('Debug')
   }));
   check('the plain game has no debug mode: no panel, no pause-menu button, no switches',
     !plainGame.panel && !plainGame.button && plainGame.switches === 0 && !plainGame.fieldCard, plainGame);
@@ -357,34 +357,34 @@ function check(description, condition, detail) {
   await startGame(debugPage, false);
   await debugPage.keyboard.press('Backquote');
   await drawFrames(debugPage, 2);
-  const panelState = await inDebugGame(() => ({ hidden: document.getElementById('debug-panel').hidden, mode: window.noReturnDebug.game.mode }));
+  const panelState = await inDebugGame(() => ({ hidden: document.getElementById('debug-panel').hidden, mode: window.lastReturnDebug.game.mode }));
   check('the ` key opens the debug panel without pausing the game', !panelState.hidden && panelState.mode === 'playing', panelState);
 
   // "Cannot be caught" goes on first, so the summoned Hollow cannot end the run while the other switches are tried.
   for (const key of ['invulnerable', 'showCreatures', 'seeThroughWalls', 'lightStation', 'showSenses', 'creaturesOnMap']) await clickInPage('debug-option-' + key);
   await clickInPage('debug-action-power');
-  await inDebugGame(() => { const debug = window.noReturnDebug; debug.teleport(21.5, 53, Math.PI / 2); debug.simulate(0.2); });
+  await inDebugGame(() => { const debug = window.lastReturnDebug; debug.teleport(21.5, 53, Math.PI / 2); debug.simulate(0.2); });
   await clickInPage('debug-action-summon');
-  await inDebugGame(() => window.noReturnDebug.simulate(1));
+  await inDebugGame(() => window.lastReturnDebug.simulate(1));
   await drawFrames(debugPage, 3);
   await clickInPage('touch-map'); // the full map, with creature markers
   await drawFrames(debugPage, 2);
   await clickInPage('touch-map');
   check('lit station, creature bodies, sense lines and map markers draw without errors',
-    debugSession.problems.length === 0 && await inDebugGame(() => window.noReturnDebug.hollow.isActive), debugSession.problems);
-  check('using a switch marks the run as a debug run', await inDebugGame(() => window.noReturnDebug.debugState.hasBeenUsedThisRun));
+    debugSession.problems.length === 0 && await inDebugGame(() => window.lastReturnDebug.hollow.isActive), debugSession.problems);
+  check('using a switch marks the run as a debug run', await inDebugGame(() => window.lastReturnDebug.debugState.hasBeenUsedThisRun));
 
   await inDebugGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.hollow.graceTimer = 0;
     debug.hollow.figure.x = debug.player.x + 0.4; debug.hollow.figure.z = debug.player.z;
     debug.simulate(2);
   });
-  check('"Cannot be caught": the Hollow reaches the player and nothing happens', (await inDebugGame(() => window.noReturnDebug.game.mode)) === 'playing');
+  check('"Cannot be caught": the Hollow reaches the player and nothing happens', (await inDebugGame(() => window.lastReturnDebug.game.mode)) === 'playing');
 
   await clickInPage('debug-option-freezeCreatures');
   const frozen = await inDebugGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.hollow.figure.x = 30.5; debug.hollow.figure.z = 52.5;
     debug.simulate(3);
     return [debug.hollow.figure.x, debug.hollow.figure.z];
@@ -394,7 +394,7 @@ function check(description, condition, detail) {
 
   await clickInPage('debug-option-creaturesIgnorePlayer');
   const ignored = await inDebugGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.hollow.state = 0;
     debug.hollow.figure.x = debug.player.x + 3; debug.hollow.figure.z = debug.player.z;
     debug.emitNoise(debug.player.x, debug.player.z, 13);
@@ -406,41 +406,41 @@ function check(description, condition, detail) {
   check('"Creatures ignore me": noise and the beam do not start a hunt', ignored !== 2, ignored);
 
   await clickInPage('debug-option-unlimitedScanner');
-  const heat = await inDebugGame(() => { const debug = window.noReturnDebug; debug.setScanHeld(true); debug.simulate(15); debug.setScanHeld(false); return [debug.player.heat, debug.player.isOverheated]; });
+  const heat = await inDebugGame(() => { const debug = window.lastReturnDebug; debug.setScanHeld(true); debug.simulate(15); debug.setScanHeld(false); return [debug.player.heat, debug.player.isOverheated]; });
   check('"Scanner never heats": fifteen seconds of painting leaves it cold', heat[0] === 0 && heat[1] === false, heat);
 
   await clickInPage('debug-option-flyMode');
   await debugPage.keyboard.down('KeyW');
-  const flight = await inDebugGame(() => { const debug = window.noReturnDebug; debug.player.pitch = 0.6; const before = debug.player.eyeHeight; debug.simulate(1.5); return debug.player.eyeHeight - before; });
+  const flight = await inDebugGame(() => { const debug = window.lastReturnDebug; debug.player.pitch = 0.6; const before = debug.player.eyeHeight; debug.simulate(1.5); return debug.player.eyeHeight - before; });
   await debugPage.keyboard.up('KeyW');
   check('"Fly through walls": looking up and moving forward gains height', flight > 3, flight);
   await clickInPage('debug-option-flyMode');
-  const landed = await inDebugGame(() => window.noReturnDebug.player.eyeHeight);
+  const landed = await inDebugGame(() => window.lastReturnDebug.player.eyeHeight);
   check('switching flying off puts the player back on the floor', Math.abs(landed - 1.62) < 0.01, landed);
 
   await inDebugGame(() => { document.getElementById('debug-zone').value = '19'; });
   await clickInPage('debug-teleport');
-  const zoneAfterTeleport = await inDebugGame(() => { const debug = window.noReturnDebug; debug.simulate(0.2); return [debug.player.x, debug.player.z]; });
+  const zoneAfterTeleport = await inDebugGame(() => { const debug = window.lastReturnDebug; debug.simulate(0.2); return [debug.player.x, debug.player.z]; });
   check('"Go to" moves the player into the chosen zone (Shaft 9)', zoneAfterTeleport[0] > 49 && zoneAfterTeleport[0] < 69 && zoneAfterTeleport[1] < 15, zoneAfterTeleport);
 
   const tuned = await inDebugGame(() => {
     const field = document.getElementById('debug-tuning-walkSpeed');
     field.value = '5';
     field.dispatchEvent(new Event('change'));
-    const changed = window.noReturnDebug.tuning.walkSpeed;
+    const changed = window.lastReturnDebug.tuning.walkSpeed;
     document.getElementById('debug-tuning-reset').click();
-    return [changed, window.noReturnDebug.tuning.walkSpeed, field.value];
+    return [changed, window.lastReturnDebug.tuning.walkSpeed, field.value];
   });
   check('live tuning changes a value and reset restores it', tuned[0] === 5 && tuned[1] === 2.5 && tuned[2] === '2.5', tuned);
   // --- leaving for the title screen must leave no sound of play running under it ---
-  await inDebugGame(() => { const debug = window.noReturnDebug; debug.spawnHollow(debug.player.x + 6, debug.player.z); debug.simulate(0.5); });
+  await inDebugGame(() => { const debug = window.lastReturnDebug; debug.spawnHollow(debug.player.x + 6, debug.player.z); debug.simulate(0.5); });
   await drawFrames(debugSession.page, 2);
   await debugSession.page.waitForTimeout(700);
-  const growlWhilePlaying = await inDebugGame(() => window.noReturnDebug.audio.context ? window.noReturnDebug.audio.hollowGrowlGain.gain.value : -1);
+  const growlWhilePlaying = await inDebugGame(() => window.lastReturnDebug.audio.context ? window.lastReturnDebug.audio.hollowGrowlGain.gain.value : -1);
   await debugSession.page.evaluate(() => document.getElementById('button-pause-restart').click());
   await drawFrames(debugSession.page, 2);
   await debugSession.page.waitForTimeout(700);
-  const afterLeaving = await inDebugGame(() => { const audio = window.noReturnDebug.audio; return { mode: window.noReturnDebug.game.mode,
+  const afterLeaving = await inDebugGame(() => { const audio = window.lastReturnDebug.audio; return { mode: window.lastReturnDebug.game.mode,
     growl: audio.context ? audio.hollowGrowlGain.gain.value : 0, staticLevel: audio.context ? audio.staticGain.gain.value : 0 }; });
   check('abandoning to the title screen switches the growl and the static off',
     growlWhilePlaying === -1 || (growlWhilePlaying > 0.05 && afterLeaving.mode === 'title' && afterLeaving.growl < 0.01 && afterLeaving.staticLevel < 0.01), { growlWhilePlaying: growlWhilePlaying, afterLeaving: afterLeaving });
@@ -449,7 +449,7 @@ function check(description, condition, detail) {
 
   // --- phones: the game holds still until the phone is turned sideways ---
   const phone = await openGame({ width: 390, height: 844, isPhone: true });
-  const phoneMode = () => phone.page.evaluate(() => window.noReturnDebug.game.mode);
+  const phoneMode = () => phone.page.evaluate(() => window.lastReturnDebug.game.mode);
   const turnPhone = async (width, height) => {
     await phone.page.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : null));
     await phone.page.waitForTimeout(300);

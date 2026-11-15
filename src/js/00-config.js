@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// NO RETURN - configuration, tuning values and all story text
+// LAST RETURN - configuration, tuning values and all story text
 //
 // This is the file to open when you want the game to FEEL different.
 // Change a number, run `npm run build`, reload index.html.
@@ -293,7 +293,7 @@ const TUNING = {
   phantomCrawlerFarthestMetres: 16, // ... and this far away
   // "In your face": you start a scan and it is standing right in front of you. Not one of the kinds above:
   // it has its own dice, thrown every time you start to scan, and its own limit.
-  phantomFaceChancePerScan: 0.005,   // the chance each time a scan starts (0.01 = one in a hundred). 0 switches it off.
+  phantomFaceChancePerScan: 0.01,   // the chance each time a scan starts (0.01 = one in a hundred). 0 switches it off.
   phantomFaceMostPerDescent: 1,     // however the dice fall, no more than this many in one descent. A scare like this wears out fast.
   phantomFaceNotBeforeSeconds: 120, // and never in the first two minutes
   phantomFaceMetres: 1.6,           // how far in front of you its feet are (it leans in: its head is about a metre from yours)

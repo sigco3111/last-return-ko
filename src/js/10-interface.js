@@ -707,7 +707,7 @@ function describeBuild() {
 // The address "Report a problem" on the pause screen opens: the bug form in .github/ISSUE_TEMPLATE/1-bug.yml,
 // with what the game knows already filled in. Each name here is the `id` of a field in that form, so a field
 // renamed there must be renamed here. Nothing is sent anywhere: the player sees the form and decides.
-const REPORT_PROBLEM_ADDRESS = 'https://github.com/StefanKnol/No-Return/issues/new';
+const REPORT_PROBLEM_ADDRESS = 'https://github.com/StefanKnol/Last-Return/issues/new';
 function buildReportProblemAddress() {
   const isGenerated = level.kind === 'generated';
   const fields = {

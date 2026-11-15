@@ -6,8 +6,8 @@ COPY src ./src
 COPY assets ./assets
 # There is no git in here, so whoever builds the image says which build this is. Left empty, the game shows
 # the version from package.json alone.
-ARG NO_RETURN_BUILD_NUMBER=
-ARG NO_RETURN_BUILD_COMMIT=
+ARG LAST_RETURN_BUILD_NUMBER=
+ARG LAST_RETURN_BUILD_COMMIT=
 RUN node build.js
 
 # Serve the single self-contained page.

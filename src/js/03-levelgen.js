@@ -24,7 +24,7 @@ const GENERATED_SIZE_PRESETS = {
   small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], spineLength: [10, 14] },
   medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], spineLength: [13, 18] },
   large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 5, keycards: 3, extraJobs: [2, 3], spineLength: [18, 26] },
+  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 7, keycards: 3, extraJobs: [2, 3], spineLength: [18, 26] },
 };
 
 // TWEAK: how spread out a station is.
@@ -35,7 +35,7 @@ const GENERATED_LAYOUT_PRESETS = {
   tight: { label: 'Tight', corridorChance: 0.3, corridorLength: [3, 6], spread: 14 },
   mixed: { label: 'Mixed', corridorChance: 0.55, corridorLength: [3, 9], spread: 24 },
   sprawling: { label: 'Sprawling', corridorChance: 0.7, corridorLength: [5, 12], spread: 60 },
-  sparse: { label: 'Sparse', corridorChance: 0.9, corridorLength: [7, 16], spread: 70 },
+  sparse: { label: 'Sparse', corridorChance: 0.8, corridorLength: [7, 16], spread: 70 },
 };
 
 // TWEAK: the extra jobs a generated station can be given on top of "power, three spools, lift".

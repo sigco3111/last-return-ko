@@ -707,7 +707,7 @@ function updateAscending(dt) {
     } else {
       try {
         // Best times are kept per threat level, and per station: a generated station only competes with itself.
-        let storageKey = 'no-return-best-' + game.difficulty.key;
+        let storageKey = 'last-return-best-' + game.difficulty.key;
         if (level.kind === 'generated') storageKey += '-' + level.sizeKey + '-' + level.layoutKey + '-' + level.levelsKey + '-' + level.seed;
         const previousBest = Number(window.localStorage.getItem(storageKey));
         if (!previousBest || game.statistics.elapsed < previousBest) window.localStorage.setItem(storageKey, String(game.statistics.elapsed));
@@ -847,7 +847,7 @@ function startApplication() {
   game.mode = 'title';
   showOnlyScreen('screen-title');
 
-  window.noReturnDebug = {
+  window.lastReturnDebug = {
     game: game, player: player, hollow: hollow, renderer: renderer, renderCamera: renderCamera, audio: audio,
     playHollowRoar: playHollowRoar, playHollowSnarl: playHollowSnarl, playHollowLostHiss: playHollowLostHiss, playHollowSniff: playHollowSniff, playHollowCuriousTrill: playHollowCuriousTrill,
     playStinger: playStinger, playSweepSound: playSweepSound, playInterfaceBlip: playInterfaceBlip, playRadioBlip: playRadioBlip, playDeniedSound: playDeniedSound, stills: stills, doors: doors, pointCloud: pointCloud, settings: settings,

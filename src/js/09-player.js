@@ -66,9 +66,28 @@ const settings = {
   hud: 'quiet'              // 'quiet' shows instruments only while they matter; 'full' shows everything all the time
 };
 
-function loadSettings() {
+// The game was called No Return before it was Last Return. Whatever a browser kept under the old name (the
+// settings, the best times, the workshop's unsaved work) is moved to the new keys once, so nobody loses it.
+function adoptStorageFromOldName() {
+  const oldPrefix = 'no-return-';
   try {
-    const stored = JSON.parse(window.localStorage.getItem('no-return-settings') || 'null');
+    const oldKeys = [];
+    for (let index = 0; index < window.localStorage.length; index++) {
+      const key = window.localStorage.key(index);
+      if (key && key.indexOf(oldPrefix) === 0) oldKeys.push(key);
+    }
+    for (const oldKey of oldKeys) {
+      const newKey = 'last-return-' + oldKey.slice(oldPrefix.length);
+      if (window.localStorage.getItem(newKey) === null) window.localStorage.setItem(newKey, window.localStorage.getItem(oldKey));
+      window.localStorage.removeItem(oldKey);
+    }
+  } catch (error) { /* storage is optional */ }
+}
+
+function loadSettings() {
+  adoptStorageFromOldName();
+  try {
+    const stored = JSON.parse(window.localStorage.getItem('last-return-settings') || 'null');
     if (stored && typeof stored === 'object') {
       if (typeof stored.sensitivity === 'number') settings.sensitivity = clampNumber(stored.sensitivity, 0.2, 3);
       if (typeof stored.volume === 'number') settings.volume = clampNumber(stored.volume, 0, 1);
@@ -87,7 +106,7 @@ function loadSettings() {
 }
 
 function saveSettings() {
-  try { window.localStorage.setItem('no-return-settings', JSON.stringify(settings)); } catch (error) { /* storage is optional */ }
+  try { window.localStorage.setItem('last-return-settings', JSON.stringify(settings)); } catch (error) { /* storage is optional */ }
 }
 
 // Where the eyes (and so the camera and the scanner) are, measured from the lift's floor level.

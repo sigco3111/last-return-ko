@@ -20,7 +20,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   // Describes the first vent of the station that is loaded: its tiles, and the two places where it opens into a
   // room (a vent tile with ordinary floor next to it). It runs inside the page, so it is handed over as text.
   const describeFirstVent = function () {
-    const debug = window.noReturnDebug, level = debug.level;
+    const debug = window.lastReturnDebug, level = debug.level;
     const tiles = [], mouths = [];
     for (let z = level.boundsMinimumZ; z < level.boundsMaximumZ; z++) for (let x = level.boundsMinimumX; x < level.boundsMaximumX; x++) {
       if (!debug.isVentAt(x + 0.5, z + 0.5) || debug.zoneNames[debug.getZoneAt(x + 0.5, z + 0.5)] !== 'VENT') continue;
@@ -42,8 +42,8 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   // a sort with a random number inside its comparison, shows up as a station that differs between now and later.)
   const promisedSeeds = [[2, 'large', 'mixed', 'one'], [3, 'large', 'sprawling', 'two'], [7, 'medium', 'mixed', 'two'], [11, 'small', 'tight', 'one'], [5, 'massive', 'mixed', 'two']];
   const buildPrints = (seeds) => inGame((list) => list.map((entry) => {
-    window.noReturnDebug.loadStation('generated', entry[0], entry[1], entry[2], entry[3]);
-    return window.noReturnDebug.getStationFingerprint();
+    window.lastReturnDebug.loadStation('generated', entry[0], entry[1], entry[2], entry[3]);
+    return window.lastReturnDebug.getStationFingerprint();
   }), seeds);
   const coldPrints = await buildPrints(promisedSeeds);
 
@@ -51,7 +51,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   const jobTotals = { fuel: 0, cores: 0, breaker: 0 };
   for (const sizeKey of ['small', 'medium', 'large']) {
     const result = await inGame(([size, seedCount]) => {
-      const debug = window.noReturnDebug;
+      const debug = window.lastReturnDebug;
       const layouts = ['tight', 'mixed', 'sprawling'];
       const bad = [];
       let roomTotal = 0, loopTotal = 0, stairTotal = 0, twoLevelCount = 0, ventTotal = 0, withVent = 0;
@@ -87,7 +87,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
 
   // --- a seed is a promise: the same seed must give the same station, a different seed a different one ---
   const repeat = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.loadStation('generated', 4471, 'medium', 'mixed');
     const first = debug.getStationFingerprint();
     debug.loadStation('generated', 4472, 'medium', 'mixed');
@@ -113,7 +113,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   // always takes the shortest way, can be watched crawling through it. Which seed that is depends on the planner,
   // so the test looks for one instead of trusting a number that was right once.
   const playSeed = await inGame(([describeSource]) => {
-    const debug = window.noReturnDebug, describeFirstVent = (0, eval)('(' + describeSource + ')');
+    const debug = window.lastReturnDebug, describeFirstVent = (0, eval)('(' + describeSource + ')');
     for (let seed = 1; seed <= 80; seed++) {
       if (!debug.loadStation('generated', seed, 'medium', 'mixed', 'two')) continue;
       const vent = describeFirstVent();
@@ -128,7 +128,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
 
   // --- going back to the classic station restores it exactly ---
   const classicAgain = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.loadStation('classic', 0);
     return { kind: debug.level.kind, problems: debug.auditLayout().concat(debug.auditProgression()).concat(debug.auditHollowRoutes()), start: [debug.playerStart.x, debug.playerStart.z], zone: debug.zoneNames[3] };
   });
@@ -142,25 +142,25 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   await page.selectOption('#title-station-layout', 'mixed');
   await page.fill('#title-seed', String(playSeed));
   await startGame(page, false);
-  const loaded = await inGame(() => ({ kind: window.noReturnDebug.level.kind, seed: window.noReturnDebug.level.seed, description: window.noReturnDebug.level.description }));
+  const loaded = await inGame(() => ({ kind: window.lastReturnDebug.level.kind, seed: window.lastReturnDebug.level.seed, description: window.lastReturnDebug.level.description }));
   check('Begin descent loads the generated station for the typed seed', loaded.kind === 'generated' && loaded.seed === playSeed, loaded);
   await page.keyboard.press('Escape');
   const reported = await inGame(() => Object.fromEntries(new URL(document.getElementById('link-report-problem').href).searchParams));
   await page.keyboard.press('Escape');
   check('"Report a problem" on the pause screen carries the seed and the station options',
     reported.station === 'Uncharted annex' && new RegExp('^' + playSeed + ', medium, [a-z]+, two levels$').test(reported.seed) &&
-    (await inGame(() => window.noReturnDebug.game.mode)) === 'playing', reported);
+    (await inGame(() => window.lastReturnDebug.game.mode)) === 'playing', reported);
 
   await page.keyboard.down('KeyW');
-  await inGame(() => window.noReturnDebug.simulate(4));
+  await inGame(() => window.lastReturnDebug.simulate(4));
   await page.keyboard.up('KeyW');
-  check('walking forward leaves the lift car', await inGame(() => window.noReturnDebug.game.flags.hasLeftLift));
-  await inGame(() => window.noReturnDebug.simulate(4));
-  check('lift door closes behind the player', (await inGame(() => window.noReturnDebug.getLiftDoor().openFraction)) === 0);
+  check('walking forward leaves the lift car', await inGame(() => window.lastReturnDebug.game.flags.hasLeftLift));
+  await inGame(() => window.lastReturnDebug.simulate(4));
+  check('lift door closes behind the player', (await inGame(() => window.lastReturnDebug.getLiftDoor().openFraction)) === 0);
 
   // --- the stairs: walk down them on foot, and check the view goes down with the floor ---
   const stairs = await inGame(() => {
-    const debug = window.noReturnDebug, level = debug.level;
+    const debug = window.lastReturnDebug, level = debug.level;
     const zone = debug.zoneNames.indexOf('STAIRS');
     let top = null, bottom = null;
     const tiles = [];
@@ -184,21 +184,21 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   });
   await page.keyboard.down('KeyW');
   const descent = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     const heights = [];
     for (let step = 0; step < 16; step++) { debug.simulate(0.5); heights.push(Math.round(debug.player.floorY * 100) / 100); }
     return { heights: heights, camera: debug.renderCamera.y, mode: debug.game.mode };
   });
   await page.keyboard.up('KeyW');
   await drawFrames(page, 1);
-  const cameraAtFoot = await inGame(() => window.noReturnDebug.renderCamera.y);
+  const cameraAtFoot = await inGame(() => window.lastReturnDebug.renderCamera.y);
   const neverJumps = descent.heights.every((height, index) => index === 0 || Math.abs(height - descent.heights[index - 1]) < 1);
   // How far down the stairs go differs from station to station, so everything is measured against the foot of this one.
   check('walking down the stairs lowers the floor under you smoothly, all the way to the foot',
     stairs.floorAtTop === 0 && stairs.bottom.floor < -0.2 && Math.abs(descent.heights[descent.heights.length - 1] - stairs.bottom.floor) < 0.05 && neverJumps, { stairs: stairs, descent: descent });
   const eyeAboveFoot = cameraAtFoot - stairs.bottom.floor;
   check('the view follows the floor down', eyeAboveFoot > 1.4 && eyeAboveFoot < 2, { cameraAtFoot: cameraAtFoot, foot: stairs.bottom.floor });
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
 
   // --- vents: you only fit crouched, it is loud in there, and the Hollow crawls through ---
   const vent = await inGame(([describeSource]) => (0, eval)('(' + describeSource + ')')(), [String(describeFirstVent)]);
@@ -206,7 +206,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   const enterVent = async (holdCrouch) => {
     const mouth = vent.mouths[0];
     await inGame(([m]) => {
-      const debug = window.noReturnDebug;
+      const debug = window.lastReturnDebug;
       debug.teleport(m.roomX, m.roomZ, Math.atan2(m.stepX, -m.stepZ));
       debug.player.velocityX = 0; debug.player.velocityZ = 0;
       debug.simulate(0.1);
@@ -214,7 +214,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     if (holdCrouch) await page.keyboard.down('KeyC');
     await page.keyboard.down('KeyW');
     const state = await inGame(() => {
-      const debug = window.noReturnDebug;
+      const debug = window.lastReturnDebug;
       // Two and a half seconds forward. How audible the player is gets noted while they are moving inside the
       // vent, because a vent can bend, and a player stopped against the bend is quiet again.
       let loudestInVent = 0;
@@ -227,9 +227,9 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     if (holdCrouch) {
       // Let go of crouch and keep crawling: there is no room to stand up.
       await page.keyboard.up('KeyC');
-      await inGame(() => window.noReturnDebug.simulate(1));
-      Object.assign(state, await inGame(() => ({ stillCrouching: window.noReturnDebug.player.isCrouching, stillInVent: window.noReturnDebug.isVentAt(window.noReturnDebug.player.x, window.noReturnDebug.player.z),
-        eyeAfter: Math.round(window.noReturnDebug.player.eyeHeight * 100) / 100, quietLimit: window.noReturnDebug.tuning.audibleRadiusCrouchWalking, ventLimit: window.noReturnDebug.tuning.audibleRadiusVentCrawling })));
+      await inGame(() => window.lastReturnDebug.simulate(1));
+      Object.assign(state, await inGame(() => ({ stillCrouching: window.lastReturnDebug.player.isCrouching, stillInVent: window.lastReturnDebug.isVentAt(window.lastReturnDebug.player.x, window.lastReturnDebug.player.z),
+        eyeAfter: Math.round(window.lastReturnDebug.player.eyeHeight * 100) / 100, quietLimit: window.lastReturnDebug.tuning.audibleRadiusCrouchWalking, ventLimit: window.lastReturnDebug.tuning.audibleRadiusVentCrawling })));
     }
     await page.keyboard.up('KeyW');
     return state;
@@ -241,7 +241,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     crawling.inVent && crawling.crouching && crawling.stillInVent && crawling.stillCrouching && crawling.eyeAfter < 1.05, crawling);
   check('crawling in a vent is louder than creeping in a room', crawling.audible === crawling.ventLimit && crawling.ventLimit > crawling.quietLimit, crawling);
   const hollowInVent = await inGame(([mouths]) => {
-    const debug = window.noReturnDebug, hollow = debug.hollow;
+    const debug = window.lastReturnDebug, hollow = debug.hollow;
     // Out of the vent and out of earshot; then send the Hollow from one end of the vent to the room at the other.
     debug.teleport(debug.playerStart.x, debug.playerStart.z, 0);
     debug.spawnHollow(mouths[0].roomX, mouths[0].roomZ);
@@ -267,18 +267,18 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   check('the Hollow goes through the vent on knees and hands and comes out at the other end',
     hollowInVent.wasInVent && hollowInVent.closest <= 1.6 && hollowInVent.mostCrawl > 0.8 && hollowInVent.lowestTop < vent.ventHeight, hollowInVent);
 
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
 
   // Helpers that work in any station: stand next to a thing, or next to the first door of a kind.
   const standNear = (objectId) => inGame((id) => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     const thing = debug.findInteractable(id);
     const spot = debug.findWalkableSpotNear(thing.x, thing.z);
     debug.teleport(spot.x, spot.z, 0);
     return Math.hypot(spot.x - thing.x, spot.z - thing.z);
   }, objectId);
   const standAtDoorOfKind = (kind) => inGame((doorKind) => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     const door = debug.doors.find((candidate) => candidate.kind === doorKind);
     for (const step of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
       const spot = debug.findWalkableSpotNear(door.tileX + 0.5 + step[0], door.tileZ + 0.5 + step[1]);
@@ -294,26 +294,26 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   check('a powered door stays shut while the mains is off', (await standAtDoorOfKind(1)) === 0);
 
   const reachToSpool = await standNear(3);
-  await inGame(() => window.noReturnDebug.use(3));
-  check('the first spool is within reach of the floor and opens its log', reachToSpool < 2 && (await inGame(() => window.noReturnDebug.game.mode)) === 'reading', reachToSpool);
+  await inGame(() => window.lastReturnDebug.use(3));
+  check('the first spool is within reach of the floor and opens its log', reachToSpool < 2 && (await inGame(() => window.lastReturnDebug.game.mode)) === 'reading', reachToSpool);
   await page.keyboard.press('KeyE');
 
   // This station's extra jobs, whatever the seed gave it. The run below does each one where it belongs.
-  const mission = await inGame(() => JSON.parse(JSON.stringify(window.noReturnDebug.level.mission)));
-  const missionIds = await inGame(() => window.noReturnDebug.missionObjectIds);
+  const mission = await inGame(() => JSON.parse(JSON.stringify(window.lastReturnDebug.level.mission)));
+  const missionIds = await inGame(() => window.lastReturnDebug.missionObjectIds);
   console.log('      (this station\'s extra jobs: ' + JSON.stringify(mission) + ')');
   if (mission.needsFuel) {
     await standNear(2);
-    await inGame(() => window.noReturnDebug.use(2));
-    const refused = await inGame(() => ({ powerOn: window.noReturnDebug.game.flags.powerOn, objective: window.noReturnDebug.game.objectiveText }));
+    await inGame(() => window.lastReturnDebug.use(2));
+    const refused = await inGame(() => ({ powerOn: window.lastReturnDebug.game.flags.powerOn, objective: window.lastReturnDebug.game.objectiveText }));
     await standNear(missionIds.fuelCan);
-    await inGame((id) => window.noReturnDebug.use(id), missionIds.fuelCan);
+    await inGame((id) => window.lastReturnDebug.use(id), missionIds.fuelCan);
     check('the generator will not start without the fuel can, and says so', refused.powerOn === false && /fuel/i.test(refused.objective) &&
-      (await inGame(() => window.noReturnDebug.game.flags.hasFuel)) === true, refused);
+      (await inGame(() => window.lastReturnDebug.game.flags.hasFuel)) === true, refused);
   }
   await standNear(2);
   const hollowWalk = await inGame(() => {
-    const debug = window.noReturnDebug;
+    const debug = window.lastReturnDebug;
     debug.use(2);
     debug.teleport(debug.playerStart.x, debug.playerStart.z, 0);
     debug.simulate(7);
@@ -332,46 +332,46 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   check('the powered door opens once the mains is on', (await standAtDoorOfKind(1)) === 1);
   check('a keycard door stays shut without the card', (await standAtDoorOfKind(2)) === 0);
   await standNear(6);
-  await inGame(() => window.noReturnDebug.use(6));
+  await inGame(() => window.lastReturnDebug.use(6));
   check('the keycard door opens with the card', (await standAtDoorOfKind(2)) === 1);
 
   for (const spool of [4, 5]) {
     await standNear(spool);
-    await inGame((id) => window.noReturnDebug.use(id), spool);
+    await inGame((id) => window.lastReturnDebug.use(id), spool);
     await page.keyboard.press('KeyE');
-    await inGame(() => { window.noReturnDebug.hollow.isActive = false; });
+    await inGame(() => { window.lastReturnDebug.hollow.isActive = false; });
   }
-  check('all three spools can be collected', (await inGame(() => window.noReturnDebug.game.flags.spoolsCollected)) === 3);
+  check('all three spools can be collected', (await inGame(() => window.lastReturnDebug.game.flags.spoolsCollected)) === 3);
 
   if (mission.coreCount > 0) {
     await standNear(1);
-    await inGame(() => window.noReturnDebug.use(1));
-    const refused = await inGame(() => ({ started: window.noReturnDebug.game.flags.uploadStarted, uploaded: window.noReturnDebug.game.flags.spoolsUploaded }));
+    await inGame(() => window.lastReturnDebug.use(1));
+    const refused = await inGame(() => ({ started: window.lastReturnDebug.game.flags.uploadStarted, uploaded: window.lastReturnDebug.game.flags.spoolsUploaded }));
     for (let core = 0; core < mission.coreCount; core++) {
       await standNear(missionIds.firstCore + core);
-      await inGame((id) => window.noReturnDebug.use(id), missionIds.firstCore + core);
-      await inGame(() => { window.noReturnDebug.hollow.isActive = false; });
+      await inGame((id) => window.lastReturnDebug.use(id), missionIds.firstCore + core);
+      await inGame(() => { window.lastReturnDebug.hollow.isActive = false; });
     }
     check('the terminal will not take the upload until every core sample is in hand', !refused.started && !refused.uploaded &&
-      (await inGame(() => window.noReturnDebug.game.flags.coresCollected)) === mission.coreCount, refused);
+      (await inGame(() => window.lastReturnDebug.game.flags.coresCollected)) === mission.coreCount, refused);
   }
   await standNear(1);
-  await inGame(() => window.noReturnDebug.use(1));
+  await inGame(() => window.lastReturnDebug.use(1));
   if (mission.needsBreaker) {
-    const waiting = await inGame(() => ({ started: window.noReturnDebug.game.flags.uploadStarted, uploaded: window.noReturnDebug.game.flags.spoolsUploaded, objective: window.noReturnDebug.game.objectiveText,
-      marked: window.noReturnDebug.findInteractable(window.noReturnDebug.missionObjectIds.winchBreaker).isDiscovered }));
+    const waiting = await inGame(() => ({ started: window.lastReturnDebug.game.flags.uploadStarted, uploaded: window.lastReturnDebug.game.flags.spoolsUploaded, objective: window.lastReturnDebug.game.objectiveText,
+      marked: window.lastReturnDebug.findInteractable(window.lastReturnDebug.missionObjectIds.winchBreaker).isDiscovered }));
     await standNear(missionIds.winchBreaker);
-    await inGame((id) => window.noReturnDebug.use(id), missionIds.winchBreaker);
+    await inGame((id) => window.lastReturnDebug.use(id), missionIds.winchBreaker);
     check('with the winch breaker open the upload goes through but the lift does not come; closing the breaker calls it',
-      waiting.uploaded && !waiting.started && waiting.marked && /breaker/i.test(waiting.objective) && (await inGame(() => window.noReturnDebug.game.flags.uploadStarted)) === true, waiting);
+      waiting.uploaded && !waiting.started && waiting.marked && /breaker/i.test(waiting.objective) && (await inGame(() => window.lastReturnDebug.game.flags.uploadStarted)) === true, waiting);
   }
-  const upload = await inGame(() => ({ started: window.noReturnDebug.game.flags.uploadStarted, countdown: window.noReturnDebug.game.liftCountdown }));
+  const upload = await inGame(() => ({ started: window.lastReturnDebug.game.flags.uploadStarted, countdown: window.lastReturnDebug.game.liftCountdown }));
   check('uploading three spools calls the lift', upload.started && upload.countdown > 39 && upload.countdown <= 40, upload);
-  await inGame(() => { const debug = window.noReturnDebug; debug.hollow.isActive = false; debug.simulate(41); });
-  check('the lift arrives and opens', await inGame(() => window.noReturnDebug.game.flags.liftArrived && window.noReturnDebug.getLiftDoor().openFraction === 1));
-  await inGame(() => { const debug = window.noReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
-  check('boarding the lift starts the ascent', (await inGame(() => window.noReturnDebug.game.mode)) === 'ascending');
-  await page.waitForFunction(() => window.noReturnDebug.game.mode === 'ending', null, { timeout: 90000 });
+  await inGame(() => { const debug = window.lastReturnDebug; debug.hollow.isActive = false; debug.simulate(41); });
+  check('the lift arrives and opens', await inGame(() => window.lastReturnDebug.game.flags.liftArrived && window.lastReturnDebug.getLiftDoor().openFraction === 1));
+  await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
+  check('boarding the lift starts the ascent', (await inGame(() => window.lastReturnDebug.game.mode)) === 'ascending');
+  await page.waitForFunction(() => window.lastReturnDebug.game.mode === 'ending', null, { timeout: 90000 });
   await drawFrames(page, 1);
   const endingText = await page.evaluate(() => document.getElementById('ending-stats').textContent);
   check('the ending screen names the station and its seed', endingText.indexOf('seed ' + playSeed) >= 0, endingText);
@@ -379,18 +379,18 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
 
   // --- "somewhere uncharted" on the ending screen switches the title screen over ---
   await page.evaluate(() => document.getElementById('button-ending-uncharted').click());
-  const afterEnding = await page.evaluate(() => ({ mode: window.noReturnDebug.game.mode, station: window.noReturnDebug.settings.station, checked: document.getElementById('station-generated').checked }));
+  const afterEnding = await page.evaluate(() => ({ mode: window.lastReturnDebug.game.mode, station: window.lastReturnDebug.settings.station, checked: document.getElementById('station-generated').checked }));
   check('the ending screen can send you to the title screen with "Uncharted annex" chosen',
     afterEnding.mode === 'title' && afterEnding.station === 'generated' && afterEnding.checked, afterEnding);
   for (let pump = 0; pump < 6; pump++) await drawFrames(page, 1);
-  check('the title screen scans the generated lift lobby by itself', (await inGame(() => window.noReturnDebug.pointCloud.totalReturns)) > 0);
+  check('the title screen scans the generated lift lobby by itself', (await inGame(() => window.lastReturnDebug.pointCloud.totalReturns)) > 0);
 
   // --- more than one keycard: a large station has two, and each opens only its own ring of doors ---
   await page.selectOption('#title-station-size', 'large');
   await page.fill('#title-seed', '3');
   await startGame(page, false);
   const cards = await inGame(() => {
-    const debug = window.noReturnDebug, result = { count: debug.level.keycardCount, problems: debug.auditProgression() };
+    const debug = window.lastReturnDebug, result = { count: debug.level.keycardCount, problems: debug.auditProgression() };
     debug.grantPower();
     const doorOfCard = (cardLevel) => debug.doors.find((door) => door.kind === 2 && door.cardLevel === cardLevel);
     const tryDoor = (door) => {
@@ -425,7 +425,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
 
   // --- the core sample and winch breaker jobs, each on the first large station the seeds give it to ---
   const jobRules = await inGame(() => {
-    const debug = window.noReturnDebug, flags = debug.game.flags, ids = debug.missionObjectIds, result = {};
+    const debug = window.lastReturnDebug, flags = debug.game.flags, ids = debug.missionObjectIds, result = {};
     const findStation = (wanted) => { for (let seed = 1; seed < 80; seed++) { debug.loadStation('generated', seed, 'large', 'mixed', 'one'); if (wanted(debug.level.mission)) return seed; } return -1; };
     // Core samples, and no breaker to muddy it.
     result.coreSeed = findStation((mission) => mission.coreCount > 0 && !mission.needsBreaker);
@@ -467,7 +467,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
 
   // --- the largest size: three keycards ---
   const massive = await inGame(() => {
-    const debug = window.noReturnDebug, bad = [];
+    const debug = window.lastReturnDebug, bad = [];
     let cardTotal = 0;
     for (let seed = 1; seed <= 8; seed++) {
       const wasBuilt = debug.loadStation('generated', seed, 'massive', ['tight', 'mixed', 'sprawling'][seed % 3], seed % 2 === 0 ? 'two' : 'one');

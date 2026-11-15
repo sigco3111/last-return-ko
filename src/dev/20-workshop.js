@@ -15,7 +15,7 @@
 // game the page is simply loaded again, so nothing here has to tidy up after itself.
 // ---------------------------------------------------------------------------
 
-const WORKSHOP_STORAGE_KEY = 'no-return-workshop';
+const WORKSHOP_STORAGE_KEY = 'last-return-workshop';
 // Where on the (otherwise empty) map the room being worked on is put: its north-west corner.
 const WORKSHOP_ORIGIN_X = 40, WORKSHOP_ORIGIN_Z = 40;
 const WORKSHOP_FLY_SPEED = 3.5;        // metres per second
@@ -656,8 +656,8 @@ function initializeWorkshop() {
   window.addEventListener('pagehide', function () { if (workshop.isOpen) saveWorkshopState(); });
 
   connectToWorkshopServer();
-  window.noReturnDebug.workshop = workshop;
-  window.noReturnDebug.openWorkshop = openWorkshop;
+  window.lastReturnDebug.workshop = workshop;
+  window.lastReturnDebug.openWorkshop = openWorkshop;
   // An address ending in #sounds, #creatures or #rooms opens that tool. The ending is then dropped, so a
   // reload comes back to whichever tool is open by then.
   const toolFromAddress = window.location.hash.slice(1);

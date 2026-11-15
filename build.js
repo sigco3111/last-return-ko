@@ -1,18 +1,18 @@
 // Builds the game from src/ into two files:
-//   index.html                      a complete page: open it in a browser, or serve it with GitHub Pages
-//   build/no-return.artifact.html   the same game without the outer page shell, for hosts that add their own
+//   index.html                        a complete page: open it in a browser, or serve it with GitHub Pages
+//   build/last-return.artifact.html   the same game without the outer page shell, for hosts that add their own
 //
 // `node build.js --dev` (or `npm run dev`, which also serves it and rebuilds on every change) builds a third:
-//   build/workshop.html             the game plus everything in src/dev/: debug mode, and the workshop
-//                                   with its room and creature editors
+//   build/workshop.html               the game plus everything in src/dev/: debug mode, and the workshop
+//                                     with its room and creature editors
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
 // What this build is, for the pause screen and for bug reports: the version from package.json and, from git, how
 // many commits there are (the build number) and which one this is. A '+' after the commit means the source had
-// changes that were not committed. Where there is no git to ask, as in the Docker build, NO_RETURN_BUILD_NUMBER
-// and NO_RETURN_BUILD_COMMIT say it instead. Anything that cannot be found out is left empty.
+// changes that were not committed. Where there is no git to ask, as in the Docker build, LAST_RETURN_BUILD_NUMBER
+// and LAST_RETURN_BUILD_COMMIT say it instead. Anything that cannot be found out is left empty.
 function readBuildStamp(root) {
   const stamp = { version: '', number: '', commit: '' };
   try {
@@ -25,8 +25,8 @@ function readBuildStamp(root) {
       return ''; // no git, or not a repository
     }
   };
-  stamp.number = (process.env.NO_RETURN_BUILD_NUMBER || askGit(['rev-list', '--count', 'HEAD'])).trim();
-  stamp.commit = (process.env.NO_RETURN_BUILD_COMMIT || '').trim();
+  stamp.number = (process.env.LAST_RETURN_BUILD_NUMBER || askGit(['rev-list', '--count', 'HEAD'])).trim();
+  stamp.commit = (process.env.LAST_RETURN_BUILD_COMMIT || '').trim();
   if (!stamp.commit) {
     stamp.commit = askGit(['rev-parse', '--short=7', 'HEAD']);
     // Only what goes into the page counts as a change.
@@ -137,7 +137,7 @@ function build(options) {
 
   fs.mkdirSync(buildDirectory, { recursive: true });
   fs.writeFileSync(path.join(settings.root, 'index.html'), standalonePage);
-  fs.writeFileSync(path.join(buildDirectory, 'no-return.artifact.html'), fragment);
+  fs.writeFileSync(path.join(buildDirectory, 'last-return.artifact.html'), fragment);
   fs.writeFileSync(path.join(buildDirectory, 'bundle.js'), wrappedScript);
 
   messages.push(voiceEntries.length === 0 ? 'No voice recordings in assets/voice: radio lines will be text only.'

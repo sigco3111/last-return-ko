@@ -14,7 +14,7 @@ function check(description, condition, detail) {
 
 // Helpers that run inside the page. They are handed over as text and kept on `window.lab`.
 const labSource = String(function () {
-  const d = window.noReturnDebug;
+  const d = window.lastReturnDebug;
   let seed = 20261115;
   const lab = {};
   // The game throws its own dice (which kind, which of several good places). For the length of this test those
@@ -85,7 +85,7 @@ const labSource = String(function () {
 
   // --- where they are put: every kind, from hundreds of standing places, in three stations ---
   const placing = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, tuning = d.tuning;
+    const d = window.lastReturnDebug, lab = window.lab, tuning = d.tuning;
     const ranges = {
       watcher: [tuning.phantomWatcherNearestMetres, tuning.phantomWatcherFarthestMetres],
       behind: [tuning.phantomBehindNearestMetres, tuning.phantomBehindFarthestMetres],
@@ -166,7 +166,7 @@ const labSource = String(function () {
 
   // --- the watcher: gone after a proper look, gone if approached, withdrawn and not counted if never seen ---
   const watcher = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, director = d.phantomDirector, tuning = d.tuning, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, director = d.phantomDirector, tuning = d.tuning, result = {};
     lab.freshStation('classic', 0);
     // scanned
     let phantom = lab.summonSomewhere('watcher');
@@ -209,7 +209,7 @@ const labSource = String(function () {
 
   // --- behind you ---
   const behind = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, director = d.phantomDirector, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, director = d.phantomDirector, result = {};
     lab.freshStation('classic', 0);
     let phantom = lab.summonSomewhere('behind');
     result.angleWhenPut = Math.round(d.getAngleFromPlayerView(phantom.figure.x, phantom.figure.z) * 100) / 100;
@@ -230,7 +230,7 @@ const labSource = String(function () {
 
   // --- the dummy: closer after you look away, gone after you look away again ---
   const dummy = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, director = d.phantomDirector, trials = [];
+    const d = window.lastReturnDebug, lab = window.lab, director = d.phantomDirector, trials = [];
     lab.freshStation('classic', 0);
     for (let trial = 0; trial < 6; trial++) {
       const phantom = lab.summonSomewhere('dummy');
@@ -266,7 +266,7 @@ const labSource = String(function () {
 
   // --- the crosser: waits unseen, walks across once you scan that way, and is gone at the far side ---
   const crosser = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, result = {};
     lab.freshStation('classic', 0);
     const phantom = lab.summonSomewhere('crosser', 900);
     if (!phantom) return { none: true };
@@ -306,7 +306,7 @@ const labSource = String(function () {
 
   // --- the crawler: in a vent mouth, low enough to be in one, gone after a proper look ---
   const crawler = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, result = {};
     lab.freshStation('generated', 1, 'medium', 'mixed', 'two');
     result.ventMouths = d.phantomVentMouths.length;
     const phantom = lab.summonSomewhere('crawler', 900);
@@ -335,7 +335,7 @@ const labSource = String(function () {
 
   // --- the phantom director, over a long quiet walk: not too soon, not too often, never two, never the same twice, never over the limit ---
   const walk = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, director = d.phantomDirector, tuning = d.tuning;
+    const d = window.lastReturnDebug, lab = window.lab, director = d.phantomDirector, tuning = d.tuning;
     // Shorter waits, so that a whole descent's worth fits into a few minutes of game time.
     const kept = {};
     const quick = { phantomFirstAfterSeconds: 12, phantomGapShortestSeconds: 15, phantomGapLongestSeconds: 25, phantomRetryShortestSeconds: 4, phantomRetryLongestSeconds: 8 };
@@ -400,7 +400,7 @@ const labSource = String(function () {
 
   // --- they keep out of the way of what is real ---
   const real = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, director = d.phantomDirector, tuning = d.tuning, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, director = d.phantomDirector, tuning = d.tuning, result = {};
     const keptFirst = tuning.phantomFirstAfterSeconds;
     tuning.phantomFirstAfterSeconds = 0;
     lab.freshStation('classic', 0);
@@ -451,7 +451,7 @@ const labSource = String(function () {
 
   // --- in your face: its own dice at the start of a scan, its own limit, and never while something real is near ---
   const face = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, director = d.phantomDirector, tuning = d.tuning, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, director = d.phantomDirector, tuning = d.tuning, result = {};
     const kept = { chance: tuning.phantomFaceChancePerScan, notBefore: tuning.phantomFaceNotBeforeSeconds };
     lab.freshStation('classic', 0);
     result.metresWanted = tuning.phantomFaceMetres;
@@ -521,7 +521,7 @@ const labSource = String(function () {
 
   // --- the cold room's placed one: it used to need you seven metres off, which that room only allows from the far corner ---
   const coldRoom = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, result = {};
     lab.freshStation('classic', 0);
     d.phantomDirector.budget = 0;
     const cold = d.phantoms.filter((phantom) => phantom.kind === 'placed' && d.zoneNames[phantom.definition.triggerZone] === 'COLD ROOM')[0];
@@ -554,7 +554,7 @@ const labSource = String(function () {
 
   // --- the placed ones still work as they did ---
   const placedOnes = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, result = {};
     lab.freshStation('classic', 0);
     d.phantomDirector.budget = 0; // only the placed ones, for this part
     const placed = d.phantoms.filter((phantom) => phantom.kind === 'placed');

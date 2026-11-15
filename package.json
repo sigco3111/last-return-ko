@@ -1,8 +1,8 @@
 {
-  "name": "game-no-return",
+  "name": "game-last-return",
   "version": "1.14.0",
   "private": true,
-  "description": "No Return: a first-person horror game where a handheld LiDAR scanner is the only way to see.",
+  "description": "Last Return: a first-person horror game where a handheld LiDAR scanner is the only way to see.",
   "scripts": {
     "build": "node build.js && node --check build/bundle.js",
     "build:dev": "node build.js --dev && node --check build/bundle.js && node --check build/workshop-bundle.js",

@@ -46,7 +46,7 @@ function checkSourcePatching() {
   checkSourcePatching();
 
   const projectRoot = path.join(__dirname, '..');
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'no-return-workshop-'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'last-return-workshop-'));
   fs.cpSync(path.join(projectRoot, 'src'), path.join(root, 'src'), { recursive: true });
   fs.rmSync(path.join(root, 'src', 'rooms'), { recursive: true, force: true }); // start without workshop rooms
   fs.mkdirSync(path.join(root, 'assets'));
@@ -66,11 +66,11 @@ function checkSourcePatching() {
   const inPage = (callback, argument) => page.evaluate(callback, argument);
   // Headless Chromium only draws (and so only runs the game loop) when asked.
   const frames = async (count) => { for (let index = 0; index < (count || 3); index++) await page.screenshot({ type: 'jpeg', quality: 5 }); };
-  const workshopIsReady = () => page.waitForFunction(() => Boolean(window.noReturnDebug && window.noReturnDebug.roomWorkshop));
+  const workshopIsReady = () => page.waitForFunction(() => Boolean(window.lastReturnDebug && window.lastReturnDebug.roomWorkshop));
   const waitForReload = async (action) => {
     await inPage(() => { window.pageMarker = true; });
     await action();
-    await page.waitForFunction(() => !window.pageMarker && Boolean(window.noReturnDebug && window.noReturnDebug.roomWorkshop), null, { timeout: 15000 });
+    await page.waitForFunction(() => !window.pageMarker && Boolean(window.lastReturnDebug && window.lastReturnDebug.roomWorkshop), null, { timeout: 15000 });
   };
   const setNumber = async (fieldId, value) => {
     await page.fill('#' + fieldId + ' input[type="number"]', String(value));
@@ -88,7 +88,7 @@ function checkSourcePatching() {
     await page.click('#button-workshop');
     await frames();
     const opened = await inPage(() => {
-      const debug = window.noReturnDebug;
+      const debug = window.lastReturnDebug;
       return { mode: debug.game.mode, key: debug.roomWorkshop.key, doors: debug.doors.length, hasRoom: debug.roomWorkshop.room !== null, canvasWidth: debug.renderer.canvas.clientWidth };
     });
     check('the workshop opens on a room written as code, with its doors, beside the panel',
@@ -103,9 +103,9 @@ function checkSourcePatching() {
     await page.selectOption('#workshop-add-type', 'table');
     await page.click('#workshop-add-item');
     await frames();
-    const tableIndex = await inPage(() => window.noReturnDebug.roomWorkshop.room.items.findIndex((item) => item.type === 'table'));
+    const tableIndex = await inPage(() => window.lastReturnDebug.roomWorkshop.room.items.findIndex((item) => item.type === 'table'));
     const added = await inPage(() => {
-      const state = window.noReturnDebug.roomWorkshop;
+      const state = window.lastReturnDebug.roomWorkshop;
       return { count: state.room.items.length, selected: state.selectedIndex, table: state.room.items[state.selectedIndex], isDirty: state.isDirty };
     });
     check('a table is added in the middle of the view and selected',
@@ -115,9 +115,9 @@ function checkSourcePatching() {
     const middleX = canvasBox.x + canvasBox.width / 2, middleY = canvasBox.y + canvasBox.height / 2;
     await page.keyboard.press('Escape');
     await page.mouse.click(middleX + 300, middleY + 250); // bare floor
-    check('clicking bare floor selects nothing', (await inPage(() => window.noReturnDebug.roomWorkshop.selectedIndex)) === -1);
+    check('clicking bare floor selects nothing', (await inPage(() => window.lastReturnDebug.roomWorkshop.selectedIndex)) === -1);
     await page.mouse.click(middleX, middleY);
-    check('clicking the table selects it', (await inPage(() => window.noReturnDebug.roomWorkshop.selectedIndex)) === tableIndex);
+    check('clicking the table selects it', (await inPage(() => window.lastReturnDebug.roomWorkshop.selectedIndex)) === tableIndex);
 
     await page.mouse.move(middleX, middleY);
     await page.mouse.down();
@@ -125,21 +125,21 @@ function checkSourcePatching() {
     await page.mouse.move(middleX + 150, middleY + 40, { steps: 6 });
     await page.mouse.up();
     await frames();
-    const dragged = await inPage((index) => window.noReturnDebug.roomWorkshop.room.items[index], tableIndex);
+    const dragged = await inPage((index) => window.lastReturnDebug.roomWorkshop.room.items[index], tableIndex);
     check('dragging moves it across the floor (east and south here)', dragged.x > added.table.x + 0.5 && dragged.z > added.table.z + 0.1 && dragged.x < 8, dragged);
 
     await page.keyboard.press('KeyR');
-    check('R turns it', (await inPage((index) => window.noReturnDebug.roomWorkshop.room.items[index].angle, tableIndex)) === 15);
+    check('R turns it', (await inPage((index) => window.lastReturnDebug.roomWorkshop.room.items[index].angle, tableIndex)) === 15);
     await page.keyboard.press('Control+z');
-    check('Ctrl+Z takes the turn back', (await inPage((index) => window.noReturnDebug.roomWorkshop.room.items[index].angle, tableIndex)) === 0);
+    check('Ctrl+Z takes the turn back', (await inPage((index) => window.lastReturnDebug.roomWorkshop.room.items[index].angle, tableIndex)) === 0);
 
     // --- the checks: a table in the doorway is reported, and no longer once it is moved away ---
     await setNumber('workshop-item-x', 4.5);
     await setNumber('workshop-item-z', 5.5);
-    const blocked = await inPage(() => window.noReturnDebug.roomWorkshop.problems.slice());
+    const blocked = await inPage(() => window.lastReturnDebug.roomWorkshop.problems.slice());
     check('a table just inside the door is reported', blocked.some((problem) => problem.includes('south wall')), blocked);
     await setNumber('workshop-item-z', 1.5);
-    check('and not once it is moved away', (await inPage(() => window.noReturnDebug.roomWorkshop.problems.length)) === 0, await inPage(() => window.noReturnDebug.roomWorkshop.problems));
+    check('and not once it is moved away', (await inPage(() => window.lastReturnDebug.roomWorkshop.problems.length)) === 0, await inPage(() => window.lastReturnDebug.roomWorkshop.problems));
 
     // --- saving: a file appears, the page reloads into the saved room ---
     await page.fill('#workshop-room-key', 'testRoom');
@@ -153,7 +153,7 @@ function checkSourcePatching() {
     check('saving writes src/rooms/testRoom.json with the table in it',
       savedFile !== null && savedFile.name === 'TEST ROOM' && savedFile.useInStations === true && savedFile.items.some((item) => item.type === 'table' && item.z === 1.5), savedFile);
     const afterSave = await inPage(() => {
-      const debug = window.noReturnDebug, state = debug.roomWorkshop;
+      const debug = window.lastReturnDebug, state = debug.roomWorkshop;
       return { mode: debug.game.mode, key: state.key, savedKey: state.savedKey, isDirty: state.isDirty, items: state.room ? state.room.items.length : -1, props: debug.interactables.length };
     });
     check('after the reload the workshop is open on the saved room, with nothing unsaved',
@@ -163,9 +163,9 @@ function checkSourcePatching() {
     const gamePage = await context.newPage();
     gamePage.on('pageerror', (error) => problems.push('page error (game): ' + error.message));
     await gamePage.goto(server.address + 'game');
-    await gamePage.waitForFunction(() => Boolean(window.noReturnDebug));
+    await gamePage.waitForFunction(() => Boolean(window.lastReturnDebug));
     const inStations = await gamePage.evaluate(() => {
-      const debug = window.noReturnDebug;
+      const debug = window.lastReturnDebug;
       const found = [], audits = [];
       for (let seed = 1; seed <= 12; seed++) {
         if (!debug.loadStation('generated', seed, 'large', 'mixed', 'two')) continue;
@@ -178,13 +178,13 @@ function checkSourcePatching() {
       inStations.found.length > 0 && inStations.audits.every((count) => count === 0), inStations);
 
     // --- an unsaved change survives a reload caused by a change to the source ---
-    if ((await inPage(() => window.noReturnDebug.roomWorkshop.selectedIndex)) < 0) await page.click('.workshop-list-entry:has-text("Table")');
+    if ((await inPage(() => window.lastReturnDebug.roomWorkshop.selectedIndex)) < 0) await page.click('.workshop-list-entry:has-text("Table")');
     await setNumber('workshop-item-x', 2);
     await frames(30); // long enough for the work in progress to be written to the browser's storage
     await waitForReload(() => fs.appendFileSync(path.join(root, 'src', 'js', '01-math.js'), '\n// touched by the workshop test\n'));
     await frames();
     const afterSourceChange = await inPage(() => {
-      const state = window.noReturnDebug.roomWorkshop;
+      const state = window.lastReturnDebug.roomWorkshop;
       return { key: state.key, isDirty: state.isDirty, tableX: state.room.items.find((item) => item.type === 'table').x };
     });
     check('a change to the source reloads the page and keeps unsaved work', afterSourceChange.key === 'testRoom' && afterSourceChange.isDirty && afterSourceChange.tableX === 2, afterSourceChange);
@@ -204,7 +204,7 @@ function checkSourcePatching() {
     await page.click('#workshop-tab-creatures');
     await frames(4);
     const before = await inPage(() => {
-      const state = window.noReturnDebug.creatureWorkshop;
+      const state = window.lastReturnDebug.creatureWorkshop;
       return { thigh: state.figure.proportions.thigh, height: (state.figure.boundsCenterY - state.figure.y) * 2, capsules: state.figure.capsuleCount };
     });
     // Whatever the file holds today, a thigh 30 cm longer makes a taller body.
@@ -212,7 +212,7 @@ function checkSourcePatching() {
     await setNumber('workshop-proportion-thigh', longThigh);
     await frames(4);
     const after = await inPage(() => {
-      const debug = window.noReturnDebug, state = debug.creatureWorkshop;
+      const debug = window.lastReturnDebug, state = debug.creatureWorkshop;
       return {
         thigh: state.figure.proportions.thigh, height: (state.figure.boundsCenterY - state.figure.y) * 2,
         gameThigh: debug.hollow.figure.proportions.thigh, changes: Object.keys(state.overrides.hollow),
@@ -224,20 +224,20 @@ function checkSourcePatching() {
 
     await page.selectOption('#workshop-creature-behaviour', 'hunt');
     await frames(40);
-    const hunting = await inPage(() => window.noReturnDebug.creatureWorkshop.figure.pose.armRaise);
+    const hunting = await inPage(() => window.lastReturnDebug.creatureWorkshop.figure.pose.armRaise);
     check('"Hunting" poses it with the game\'s own code: the arms come up', hunting > 0.3, hunting);
 
     await page.selectOption('#workshop-creature-view', 'scanned');
     await frames(6);
-    const scanned = await inPage(() => ({ hits: window.noReturnDebug.creatureWorkshop.figure.totalHits, isLit: window.noReturnDebug.workshop.isLit }));
+    const scanned = await inPage(() => ({ hits: window.lastReturnDebug.creatureWorkshop.figure.totalHits, isLit: window.lastReturnDebug.workshop.isLit }));
     check('the scanner view turns the lights off and leaves points on the body', scanned.hits > 200 && !scanned.isLit, scanned);
 
     await frames(30);
     await waitForReload(() => page.reload());
     await frames(4);
     const reloaded = await inPage(() => {
-      const state = window.noReturnDebug.creatureWorkshop;
-      return { tool: window.noReturnDebug.workshop.tool, thigh: state.figure.proportions.thigh, behaviour: state.behaviour };
+      const state = window.lastReturnDebug.creatureWorkshop;
+      return { tool: window.lastReturnDebug.workshop.tool, thigh: state.figure.proportions.thigh, behaviour: state.behaviour };
     });
     check('a reload keeps the tool, the pose and the changed proportion', reloaded.tool === 'creatures' && reloaded.thigh === longThigh && reloaded.behaviour === 'hunt', reloaded);
 
@@ -246,7 +246,7 @@ function checkSourcePatching() {
     await frames(4);
     const figuresSource = fs.readFileSync(figuresPath, 'utf8');
     const written = await inPage(() => {
-      const state = window.noReturnDebug.creatureWorkshop;
+      const state = window.lastReturnDebug.creatureWorkshop;
       return { thigh: state.figure.proportions.thigh, fileThigh: state.fileProportions.hollow.thigh, changes: Object.keys(state.overrides.hollow).length };
     });
     const thighIn = (figureName, value) => new RegExp('FIGURE_PROPORTIONS_' + figureName + ' = \\{[^}]*thigh: ' + String(value).replace('.', '\\.') + ',').test(figuresSource);
@@ -256,7 +256,7 @@ function checkSourcePatching() {
     // --- leaving ---
     await waitForReload(() => page.click('#workshop-leave'));
     await frames();
-    const left = await inPage(() => ({ mode: window.noReturnDebug.game.mode, isOpen: window.noReturnDebug.workshop.isOpen, titleShown: !document.getElementById('screen-title').hidden }));
+    const left = await inPage(() => ({ mode: window.lastReturnDebug.game.mode, isOpen: window.lastReturnDebug.workshop.isOpen, titleShown: !document.getElementById('screen-title').hidden }));
     check('"Leave" goes back to the title screen', left.mode === 'title' && !left.isOpen && left.titleShown, left);
 
     check('no script errors along the way', problems.length === 0, problems);

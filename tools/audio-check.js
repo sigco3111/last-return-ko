@@ -56,7 +56,7 @@ async function measure(filters) {
   const { browser, page, problems } = await openGame({ dev: true });
   await page.click('#button-workshop');
   await page.click('#workshop-tab-sounds');
-  const board = () => window.noReturnDebug.soundBoard;
+  const board = () => window.lastReturnDebug.soundBoard;
   await page.evaluate(`(${board})().start()`);
   await page.waitForTimeout(300);
   const state = await page.evaluate(`(${board})().start()`);
@@ -74,8 +74,8 @@ async function measure(filters) {
   if (wanted.length === 0) { console.log('No sound has ' + filters.map((filter) => '"' + filter + '"').join(' or ') + ' in its name.'); await browser.close(); process.exit(1); }
 
   const listenTo = (item) => page.evaluate(([key, distance]) => {
-    window.noReturnDebug.soundBoard.setDistance(distance);
-    return window.noReturnDebug.soundBoard.listen(key);
+    window.lastReturnDebug.soundBoard.setDistance(distance);
+    return window.lastReturnDebug.soundBoard.listen(key);
   }, [item.key, item.distance]);
   const nameWidth = Math.max(...wanted.map((item) => item.name.length)) + 4;
   const failures = [];

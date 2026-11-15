@@ -661,7 +661,7 @@ function initializeDebugMode() {
   debugHooks.recordNoise = recordDebugNoise;
   debugHooks.buildFrameData = buildDebugFrameData;
   debugHooks.drawMapMarkers = drawDebugMapMarkers;
-  window.noReturnDebug.setDebugOption = setDebugOption; // for the tests
+  window.lastReturnDebug.setDebugOption = setDebugOption; // for the tests
 }
 
 function openDebugPanel() {
