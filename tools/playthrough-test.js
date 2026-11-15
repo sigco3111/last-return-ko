@@ -48,6 +48,11 @@ function check(description, condition, detail) {
   await page.keyboard.up('KeyW');
   const afterWalking = await inGame(() => ({ x: window.lastReturnDebug.player.x, hasLeftLift: window.lastReturnDebug.game.flags.hasLeftLift }));
   check('walking forward leaves the lift car', afterWalking.hasLeftLift && afterWalking.x > 10, afterWalking);
+  // Leaving the lift has just changed the objective, and the quiet screen shows it for eight seconds after that.
+  // So it is looked at here and not further down with the rest of the quiet screen: by then the pause screen has
+  // come and gone, and on a machine that draws slowly that takes most of those eight seconds, or all of them.
+  await drawFrames(page, 1);
+  const objectiveFadedJustAfterItChanged = await inGame(() => document.getElementById('hud-block-objective').classList.contains('is-faded'));
   await inGame(() => window.lastReturnDebug.simulate(4));
   check('lift door closes behind the player', (await inGame(() => window.lastReturnDebug.doors[0].openFraction)) === 0);
 
@@ -77,11 +82,15 @@ function check(description, condition, detail) {
   await drawFrames(page, 2);
   const quiet = await inGame(() => {
     const debug = window.lastReturnDebug, faded = (id) => document.getElementById(id).classList.contains('is-faded');
-    const result = { setting: debug.settings.hud, readouts: faded('hud-readouts'), minimap: faded('hud-block-map'), heatCold: faded('meter-heat'), objectiveJustChanged: faded('hud-block-objective') };
+    const result = { setting: debug.settings.hud, readouts: faded('hud-readouts'), minimap: faded('hud-block-map'), heatCold: faded('meter-heat') };
     debug.player.heat = 0.6;
     return result;
   });
-  await drawFrames(page, 2);
+  quiet.objectiveJustChanged = objectiveFadedJustAfterItChanged;
+  // The emitter cools as the clock runs, a second and a half from here to cold enough to hide the meter again. So
+  // this waits for the meter itself and not for two screenshots: on a machine that draws slowly, as the one that
+  // checks pull requests does, those take longer than that. If the meter never shows, the check below says so.
+  await page.waitForFunction(() => !document.getElementById('meter-heat').classList.contains('is-faded'), null, { polling: 20, timeout: 3000 }).catch(() => {});
   const quietLater = await inGame(() => {
     const debug = window.lastReturnDebug, faded = (id) => document.getElementById(id).classList.contains('is-faded');
     const result = { heatWarm: faded('meter-heat') };
