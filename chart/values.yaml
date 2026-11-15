@@ -1,0 +1,41 @@
+image:
+  # The registry host is not written down in this repository, so it is given at install time:
+  #   --set image.repository=<registry-host>/last-return
+  repository: ""
+  # `latest` moves, and Helm cannot see it move: an upgrade with nothing else changed restarts
+  # nothing. Pin a build for a real deploy: --set image.tag=build-92
+  tag: latest
+  # Always, so that a pod restarted on `latest` picks up the newest push.
+  pullPolicy: Always
+
+# Only needed if the registry stops serving pulls anonymously.
+imagePullSecrets: []
+
+replicaCount: 1
+
+service:
+  # ClusterIP when an ingress controller fronts the game.
+  # LoadBalancer to get a public address without one (plain http on port 80).
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: false
+  # The cluster has to have an ingress controller, and this names its class.
+  className: traefik
+  host: ""
+  # The cert-manager ClusterIssuer that gets the certificate (cluster/letsencrypt-issuer.yaml
+  # creates one named `letsencrypt`). Set, it turns https on and the certificate is kept in
+  # the secret <release>-tls. Empty means plain http, unless tlsSecretName is given.
+  clusterIssuer: ""
+  # Only to bring your own certificate, or to name the secret differently.
+  tlsSecretName: ""
+  annotations: {}
+
+# One 2 MB file and nginx: this is generous.
+resources:
+  requests:
+    cpu: 10m
+    memory: 16Mi
+  limits:
+    memory: 64Mi

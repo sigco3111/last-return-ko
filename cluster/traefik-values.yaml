@@ -1,0 +1,12 @@
+# Values for the Traefik ingress controller (chart traefik/traefik 42.4.0, Traefik v3.7).
+# The chart's defaults already give a LoadBalancer service on 80 and 443 and an IngressClass
+# named `traefik`. The one thing added here: plain http is answered with a redirect to https.
+# Let's Encrypt follows that redirect when it checks a hostname, so certificates still issue.
+ports:
+  web:
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
