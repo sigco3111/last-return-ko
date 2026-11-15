@@ -35,6 +35,7 @@
 - multiplayer? (mostly for item collection, like extraction looters), more interesting with the opened github issue <https://github.com/StefanKnol/No-Return/issues/14>
   - dev backdoor to mess with people :P (play/direct the monsters, play sounds, control doors, disco mode with random lidar dots coming out of a disco ball and music)
     - only on same server host, not other hosted
+    - statistics of players (anonymous, but survival time, playtime and count, etc.)
 
 ### Implemented
 ~~- Slower detection of beam pointed at monster, so a tap doesn't immediately end in death but raises the monsters 'anger' level.~~
