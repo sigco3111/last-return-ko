@@ -1,7 +1,16 @@
 // Measures the game's sounds, since a test cannot listen to them.
-// For each sound it reports how loud it is (peak and average level, where 1.0 is the loudest a
-// speaker can go) and where its energy sits ("centre" in Hz: low is dull or deep, high is bright or harsh).
-// It fails if a sound is silent, if it would distort, or if the audio engine produced invalid numbers.
+// Everything is measured where it leaves the compressor, which is what reaches the speakers. For each sound:
+//   loud     how loud it is to an ear at its loudest moment, in decibels below the most the speakers can do.
+//            Ten less is about half as loud. Deep rumble counts for little here, as it does in your head.
+//   peak     how large the wave got at the speakers, of 1.0. Above 1.0 the speakers cut it off flat.
+//   held     how many decibels the compressor took off it (never much: see SOUND_OUTPUT in src/js/07-audio.js)
+//   centre   where its energy sits, in Hz: low is dull or deep, high is bright or harsh
+// It fails only if a sound is silent or the audio engine produced invalid numbers.
+// Two lists follow that are for you to judge, not faults:
+//   - sounds whose peak is over 1.0. They get a harsh edge, and turning them up further adds edge, not loudness.
+//     In a horror game some of that may be exactly what you want.
+//   - sounds with a big wave for how little of it is heard, because most of the sound is very low. These are
+//     the ones that stay hard to hear however far they are turned up.
 //
 // The sounds are the ones on the workshop's sound board (src/dev/23-workshop-sounds.js), played the way
 // the board plays them: one at a time, with nothing else on.
@@ -15,6 +24,8 @@ const { spawn } = require('child_process');
 const { openGame } = require('./browser-harness.js');
 const { startDevServer, DEFAULT_PORT } = require('./dev-server.js');
 
+// The same line the sound board draws (SOUND_BOARD_LITTLE_HEARD_FOR_ITS_WAVE): loudness to the ear, less the size of the wave in decibels.
+const LITTLE_HEARD_FOR_ITS_WAVE = -34;
 const FAR_DISTANCE = 12; // the Hollow's hunting growl is also measured from this far, to see how it carries
 
 function openInBrowser(address) {
@@ -62,7 +73,7 @@ async function measure(filters) {
   const state = await page.evaluate(`(${board})().start()`);
   if (state !== 'running') { console.log('The audio engine is not running here (state: ' + state + '), so nothing can be measured.'); await browser.close(); process.exit(2); }
 
-  const limits = await page.evaluate(`({ silentPeak: (${board})().silentPeak, distortingPeak: (${board})().distortingPeak })`);
+  const limits = await page.evaluate(`({ silentPeak: (${board})().silentPeak, distortingPeak: (${board})().distortingPeak, })`);
   const nearDistance = await page.evaluate(`(${board})().state.distance`);
   const cases = [];
   for (const entry of await page.evaluate(`(${board})().list()`)) {
@@ -78,9 +89,9 @@ async function measure(filters) {
     return window.lastReturnDebug.soundBoard.listen(key);
   }, [item.key, item.distance]);
   const nameWidth = Math.max(...wanted.map((item) => item.name.length)) + 4;
-  const failures = [];
+  const failures = [], overloading = [], mostlyTooLow = [];
   let group = null;
-  console.log('sound'.padEnd(nameWidth) + 'peak   average  centre');
+  console.log('sound'.padEnd(nameWidth) + 'loud     peak   held    centre');
   for (const item of wanted) {
     if (item.group !== group) { group = item.group; console.log('\n' + group); }
     let result = await listenTo(item);
@@ -90,15 +101,27 @@ async function measure(filters) {
       await page.waitForTimeout(300);
       result = await listenTo(item);
     }
-    console.log(('  ' + item.name).padEnd(nameWidth) + result.peak.toFixed(3) + '  ' + result.average.toFixed(4) + '   ' + Math.round(result.centre) + ' Hz');
+    console.log(('  ' + item.name).padEnd(nameWidth) + (Math.round(result.loudness) + ' dB').padEnd(9) + result.peak.toFixed(2).padEnd(7) +
+      (result.heldBack >= 1 ? Math.round(result.heldBack) + ' dB' : '-').padEnd(8) + Math.round(result.centre) + ' Hz');
     if (result.isInvalid) failures.push(item.name + ': invalid numbers in the output');
     if (result.peak < limits.silentPeak) failures.push(item.name + ': silent');
-    if (result.peak > limits.distortingPeak) failures.push(item.name + ': loud enough to distort');
+    if (result.peak > limits.distortingPeak) overloading.push(item.name + ': peak ' + result.peak.toFixed(2) + ', heard at ' + Math.round(result.loudness) + ' dB');
+    if (result.peak >= 0.3 && result.loudness - 20 * Math.log10(result.peak) <= LITTLE_HEARD_FOR_ITS_WAVE) {
+      mostlyTooLow.push(item.name + ': peak ' + result.peak.toFixed(2) + ', but heard at only ' + Math.round(result.loudness) + ' dB (its energy sits around ' + Math.round(result.centre) + ' Hz)');
+    }
     await page.waitForTimeout(500); // let it ring out before the next one
   }
   if (problems.length > 0) failures.push('script errors: ' + problems.join('; '));
   await browser.close();
-  console.log(failures.length === 0 ? '\nEvery sound is audible, undistorted and valid.' : '\nProblems:\n  ' + failures.join('\n  '));
+  console.log(failures.length === 0 ? '\nEvery sound is audible and the numbers are valid.' : '\nProblems:\n  ' + failures.join('\n  '));
+  if (overloading.length > 0) {
+    console.log('\nOver what a speaker can take (the top of the wave is cut off flat: a harsh edge, and no louder for being turned up).');
+    console.log('Yours to judge; for some sounds in a horror game that edge is the point:\n  ' + overloading.join('\n  '));
+  }
+  if (mostlyTooLow.length > 0) {
+    console.log('\nA big wave for how little of it is heard (most of the sound is too low for ears and small speakers).');
+    console.log('These stay hard to hear however far they are turned up. More of the sound between 150 and 600 Hz would help:\n  ' + mostlyTooLow.join('\n  '));
+  }
   console.log('To hear them yourself: npm run audio-check -- --listen');
   process.exit(failures.length === 0 ? 0 : 1);
 }

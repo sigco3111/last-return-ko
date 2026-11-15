@@ -219,6 +219,11 @@ function updateHollowInCrawlspace(dt) {
     pose.armRaise = approachValue(pose.armRaise, 2.6, dt * 4); // straight up
     pose.elbowBend = 0.1; pose.legSwing = 0; pose.armSwing = 0; pose.lean = 0;
     updateFigureCapsules(figure);
+    // Pulling itself up and in takes a moment, and you hear it: a scrabble on the ceiling right at the hatch.
+    if (crawl.timer > 0.4 && crawl.soundTimer <= 0) {
+      crawl.soundTimer = 0.34;
+      playHollowCeilingStep(figure.x, figure.z, 0.7);
+    }
     if (crawl.timer >= TUNING.hollowCrawlClimbSeconds) {
       crawl.phase = CRAWL_PHASE_TRAVELLING; crawl.timer = 0; crawl.soundTimer = 0;
       setFigureRaycastable(figure, false); // gone into the ceiling: nothing for a scan to find

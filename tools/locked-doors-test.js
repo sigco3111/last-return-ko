@@ -12,7 +12,7 @@ function check(description, condition, detail) {
 
 // Helpers that run inside the page, kept on `window.lab`.
 const labSource = String(function () {
-  const d = window.noReturnDebug, lab = {};
+  const d = window.lastReturnDebug, lab = {};
   lab.fresh = function () {
     d.loadStation('classic', 0);
     d.game.flags.hasLeftLift = true;
@@ -83,7 +83,7 @@ const labSource = String(function () {
 
   // --- which doors open for it ---
   const doorRules = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, kinds = d.doorKinds, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, kinds = d.doorKinds, result = {};
     const openedFor = function (kind, prepare) {
       lab.fresh();
       prepare();
@@ -93,7 +93,7 @@ const labSource = String(function () {
       // The player must be nowhere near, or the door would open for them.
       if (Math.hypot(d.player.x - found.door.centerX, d.player.z - found.door.centerZ) < 4) return 'player too near';
       lab.holdHollowAt(found.sides[0].x, found.sides[0].z, 2);
-      const answer = { open: found.door.openFraction, blocked: d.tileBlocksHollow[Math.floor(found.door.centerZ) * 256 + Math.floor(found.door.centerX)] };
+      const answer = { open: found.door.openFraction, blocked: d.tileBlocksHollow[Math.floor(found.door.centerZ) * d.gridWidth + Math.floor(found.door.centerX)] };
       d.hollow.isActive = false;
       return answer;
     };
@@ -122,7 +122,7 @@ const labSource = String(function () {
 
   // --- it cannot walk through a shut door, and it has a way round ---
   const wayRound = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
     lab.fresh();
     d.game.flags.powerOn = true;
     lab.takeCardsAway(); // without the card it leaves the door alone (pounding on doors has its own checks below)
@@ -138,7 +138,7 @@ const labSource = String(function () {
     result.partsDiffer = d.getHollowPartAt(d.player.x, d.player.z) !== d.getHollowPartAt(d.hollow.figure.x, d.hollow.figure.z);
     result.stepsStraightThroughTheDoor = Math.round(Math.abs(playerSpot.x - d.hollow.figure.x) + Math.abs(playerSpot.z - d.hollow.figure.z));
     result.stepsItHasToGo = d.getHollowStepsTo(d.player.x, d.player.z);
-    const phases = [], doorIndex = Math.floor(door.centerZ) * 256 + Math.floor(door.centerX);
+    const phases = [], doorIndex = Math.floor(door.centerZ) * d.gridWidth + Math.floor(door.centerX);
     // Phases are timed on the game's own clock, so that the pause for the look from below does not count.
     let last = 'on foot', phaseStart = d.game.time, time = 0, wasOnShutDoor = false, doorOpened = false, crawlMetres = 0;
     let hitsWhileHidden = 0, caughtFromAbove = false, graceAfterLanding = -1, landedAt = null, exitHatch = null;
@@ -149,7 +149,7 @@ const labSource = String(function () {
       hasReached = lab.hasReachedPlayer();
       const figure = d.hollow.figure, crawl = d.hollow.crawlspace;
       if (door.openFraction > 0) doorOpened = true;
-      if (!crawl && Math.floor(figure.z) * 256 + Math.floor(figure.x) === doorIndex && door.openFraction < 0.6) wasOnShutDoor = true;
+      if (!crawl && Math.floor(figure.z) * d.gridWidth + Math.floor(figure.x) === doorIndex && door.openFraction < 0.6) wasOnShutDoor = true;
       const now = crawl ? ['climbing', 'travelling', 'rattling'][crawl.phase] : 'on foot';
       if (now !== last) {
         phases.push([last, Math.round((d.game.time - phaseStart) * 10) / 10]);
@@ -203,7 +203,7 @@ const labSource = String(function () {
 
   // --- an open keycard door is an open door: it comes through behind you, and the door does not close on it ---
   const openDoor = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, kinds = d.doorKinds, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, kinds = d.doorKinds, result = {};
     lab.fresh();
     d.game.flags.powerOn = true; d.grantKeycard();
     const found = lab.findDoor(kinds.keycard), door = found.door;
@@ -213,13 +213,13 @@ const labSource = String(function () {
     d.spawnHollow(found.sides[1].x + found.sides[1].awayX * 3, found.sides[1].z + found.sides[1].awayZ * 3);
     d.hollow.graceTimer = 0; d.hollow.knowsPlayerPositionAlways = true;
     let usedCrawlspace = false, lowestOpenWhileInDoorway = 1, time = 0;
-    const doorIndex = Math.floor(door.centerZ) * 256 + Math.floor(door.centerX);
+    const doorIndex = Math.floor(door.centerZ) * d.gridWidth + Math.floor(door.centerX);
     let hasReached = false;
     for (; time < 20 && !hasReached; time += 0.1) {
       d.simulate(0.1);
       hasReached = lab.hasReachedPlayer();
       if (d.hollow.crawlspace) usedCrawlspace = true;
-      if (Math.floor(d.hollow.figure.z) * 256 + Math.floor(d.hollow.figure.x) === doorIndex) lowestOpenWhileInDoorway = Math.min(lowestOpenWhileInDoorway, door.openFraction);
+      if (Math.floor(d.hollow.figure.z) * d.gridWidth + Math.floor(d.hollow.figure.x) === doorIndex) lowestOpenWhileInDoorway = Math.min(lowestOpenWhileInDoorway, door.openFraction);
     }
     result.reachedThePlayer = hasReached; result.seconds = Math.round(time * 10) / 10; result.usedCrawlspace = usedCrawlspace; result.lowestOpenWhileInDoorway = lowestOpenWhileInDoorway;
     return result;
@@ -229,7 +229,7 @@ const labSource = String(function () {
 
   // --- it does not take to the ceiling for a short walk ---
   const shortWalk = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, result = { trips: 0, crawls: 0 };
+    const d = window.lastReturnDebug, lab = window.lab, result = { trips: 0, crawls: 0 };
     lab.fresh();
     d.game.flags.powerOn = true;
     lab.far();
@@ -252,7 +252,7 @@ const labSource = String(function () {
 
   // --- the lift car ---
   const liftCar = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, result = {};
     lab.fresh();
     d.game.flags.powerOn = true;
     const lift = d.getLiftDoor();
@@ -288,10 +288,10 @@ const labSource = String(function () {
 
   // --- pounding on a door, and breaking it down ---
   const pounding = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
     lab.fresh();
     d.game.flags.powerOn = true; d.grantKeycard();
-    const door = lab.findDoor(kinds.keycard).door, doorIndex = door.tileZ * 256 + door.tileX;
+    const door = lab.findDoor(kinds.keycard).door, doorIndex = door.tileZ * d.gridWidth + door.tileX;
     result.numbers = { seconds: tuning.hollowDoorBangSeconds, perBout: tuning.hollowDoorDamagePerBout, cooldown: tuning.hollowDoorBangCooldownSeconds };
     // First meeting: it pounds, the door holds, it leaves the door alone and goes round.
     lab.faceOffAcross(door);
@@ -325,7 +325,7 @@ const labSource = String(function () {
   });
   await page.keyboard.down('KeyW');
   const walkedThrough = await inGame(([sides]) => {
-    const d = window.noReturnDebug; d.simulate(1.6);
+    const d = window.lastReturnDebug; d.simulate(1.6);
     return { x: d.player.x, z: d.player.z, gotAcross: Math.hypot(d.player.x - sides[1].x, d.player.z - sides[1].z) < Math.hypot(d.player.x - sides[0].x, d.player.z - sides[0].z) };
   }, [pounding.sides]);
   await page.keyboard.up('KeyW');
@@ -344,7 +344,7 @@ const labSource = String(function () {
   check('dispatch tells you, the first time', pounding.dispatchToldYou, pounding.dispatchToldYou);
 
   const poundingRules = await inGame(() => {
-    const d = window.noReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
+    const d = window.lastReturnDebug, lab = window.lab, kinds = d.doorKinds, tuning = d.tuning, result = {};
     // Without the card for that door, it does not go at it: a door it broke would let you past a lock.
     lab.fresh();
     d.game.flags.powerOn = true; lab.takeCardsAway();
@@ -416,7 +416,7 @@ const labSource = String(function () {
 
   // --- the hatches: every locked-off part has one, the same station always gets the same ones ---
   const hatches = await inGame(() => {
-    const d = window.noReturnDebug, result = {};
+    const d = window.lastReturnDebug, result = {};
     const describe = function () { return d.hollowHatches.map((hatch) => [hatch.x, hatch.z, hatch.part].join(':')).join(' '); };
     d.loadStation('classic', 0);
     result.classic = { hatches: d.hollowHatches.length, parts: d.getHollowPartCount(), problems: d.auditHollowRoutes(), layout: d.auditLayout() };
