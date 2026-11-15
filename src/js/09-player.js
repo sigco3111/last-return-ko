@@ -56,7 +56,8 @@ const settings = {
   volume: 0.8,
   quality: 'medium',
   palette: 0,
-  difficulty: 'standard',
+  difficulty: 'standard',   // a key of DIFFICULTY_PRESETS, or 'custom'
+  customDifficulty: createCustomDifficultyValues('standard'), // what 'custom' means: one value for each of CUSTOM_DIFFICULTY_OPTIONS
   station: 'classic',       // 'classic' (Kessel-9 as built) or 'generated' (a different station every descent)
   stationSize: 'medium',    // a key of GENERATED_SIZE_PRESETS
   stationLayout: 'mixed',   // a key of GENERATED_LAYOUT_PRESETS
@@ -73,7 +74,8 @@ function loadSettings() {
       if (typeof stored.volume === 'number') settings.volume = clampNumber(stored.volume, 0, 1);
       if (QUALITY_PRESETS[stored.quality]) settings.quality = stored.quality;
       if (stored.palette === 0 || stored.palette === 1 || stored.palette === 2) settings.palette = stored.palette;
-      if (DIFFICULTY_PRESETS[stored.difficulty]) settings.difficulty = stored.difficulty;
+      if (DIFFICULTY_PRESETS[stored.difficulty] || stored.difficulty === 'custom') settings.difficulty = stored.difficulty;
+      settings.customDifficulty = sanitizeCustomDifficultyValues(stored.customDifficulty);
       if (stored.station === 'classic' || stored.station === 'generated') settings.station = stored.station;
       if (GENERATED_SIZE_PRESETS[stored.stationSize]) settings.stationSize = stored.stationSize;
       if (GENERATED_LAYOUT_PRESETS[stored.stationLayout]) settings.stationLayout = stored.stationLayout;
@@ -366,7 +368,7 @@ function updatePlayerMovement(dt) {
   player.isSprinting = wantsSprint && hasMoveInput && forwardInput > 0.2 && !player.isStaminaLocked && player.sweepTimeRemaining <= 0;
 
   if (player.isSprinting) {
-    player.stamina -= dt / TUNING.staminaSeconds;
+    player.stamina -= dt / (TUNING.staminaSeconds * game.difficulty.staminaFactor);
     player.timeSinceSprint = 0;
     if (player.stamina <= 0) { player.stamina = 0; player.isStaminaLocked = true; }
   } else {

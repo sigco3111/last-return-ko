@@ -23,9 +23,14 @@ const DIFFICULTY_PRESETS = {
     hearingFactor: 1.0,         // multiplies every noise radius and how close it must be to hear you
     pressureFactor: 1.0,        // multiplies how quickly the Hollow closes in again after a breather, and shortens
                                 // the breather by the same amount (see "The director" in TUNING)
-    heatFactor: 0.7             // multiplies how fast the scanner heats up (painting and sweeps).
+    heatFactor: 0.7,            // multiplies how fast the scanner heats up (painting and sweeps).
                                 // Below 1 you can scan for longer before overheating, above 1 for less long.
                                 // It does not change how fast the scanner cools down.
+    angerFactor: 1.0,           // multiplies how fast the beam angers the Hollow. Above 1 it knows where you are sooner.
+    staminaFactor: 1.0,         // multiplies how long a full bar of stamina lasts. It does not change how fast it refills.
+    phantomFactor: 1.0,         // multiplies how many apparitions a descent has, and divides the wait between them.
+                                // 0 means none at all, not even the ones that stand at fixed places.
+    checkpointsEnabled: true    // false: one life. Being caught ends the descent; there is no resuming from a checkpoint.
   },
   standard: {
     key: 'standard',
@@ -35,7 +40,11 @@ const DIFFICULTY_PRESETS = {
     hollowSpeedFactor: 1.0,
     hearingFactor: 0.8,         // it hears 20 % less far than the numbers in TUNING: a sprint step carries 11.2 m, not 14 m
     pressureFactor: 1.0,
-    heatFactor: 1.0
+    heatFactor: 1.0,
+    angerFactor: 1.0,
+    staminaFactor: 1.0,
+    phantomFactor: 1.0,
+    checkpointsEnabled: true
   },
   nightmare: {
     key: 'nightmare',
@@ -45,9 +54,34 @@ const DIFFICULTY_PRESETS = {
     hollowSpeedFactor: 1.14,    // 14 % faster: its hunt speed goes from 3.5 to about 4.0 (you sprint at 4.6)
     hearingFactor: 1.15,        // hears 15 % further than TUNING says: a sprint step carries 16.1 m (11.2 m on Standard)
     pressureFactor: 1.4,        // it closes in 40 % sooner and breathers are 40 % shorter
-    heatFactor: 1.3             // about 7.7 s of continuous painting before overheating instead of 10 s
+    heatFactor: 1.3,            // about 7.7 s of continuous painting before overheating instead of 10 s
+    angerFactor: 1.0,
+    staminaFactor: 1.0,
+    phantomFactor: 1.0,
+    checkpointsEnabled: true
   }
 };
+
+// The fourth threat level, "Custom": the player sets each of the numbers above for themselves.
+// This list is what the "Adjust" panel on the title screen shows, in this order.
+//   kind 'switch'   on or off. onText and offText say what each means.
+//   kind 'percent'  a slider from minimum to maximum in steps of `step` (1.0 is shown as 100 %).
+//   kind 'choice'   one of a few named values.
+// What each setting comes to in plain numbers ("Hunts at 3.9 m/s. You sprint at 4.6.") is worked out from
+// TUNING in 09-difficulty.js, so it stays true when TUNING changes.
+// A custom threat level starts out as a copy of Standard.
+const CUSTOM_DIFFICULTY_OPTIONS = [
+  { key: 'hollowEnabled', kind: 'switch', label: 'The Hollow', onText: 'It comes once the power is on.', offText: 'It never appears.' },
+  { key: 'stillsEnabled', kind: 'switch', label: 'The Stills', onText: 'They move while nothing is scanning them.', offText: 'They stay ordinary statues.' },
+  { key: 'hollowSpeedFactor', kind: 'percent', label: 'Hollow speed', minimum: 0.7, maximum: 1.4, step: 0.05 },
+  { key: 'hearingFactor', kind: 'percent', label: 'Hollow hearing', minimum: 0.5, maximum: 1.6, step: 0.05 },
+  { key: 'pressureFactor', kind: 'percent', label: 'How hard it presses', minimum: 0.5, maximum: 2, step: 0.1 },
+  { key: 'angerFactor', kind: 'percent', label: 'Its temper in the beam', minimum: 0.5, maximum: 2, step: 0.1 },
+  { key: 'heatFactor', kind: 'percent', label: 'Scanner heat', minimum: 0.5, maximum: 2, step: 0.1 },
+  { key: 'staminaFactor', kind: 'percent', label: 'Your stamina', minimum: 0.5, maximum: 2, step: 0.1 },
+  { key: 'phantomFactor', kind: 'choice', label: 'Apparitions', choices: [[0, 'None'], [0.5, 'Few'], [1, 'Normal'], [2, 'Many']] },
+  { key: 'checkpointsEnabled', kind: 'switch', label: 'Checkpoints', onText: 'Caught: you resume from the last checkpoint.', offText: 'One life. Caught means starting over.' }
+];
 
 // The "Quality" choice on the title screen. These only affect looks and performance.
 const QUALITY_PRESETS = {
