@@ -5,6 +5,10 @@
 - random object that make sound when walked on and warn the monster
 - Hollow can go through locked doors, though small chance, shouldn't be a thing, give alternative ways to get around (ceiling vents only for the monster? teleport with delay), also opens up player locking doors to get away
   - if enough doors are locked in its face it starts breaking them down? (protected doors it can't break down?)
+- random work order numbers and letters
+  - same for shaft number and rooms, allowing the same room multiple times with different indicator?
+- random 'locations' to go along with work orders (not just Kessel-9 pumping annex)
+  - random objectives and rooms tied to location types? pumping annex has shaft 9, others might not. 
 
 - more random objectives
   - item collection, multi-stage generators, activate and escape
