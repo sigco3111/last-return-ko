@@ -99,6 +99,46 @@ function check(description, condition, detail) {
     quiet.setting === 'quiet' && quiet.readouts && quiet.minimap && quiet.heatCold && !quiet.objectiveJustChanged && !quietLater.heatWarm, { quiet: quiet, later: quietLater });
   check('"Full instruments" shows them all', !full.readouts && !full.minimap && !full.heatCold, full);
 
+  // --- the laser lines start at the lens of the scanner in the player's hand, not in the air beside it ---
+  // The station and the scanner are drawn with different fields of view, so both are compared where they land on the screen.
+  const measureBeamOrigin = () => inGame(() => {
+    const debug = window.lastReturnDebug, renderer = debug.renderer, beamLines = debug.beamLines;
+    const projectToScreen = (matrix, x, y, z) => {
+      const w = matrix[3] * x + matrix[7] * y + matrix[11] * z + matrix[15];
+      return [(matrix[0] * x + matrix[4] * y + matrix[8] * z + matrix[12]) / w, (matrix[1] * x + matrix[5] * y + matrix[9] * z + matrix[13]) / w];
+    };
+    const lensMatrix = new Float32Array(16), projection = renderer.viewmodelProjectionMatrix, placement = renderer.viewmodelMatrix;
+    for (let column = 0; column < 4; column++) {
+      for (let row = 0; row < 4; row++) {
+        let sum = 0;
+        for (let index = 0; index < 4; index++) sum += projection[index * 4 + row] * placement[column * 4 + index];
+        lensMatrix[column * 4 + row] = sum;
+      }
+    }
+    const lens = projectToScreen(lensMatrix, debug.viewmodelLensCenter[0], debug.viewmodelLensCenter[1], debug.viewmodelLensCenter[2]);
+    let largestDistance = 0;
+    for (let lineIndex = 0; lineIndex < beamLines.count; lineIndex++) {
+      const offset = lineIndex * 8;
+      const origin = projectToScreen(renderer.viewProjectionMatrix, beamLines.vertices[offset], beamLines.vertices[offset + 1], beamLines.vertices[offset + 2]);
+      largestDistance = Math.max(largestDistance, Math.hypot(origin[0] - lens[0], origin[1] - lens[1]));
+    }
+    return { lineCount: beamLines.count, lensOnScreen: lens, largestDistanceFromLens: largestDistance, fieldOfView: debug.renderCamera.fieldOfViewDegrees };
+  });
+  await page.keyboard.down('Space');
+  await drawFrames(page, 3);
+  const beamStanding = await measureBeamOrigin();
+  await page.keyboard.down('KeyW');
+  await page.keyboard.down('ShiftLeft');
+  await drawFrames(page, 3);
+  const beamSprinting = await measureBeamOrigin();
+  await page.keyboard.up('ShiftLeft');
+  await page.keyboard.up('KeyW');
+  await page.keyboard.up('Space');
+  await inGame(() => { window.lastReturnDebug.player.heat = 0; });
+  check('the laser lines of a scan start at the lens of the scanner in hand, standing and sprinting',
+    beamStanding.lineCount > 0 && beamStanding.largestDistanceFromLens < 0.005 && beamSprinting.lineCount > 0 && beamSprinting.largestDistanceFromLens < 0.005,
+    { standing: beamStanding, sprinting: beamSprinting });
+
   // --- voice recordings: a line with a recording is played, one without stays text only ---
   // Made-up line names are used, so this works whether or not real recordings are in assets/voice.
   const voice = await inGame(async () => {
