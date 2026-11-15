@@ -220,24 +220,37 @@ function checkSourcePatching() {
     // --- the creature tool ---
     await page.click('#workshop-tab-creatures');
     await frames(4);
+    // The body walks on the spot, and its height rises and falls some twenty centimetres with every stride.
+    // So "how tall" is the tallest it gets over a whole stride. One drawn frame moves the game on by a
+    // twentieth of a second at most, and at its wandering pace a stride is then some 42 frames: 45 are taken.
+    const tallestOverAStride = async () => {
+      let tallest = 0;
+      for (let frame = 0; frame < 45; frame++) {
+        await frames(1);
+        tallest = Math.max(tallest, await inPage(() => { const figure = window.lastReturnDebug.creatureWorkshop.figure; return (figure.boundsCenterY - figure.y) * 2; }));
+      }
+      return Math.round(tallest * 1000) / 1000;
+    };
     const before = await inPage(() => {
       const state = window.lastReturnDebug.creatureWorkshop;
-      return { thigh: state.figure.proportions.thigh, height: (state.figure.boundsCenterY - state.figure.y) * 2, capsules: state.figure.capsuleCount };
+      return { thigh: state.figure.proportions.thigh, capsules: state.figure.capsuleCount };
     });
+    before.tallest = await tallestOverAStride();
     // Whatever the file holds today, a thigh 30 cm longer makes a taller body.
     const longThigh = Math.round((before.thigh + 0.3) * 1000) / 1000;
     await setNumber('workshop-proportion-thigh', longThigh);
-    await frames(4);
+    await frames(1);
     const after = await inPage(() => {
       const debug = window.lastReturnDebug, state = debug.creatureWorkshop;
       return {
-        thigh: state.figure.proportions.thigh, height: (state.figure.boundsCenterY - state.figure.y) * 2,
+        thigh: state.figure.proportions.thigh,
         gameThigh: debug.hollow.figure.proportions.thigh, changes: Object.keys(state.overrides.hollow),
         originalThigh: state.originalFigure.proportions.thigh
       };
     });
+    after.tallest = await tallestOverAStride();
     check('a proportion slider changes the body at once, for the whole game, and keeps the file\'s shape to compare',
-      after.thigh === longThigh && after.height > before.height + 0.02 && after.gameThigh === longThigh && after.changes.join() === 'thigh' && after.originalThigh === before.thigh, { before: before, after: after });
+      after.thigh === longThigh && after.tallest > before.tallest + 0.1 && after.gameThigh === longThigh && after.changes.join() === 'thigh' && after.originalThigh === before.thigh, { before: before, after: after });
 
     await page.selectOption('#workshop-creature-behaviour', 'hunt');
     await frames(40);

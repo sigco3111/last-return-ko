@@ -109,12 +109,22 @@ body {
 .hud-message.is-radio { border-left-color: var(--return); }
 .hud-message .message-speaker { display: block; font-family: var(--font-data); font-size: 10px; letter-spacing: 0.14em; color: var(--return); }
 @keyframes message-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* Captions: up to four lines, the newest at the bottom, standing on a fixed baseline so that the stack grows upward. */
 #hud-caption {
-  position: absolute; left: 50%; bottom: 13%; transform: translateX(-50%);
-  font-family: var(--font-body); font-style: italic; font-size: 13px; color: var(--text-dim); text-shadow: 0 0 6px #000;
-  white-space: nowrap; transition: opacity 0.4s; opacity: 0;
+  position: absolute; left: 50%; bottom: 3%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 2px; pointer-events: none;
+  width: max-content; max-width: calc(100% - 24px);
 }
-#hud-caption.is-visible { opacity: 1; }
+.hud-caption-line {
+  font-family: var(--font-body); font-style: italic; font-size: 13px; line-height: 1.35; color: var(--text-dim); text-shadow: 0 0 6px #000;
+  text-align: center; animation: caption-in 0.3s ease-out;
+}
+.hud-caption-where { font-family: var(--font-data); font-style: normal; color: var(--text); margin-left: 10px; }
+.hud-caption-where[hidden], .hud-caption-arrow[hidden] { display: none; }
+.hud-caption-arrow { display: inline-block; margin-right: 6px; font-weight: bold; }
+/* "Every sound": these lines stand in for hearing, so they are larger, brighter and on a dark strip. */
+#hud-caption.is-every-sound .hud-caption-line { font-size: 15px; color: var(--text); background: rgba(0, 0, 0, 0.55); padding: 0 10px; }
+@keyframes caption-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------- touch controls ---------- */
 #touch-controls { position: absolute; inset: 0; font-family: var(--font-data); }
@@ -143,7 +153,7 @@ body.is-touch .meter { grid-template-columns: 74px 62px; gap: 6px; }
 body.is-touch .meter-name { font-size: 9px; letter-spacing: 0.06em; }
 body.is-touch #hud-messages { bottom: 36%; }
 body.is-touch .hud-message { font-size: 13px; }
-body.is-touch #hud-caption { bottom: 30%; }
+body.is-touch #hud-caption { bottom: auto; top: 16%; } /* the thumbs have the bottom of the screen: captions go under the work order, and grow downward */
 body.is-touch #hud-prompt { top: calc(50% + 48px); }
 @media (max-height: 480px) {
   body.is-touch .hud-bottom-left { top: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: auto; left: var(--gutter-left); }
@@ -300,6 +310,6 @@ kbd { display: inline-block; margin-right: 3px; padding: 0 6px; border: 1px soli
   .hud-bottom-left .readouts { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hud-message, .intro-lines p { animation: none; }
+  .hud-message, .hud-caption-line, .intro-lines p { animation: none; }
   .rotate-phone { animation: none; transform: rotate(-90deg); }
 }

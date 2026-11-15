@@ -16,7 +16,8 @@ const interfaceState = {
   lastStatusSignature: '',  // objective and chip state as last shown, to notice when it changes
   objectiveShownUntil: 0,   // on the quiet screen the objective block is visible until this moment
   messages: [],
-  captionExpiresAt: 0,
+  captionLines: [],     // the caption lines on screen: { slot, key, rank, source, expiresAt, element, textElement, whereElement, whereText }
+  captionCounts: {},    // how often each caption has been shown since the page was opened, by key (for the tests)
   textRefreshTimer: 0,
   minimapRefreshTimer: 0,
   visitedZones: new Set(),
@@ -488,18 +489,116 @@ function playRadioLine(key) {
   });
 }
 
-function showCaption(text) {
-  const element = interfaceState.elements['hud-caption'];
-  if (!element) return;
-  element.textContent = text;
-  element.classList.add('is-visible');
-  interfaceState.captionExpiresAt = game.realTime + 3.2;
+// ---- captions. What each one says, and who gets to see it, is the table CAPTIONS in 00-config.js. ----
+
+// The eight arrows, clockwise from straight ahead. (On screen it is one arrow, turned: the slanting ones of
+// most typefaces are too small to read at a glance. These are what the tests are given.)
+const CAPTION_ARROWS = ['\u2191', '\u2197', '\u2192', '\u2198', '\u2193', '\u2199', '\u2190', '\u2196'];
+
+// Whether the "Captions" setting lets captions of this level ('tell' or 'sound') through.
+function isCaptionLevelShown(level) {
+  return settings.captions === 'all' || (settings.captions === 'tells' && level === 'tell');
+}
+
+// Where a sound comes from, the way the player would point at it: which of eight ways (0 is straight ahead of
+// them, 2 to their right, 4 behind) and "close", "near" or "far". Something within arm's reach is simply
+// "right here", with no direction (-1).
+function describeCaptionSource(source) {
+  const offsetX = source.x - player.x, offsetZ = source.z - player.z;
+  const metres = Math.hypot(offsetX, offsetZ);
+  if (metres < 1.2) return { eighth: -1, word: 'right here' };
+  const ahead = offsetX * Math.sin(player.yaw) - offsetZ * Math.cos(player.yaw);
+  const toTheRight = offsetX * Math.cos(player.yaw) + offsetZ * Math.sin(player.yaw);
+  const eighth = (Math.round(Math.atan2(toTheRight, ahead) / (Math.PI / 4)) + 8) % 8;
+  return { eighth: eighth, word: metres < TUNING.captionCloseMetres ? 'close' : (metres < TUNING.captionNearMetres ? 'near' : 'far') };
+}
+
+function removeCaptionLine(line) {
+  line.element.remove();
+  const index = interfaceState.captionLines.indexOf(line);
+  if (index >= 0) interfaceState.captionLines.splice(index, 1);
+}
+
+// Puts a caption on screen, if the "Captions" setting shows captions of its kind and the thing is near enough
+// to be heard. `key` is its name in CAPTIONS. `source` is where the sound comes from: anything with an x and
+// a z (a figure, a door, a hatch); leave it out for a sound that comes from nowhere in particular. A source
+// that moves is followed: its arrow is worked out afresh every frame.
+// Calling this again while the line is still up keeps it up, so a sound that goes on (footsteps, a growl) is
+// one steady line and not a flicker. Returns whether the caption is now on screen.
+function showCaption(key, source) {
+  const caption = CAPTIONS[key], container = interfaceState.elements['hud-caption'];
+  if (!caption || !container || !isCaptionLevelShown(caption.level)) return false;
+  if (source && caption.withinMetres > 0 && distanceBetweenPoints(source.x, source.z, player.x, player.z) > caption.withinMetres) return false;
+  const slot = caption.slot || key, rank = caption.rank || 0;
+  let line = null;
+  for (const existing of interfaceState.captionLines) if (existing.slot === slot) line = existing;
+  // Something more telling has this line and has not had its time yet: this one waits.
+  if (line && line.key !== key && rank < line.rank && game.time < line.expiresAt) return false;
+  if (!line) {
+    line = { slot: slot, key: '', rank: 0, source: null, expiresAt: 0, whereText: '',
+      element: document.createElement('div'), textElement: document.createElement('span'), whereElement: document.createElement('span'),
+      arrowElement: document.createElement('span'), wordElement: document.createElement('span') };
+    line.element.className = 'hud-caption-line';
+    line.whereElement.className = 'hud-caption-where';
+    line.whereElement.setAttribute('aria-hidden', 'true'); // it changes as you turn: not something to read out each time
+    line.whereElement.hidden = true;
+    line.arrowElement.className = 'hud-caption-arrow';
+    line.arrowElement.textContent = CAPTION_ARROWS[0];
+    line.whereElement.appendChild(line.arrowElement);
+    line.whereElement.appendChild(line.wordElement);
+    line.element.appendChild(line.textElement);
+    line.element.appendChild(line.whereElement);
+    container.appendChild(line.element);
+    interfaceState.captionLines.push(line);
+    // Too many lines: the one that says least goes, and of those the one that has least time left.
+    while (interfaceState.captionLines.length > TUNING.captionMostLines) {
+      let weakest = null;
+      for (const other of interfaceState.captionLines) {
+        if (other !== line && (!weakest || other.rank < weakest.rank || (other.rank === weakest.rank && other.expiresAt < weakest.expiresAt))) weakest = other;
+      }
+      removeCaptionLine(weakest);
+    }
+  }
+  if (line.key !== key) { line.key = key; line.textElement.textContent = caption.text; }
+  line.rank = rank;
+  line.source = source || null;
+  line.expiresAt = game.time + caption.seconds;
+  interfaceState.captionCounts[key] = (interfaceState.captionCounts[key] || 0) + 1;
+  return true;
+}
+
+// Called every frame: takes down the lines whose time is up, and keeps the arrows pointing the right way.
+function updateCaptions() {
+  const container = interfaceState.elements['hud-caption'];
+  if (!container) return;
+  const isEverySound = settings.captions === 'all';
+  container.classList.toggle('is-every-sound', isEverySound);
+  for (let index = interfaceState.captionLines.length - 1; index >= 0; index--) {
+    const line = interfaceState.captionLines[index];
+    // (The second test: a new descent starts the clock again, and a line left over from the last one must not outstay it.)
+    if (game.time > line.expiresAt || line.expiresAt - game.time > 30 || !isCaptionLevelShown(CAPTIONS[line.key].level)) { removeCaptionLine(line); continue; }
+    const where = isEverySound && line.source ? describeCaptionSource(line.source) : null;
+    const whereText = where ? (where.eighth >= 0 ? CAPTION_ARROWS[where.eighth] + ' ' : '') + where.word : '';
+    if (whereText !== line.whereText) {
+      line.whereText = whereText;
+      line.whereElement.hidden = !where;
+      if (where) {
+        line.arrowElement.hidden = where.eighth < 0;
+        line.arrowElement.style.transform = 'rotate(' + Math.max(0, where.eighth) * 45 + 'deg)';
+        line.wordElement.textContent = where.word;
+      }
+    }
+  }
+}
+
+function clearCaptions() {
+  while (interfaceState.captionLines.length > 0) removeCaptionLine(interfaceState.captionLines[0]);
 }
 
 function clearMessages() {
   for (const message of interfaceState.messages) message.element.remove();
   interfaceState.messages.length = 0;
-  interfaceState.elements['hud-caption'].classList.remove('is-visible');
+  clearCaptions();
 }
 
 // ---------------------------------------------------------------------------
@@ -530,7 +629,7 @@ function updateHud(realDt) {
       interfaceState.messages.splice(index, 1);
     }
   }
-  if (now > interfaceState.captionExpiresAt) elements['hud-caption'].classList.remove('is-visible');
+  updateCaptions();
 
   if (game.mode === 'title') {
     interfaceState.textRefreshTimer -= realDt;

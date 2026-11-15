@@ -1537,10 +1537,12 @@ function playLiftBell() {
   }
 }
 
+// Returns whether the bell rang just now.
 function updateLiftBell(isLiftMoving, gameTime) {
-  if (!isLiftMoving || gameTime < audio.nextLiftBellTime) return;
+  if (!isLiftMoving || gameTime < audio.nextLiftBellTime) return false;
   playLiftBell();
   audio.nextLiftBellTime = gameTime + 1.6;
+  return true;
 }
 
 // Occasional sounds from elsewhere in the station. Each has a function of its own, so it can be played by itself.
@@ -1600,9 +1602,10 @@ function updateAmbientEvents(gameTime, listenerX, listenerZ, dread) {
   const choice = Math.random();
   const angle = Math.random() * TWO_PI, distance = randomBetween(6, 16);
   const eventX = listenerX + Math.cos(angle) * distance, eventZ = listenerZ + Math.sin(angle) * distance;
-  if (choice < 0.34) { playAmbientDrips(eventX, eventZ); return null; }
-  if (choice < 0.58) { playAmbientPipeGroan(eventX, eventZ); return null; }
-  if (choice < 0.8) { playAmbientMetalSettling(eventX, eventZ); return null; }
+  // What is returned is the caption for it and where it came from.
+  if (choice < 0.34) { playAmbientDrips(eventX, eventZ); return { caption: 'ambientDrips', x: eventX, z: eventZ }; }
+  if (choice < 0.58) { playAmbientPipeGroan(eventX, eventZ); return { caption: 'ambientPipe', x: eventX, z: eventZ }; }
+  if (choice < 0.8) { playAmbientMetalSettling(eventX, eventZ); return { caption: 'ambientMetal', x: eventX, z: eventZ }; }
   playAmbientShaftKnocks();
-  return '[knocking, far below]';
+  return { caption: 'ambientKnocks', x: SHAFT_POSITION.x, z: SHAFT_POSITION.z };
 }

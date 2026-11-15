@@ -199,7 +199,7 @@ function beginHollowCrawl(fromHatch, toHatch) {
   };
   hollow.figure.x = fromHatch.x; hollow.figure.z = fromHatch.z;
   // The first time through a hatch it has to force the cover, and that is loud. After that the cover only rattles.
-  if (fromHatch.isOpen) playHatchRattle(fromHatch.x, fromHatch.z, 1);
+  if (fromHatch.isOpen) { playHatchRattle(fromHatch.x, fromHatch.z, 1); showCaption('hatchRattle', fromHatch); }
   else forceHollowHatchOpen(fromHatch, false);
 }
 
@@ -226,6 +226,7 @@ function updateHollowInCrawlspace(dt) {
     if (crawl.timer > 0.4 && crawl.soundTimer <= 0) {
       crawl.soundTimer = 0.34;
       playHollowCeilingStep(figure.x, figure.z, 0.7);
+      showCaption('hollowOverhead', figure);
     }
     if (crawl.timer >= TUNING.hollowCrawlClimbSeconds) {
       crawl.phase = CRAWL_PHASE_TRAVELLING; crawl.timer = 0; crawl.soundTimer = 0;
@@ -241,10 +242,7 @@ function updateHollowInCrawlspace(dt) {
     if (crawl.soundTimer <= 0) {
       crawl.soundTimer = 0.42 + Math.random() * 0.14;
       playHollowCeilingStep(figure.x, figure.z, hollow.state === HOLLOW_STATE_HUNT ? 1 : 0.8);
-      if (hollow.turnCaptionCooldown <= 0 && distanceBetweenPoints(figure.x, figure.z, player.x, player.z) < 12) {
-        showCaption('[something crawls overhead]');
-        hollow.turnCaptionCooldown = 15;
-      }
+      showCaption('hollowOverhead', figure);
     }
     if (amount >= 1) { crawl.phase = CRAWL_PHASE_RATTLING; crawl.timer = 0; crawl.soundTimer = 0; }
     return;
@@ -255,6 +253,7 @@ function updateHollowInCrawlspace(dt) {
   if (crawl.soundTimer <= 0) {
     crawl.soundTimer = 0.55;
     playHatchRattle(crawl.to.x, crawl.to.z, 0.7 + 0.3 * crawl.timer / Math.max(0.1, TUNING.hollowCrawlDropWarningSeconds));
+    showCaption('hatchRattle', crawl.to);
   }
   if (crawl.timer >= TUNING.hollowCrawlDropWarningSeconds) {
     hollow.crawlspace = null;
@@ -266,8 +265,9 @@ function updateHollowInCrawlspace(dt) {
     hollow.graceTimer = Math.max(hollow.graceTimer, TUNING.hollowCrawlLandingGraceSeconds);
     hollow.fieldTargetIndex = -1; // work out the way again from where it now is
     playHollowFootstep(figure.x, figure.z, 1.6);
+    showCaption('hollowSteps', figure);
     // Out through a hatch nothing has come through before: the cover goes with a bang as it drops.
-    if (crawl.to.isOpen) playHatchRattle(crawl.to.x, crawl.to.z, 1.2);
+    if (crawl.to.isOpen) { playHatchRattle(crawl.to.x, crawl.to.z, 1.2); showCaption('hatchRattle', crawl.to); }
     else forceHollowHatchOpen(crawl.to, true);
   }
 }
@@ -383,8 +383,9 @@ function updateHollowDoorBang(dt) {
       // What you are told depends on the state of the door: untouched, already battered, or about to go.
       const damageBefore = door.damage - damagePerBlow;
       const willGoThisBout = damageBefore + damagePerBlow * blowsInOneBout >= 0.999;
-      showCaption(willGoThisBout ? '[it is at the door again. The door will not hold]' : (damageBefore > 0.01 ? '[it is at the door again]' : '[it is at the door]'));
+      bang.captionKey = willGoThisBout ? 'doorPoundedLast' : (damageBefore > 0.01 ? 'doorPoundedAgain' : 'doorPounded');
     }
+    showCaption(bang.captionKey, { x: door.centerX, z: door.centerZ }); // every blow keeps the line up for as long as it goes on
     if (door.damage >= 1) { breakDoor(door); hollow.doorBang = null; hollow.fieldTargetIndex = -1; return; }
     if (bang.hits >= blowsInOneBout) {
       // The door held. It leaves it for now and goes round; what it did to the door stays done.
@@ -409,7 +410,7 @@ function breakDoor(door) {
   slab.centerY = door.baseY + 0.04; slab.minimumY = door.baseY; slab.maximumY = door.baseY + 0.08;
   slab.blocksMovement = false; slab.isRemoved = false;
   playDoorBreak(door.centerX, door.centerZ);
-  showCaption('[the door gives way]');
+  showCaption('doorBreaks', { x: door.centerX, z: door.centerZ });
   if (!game.flags.hasHeardOfBrokenDoor) {
     game.flags.hasHeardOfBrokenDoor = true;
     scheduleEvent(3.5, function () { playRadioLine('doorBroken'); });
@@ -560,9 +561,7 @@ function forceHollowHatchOpen(hatch, isComingOut) {
     convertSecondsToPointLifeCode(TUNING.doorImprintSeconds));
   placeHollowHatchCover(hatch);
   playHatchBurst(hatch.x, hatch.z);
-  if (distanceBetweenPoints(hatch.x, hatch.z, player.x, player.z) < TUNING.hollowHatchBurstCaptionMetres) {
-    showCaption(isComingOut ? '[a ceiling hatch bursts open]' : '[a ceiling hatch is forced open]');
-  }
+  showCaption(isComingOut ? 'hatchBurst' : 'hatchForced', hatch);
 }
 
 // Shuts every hatch again. For the start of a new descent.

@@ -5,6 +5,9 @@
 //   peak     how large the wave got at the speakers, of 1.0. Above 1.0 the speakers cut it off flat.
 //   held     how many decibels the compressor took off it (never much: see SOUND_OUTPUT in src/js/07-audio.js)
 //   centre   where its energy sits, in Hz: low is dull or deep, high is bright or harsh
+//   heard to for a sound that comes from somewhere: how far away it can still be heard, taken as the distance at
+//            which it has faded to the level of the room tone. This is the number a caption's `withinMetres`
+//            should have (CAPTIONS in src/js/00-config.js), so that a caption shows where ears would hear it.
 // It fails only if a sound is silent or the audio engine produced invalid numbers.
 // Two lists follow that are for you to judge, not faults:
 //   - sounds whose peak is over 1.0. They get a harsh edge, and turning them up further adds edge, not loudness.
@@ -27,6 +30,17 @@ const { startDevServer, DEFAULT_PORT } = require('./dev-server.js');
 // The same line the sound board draws (SOUND_BOARD_LITTLE_HEARD_FOR_ITS_WAVE): loudness to the ear, less the size of the wave in decibels.
 const LITTLE_HEARD_FOR_ITS_WAVE = -34;
 const FAR_DISTANCE = 12; // the Hollow's hunting growl is also measured from this far, to see how it carries
+const QUIETEST_HEARD = -48; // dB: about the level of the room tone. A sound from somewhere counts as heard down to this.
+
+// How far away a sound measured at `metres` with loudness `decibels` still reaches QUIETEST_HEARD. Sound from a
+// place fades the way createTemporaryPanner in src/js/07-audio.js sets it: full within 2.5 m, then as
+// 2.5 / (2.5 + 1.2 x (distance - 2.5)). The Hollow's own voice fades very slightly faster; near enough.
+function metresHeardTo(decibels, metres) {
+  const fadeAt = function (distance) { return distance <= 2.5 ? 1 : 2.5 / (2.5 + 1.2 * (distance - 2.5)); };
+  const fadeWanted = fadeAt(metres) * Math.pow(10, (QUIETEST_HEARD - decibels) / 20);
+  if (fadeWanted >= 1) return 0;
+  return 2.5 + (2.5 / fadeWanted - 2.5) / 1.2;
+}
 
 function openInBrowser(address) {
   const command = process.platform === 'darwin' ? ['open', address]
@@ -91,7 +105,7 @@ async function measure(filters) {
   const nameWidth = Math.max(...wanted.map((item) => item.name.length)) + 4;
   const failures = [], overloading = [], mostlyTooLow = [];
   let group = null;
-  console.log('sound'.padEnd(nameWidth) + 'loud     peak   held    centre');
+  console.log('sound'.padEnd(nameWidth) + 'loud     peak   held    centre    heard to');
   for (const item of wanted) {
     if (item.group !== group) { group = item.group; console.log('\n' + group); }
     let result = await listenTo(item);
@@ -102,7 +116,8 @@ async function measure(filters) {
       result = await listenTo(item);
     }
     console.log(('  ' + item.name).padEnd(nameWidth) + (Math.round(result.loudness) + ' dB').padEnd(9) + result.peak.toFixed(2).padEnd(7) +
-      (result.heldBack >= 1 ? Math.round(result.heldBack) + ' dB' : '-').padEnd(8) + Math.round(result.centre) + ' Hz');
+      (result.heldBack >= 1 ? Math.round(result.heldBack) + ' dB' : '-').padEnd(8) + (Math.round(result.centre) + ' Hz').padEnd(10) +
+      (item.distance > 0 && isFinite(result.loudness) ? Math.round(metresHeardTo(result.loudness, item.distance)) + ' m' : ''));
     if (result.isInvalid) failures.push(item.name + ': invalid numbers in the output');
     if (result.peak < limits.silentPeak) failures.push(item.name + ': silent');
     if (result.peak > limits.distortingPeak) overloading.push(item.name + ': peak ' + result.peak.toFixed(2) + ', heard at ' + Math.round(result.loudness) + ' dB');

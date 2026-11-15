@@ -63,7 +63,8 @@ const settings = {
   stationLayout: 'mixed',   // a key of GENERATED_LAYOUT_PRESETS
   stationLevels: 'two',     // a key of GENERATED_LEVEL_PRESETS
   seedText: '',             // what is typed in the seed box; empty means a new random station each descent
-  hud: 'quiet'              // 'quiet' shows instruments only while they matter; 'full' shows everything all the time
+  hud: 'quiet',             // 'quiet' shows instruments only while they matter; 'full' shows everything all the time
+  captions: 'tells'         // the lines in square brackets: 'off', 'tells' (what the Hollow has just done) or 'all' (every sound, with where it comes from)
 };
 
 // The game was called No Return before it was Last Return. Whatever a browser kept under the old name (the
@@ -101,6 +102,7 @@ function loadSettings() {
       if (GENERATED_LEVEL_PRESETS[stored.stationLevels]) settings.stationLevels = stored.stationLevels;
       if (typeof stored.seedText === 'string') settings.seedText = stored.seedText.slice(0, 24);
       if (stored.hud === 'quiet' || stored.hud === 'full') settings.hud = stored.hud;
+      if (stored.captions === 'off' || stored.captions === 'tells' || stored.captions === 'all') settings.captions = stored.captions;
     }
   } catch (error) { /* storage is optional */ }
 }

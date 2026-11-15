@@ -360,6 +360,7 @@ function startPhantomBehind(phantom, spot) {
   updateFigureCapsules(figure);
   showPhantom(phantom);
   playPhantomBreath(figure.x, figure.z);
+  showCaption('phantomBreath', figure);
 }
 
 function updatePhantomBehind(phantom) {

@@ -138,6 +138,14 @@ const TUNING = {
   noiseRadiusSweep: 22,
   noiseRadiusDoor: 8,           // a door you open (doors the Hollow opens do not count)
   noiseRadiusPickup: 4,
+  // ---- Captions (the lines themselves are in CAPTIONS, further down) ----
+  captionMostLines: 4,              // never more than this many caption lines on screen at once
+  captionCloseMetres: 5,            // with "every sound" on, a sound nearer than this is called "close" ...
+  captionNearMetres: 12,            // ... nearer than this "near", and anything further "far"
+  captionOwnDoorMetres: 3.5,        // a door opening or closing this near to you is your own doing and gets no caption
+  captionHeartbeatPressure: 0.55,   // how hard you are pressed (0 to 1) before your heartbeat is put into words
+  captionShriekLevel: 0.3,          // how loud its shriek in the beam (0 to 1) before that is put into words
+
   // ---- Noisy things on the floor (see 03-noisy-floor.js): broken glass, a loose plate, empty cans ----
   noiseRadiusNoisyFloorWalk: 10,    // walking over one. A plain walking step carries 4.
   noiseRadiusNoisyFloorSprint: 19,  // running over one. A plain sprinting step carries 14. Crouched, they make no noise at all.
@@ -147,7 +155,6 @@ const TUNING = {
   noisyFloorShareWhereYouMustWalk: 0.5, // this share of them lies in corridors and a step or two inside doors; the rest anywhere
   noisyFloorLeaveMetres: 0.25,      // you (and the Hollow) count as still on one until this far past its edge, so shuffling on the edge does not set it off again and again
   noisyFloorShortestGapSeconds: 0.3, // and the same feet cannot set one off twice within this time
-  noisyFloorCaptionMetres: 20,      // the Hollow setting one off within this distance of you puts a line on screen, as its other warnings do
   waterStepNoiseFactor: 1.5,    // footsteps in water carry this much further
 
   // ---- How close the Hollow must be to notice you without any sound event --
@@ -187,7 +194,6 @@ const TUNING = {
                                       // square metres of floor ...
   hollowHatchMostPerPart: 3,          // ... up to this many ...
   hollowHatchLeastMetresApart: 10,    // ... and never two closer together than this
-  hollowHatchBurstCaptionMetres: 25,  // a hatch being forced for the first time is put into words if it is this near to you
 
   // ---- Breaking a door down (see 08-crawlspace.js) ----
   // Hunting, with a keycard door shut between it and you that you have the card for, it goes at the door first.
@@ -376,6 +382,83 @@ const RADIO_MESSAGES = {
   allSpools: 'That is all three. Go back to the lift lobby and upload them.',
   uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',
   liftArrived: 'The car is at your level. Get in quick.'
+};
+
+// ---------------------------------------------------------------------------
+// Captions: the lines in square brackets at the bottom of the screen.
+//
+// The "Captions" setting has three levels:
+//   off     none of them. You go by your ears.
+//   tells   only the ones that say what the Hollow has just done (level 'tell'). This is what a new game starts on.
+//   all     every sound that matters as well (level 'sound'), each with an arrow to where it comes from
+//           (the arrow pointing up is straight ahead) and "close", "near" or "far". For playing without hearing the game.
+// Messages (a locked door, lift control, a hint) and Dispatch's words are not captions and always show.
+//
+// TWEAK: one line for each caption.
+//   text          what it says
+//   level         'tell' or 'sound', as above
+//   withinMetres  it only shows if what makes the sound is this near to you; 0 means at any distance.
+//                 For a sound this is as far as it can be heard: the distance at which it has faded to the
+//                 level of the room tone (-48 dB in "npm run audio-check", which measures each one 3 m away).
+//                 Make a sound louder in SOUND_LEVELS and it carries further: about 1.25 times as far for each
+//                 2 dB it gains. Walls do not stop sound in this game, so they do not stop a caption either.
+//   seconds       how long the line stays after the sound was last made
+//   slot          captions with the same slot take turns on one line (its voice; its feet; the door it is at)
+//   rank          within a slot, a caption with a lower rank waits until one with a higher rank has had its time
+// ---------------------------------------------------------------------------
+const CAPTIONS = {
+  // ---- what the Hollow has just done ----
+  hollowFound: { text: '[it has found you]', level: 'tell', withinMetres: 0, seconds: 3.2, slot: 'hollowVoice', rank: 3 },
+  hollowLost: { text: '[it has lost you]', level: 'tell', withinMetres: 0, seconds: 3.2, slot: 'hollowVoice', rank: 3 },
+  hollowEnraged: { text: '[the beam no longer holds it]', level: 'tell', withinMetres: 0, seconds: 3.2 },
+  hollowTurns: { text: '[it turns toward the light]', level: 'tell', withinMetres: 0, seconds: 3.2 },
+  hollowMovingOff: { text: '[it is moving off]', level: 'tell', withinMetres: 22, seconds: 3.2 },
+
+  // ---- its voice ----
+  hollowGrowl: { text: '[a low, rattling growl]', level: 'sound', withinMetres: 6, seconds: 1.2, slot: 'hollowVoice', rank: 0 },
+  hollowGrowlHunting: { text: '[growling, loud and fast]', level: 'sound', withinMetres: 13, seconds: 1.2, slot: 'hollowVoice', rank: 0 },
+  hollowShriek: { text: '[it shrieks in the beam]', level: 'sound', withinMetres: 50, seconds: 1.2, slot: 'hollowVoice', rank: 2 },
+  hollowRoar: { text: '[it roars]', level: 'sound', withinMetres: 50, seconds: 2.5, slot: 'hollowVoice', rank: 3 },
+  hollowSnarl: { text: '[it snarls]', level: 'sound', withinMetres: 60, seconds: 1.8, slot: 'hollowVoice', rank: 2 },
+  hollowSniff: { text: '[it sniffs the air]', level: 'sound', withinMetres: 50, seconds: 2, slot: 'hollowVoice', rank: 2 },
+  hollowTrill: { text: '[a short, rising trill]', level: 'sound', withinMetres: 23, seconds: 2.5, slot: 'hollowVoice', rank: 2 },
+
+  // ---- where it puts its feet ----
+  hollowSteps: { text: '[heavy footsteps]', level: 'sound', withinMetres: 10, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
+  hollowStepsHunting: { text: '[heavy footsteps, fast]', level: 'sound', withinMetres: 12, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
+  hollowVentSteps: { text: '[sheet metal booms: something is in a vent]', level: 'sound', withinMetres: 12, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
+  hollowOverhead: { text: '[something crawls overhead]', level: 'sound', withinMetres: 10, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
+  hollowOnGlass: { text: '[glass crunches under something]', level: 'sound', withinMetres: 13, seconds: 3, slot: 'hollowFeet', rank: 1 },
+  hollowOnPlate: { text: '[a floor plate clanks under something]', level: 'sound', withinMetres: 13, seconds: 3, slot: 'hollowFeet', rank: 1 },
+  hollowOnCans: { text: '[cans scatter, and not by you]', level: 'sound', withinMetres: 13, seconds: 3, slot: 'hollowFeet', rank: 1 },
+
+  // ---- hatches and doors ----
+  hatchRattle: { text: '[a ceiling hatch rattles]', level: 'sound', withinMetres: 10, seconds: 1.5, slot: 'hatch', rank: 0 },
+  hatchForced: { text: '[a ceiling hatch is forced open]', level: 'sound', withinMetres: 25, seconds: 3.2, slot: 'hatch', rank: 1 },
+  hatchBurst: { text: '[a ceiling hatch bursts open]', level: 'sound', withinMetres: 25, seconds: 3.2, slot: 'hatch', rank: 1 },
+  doorPounded: { text: '[it is at the door]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
+  doorPoundedAgain: { text: '[it is at the door again]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
+  doorPoundedLast: { text: '[it is at the door again. The door will not hold]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
+  doorBreaks: { text: '[the door gives way]', level: 'sound', withinMetres: 26, seconds: 3.2, slot: 'doorPounded', rank: 1 },
+  doorOpens: { text: '[a door opens]', level: 'sound', withinMetres: 26, seconds: 2.2, slot: 'door', rank: 0 },
+  doorCloses: { text: '[a door closes]', level: 'sound', withinMetres: 26, seconds: 2.2, slot: 'door', rank: 0 },
+
+  // ---- the Stills and the apparitions ----
+  stillShifts: { text: '[something shifts]', level: 'sound', withinMetres: 6, seconds: 2.5 },
+  phantomBreath: { text: '[a breath behind you]', level: 'sound', withinMetres: 12, seconds: 3 },
+
+  // ---- the station ----
+  ambientDrips: { text: '[water drips]', level: 'sound', withinMetres: 8, seconds: 2.5, slot: 'station', rank: 0 },
+  ambientPipe: { text: '[a pipe groans]', level: 'sound', withinMetres: 19, seconds: 3, slot: 'station', rank: 0 },
+  ambientMetal: { text: '[metal ticks as it settles]', level: 'sound', withinMetres: 37, seconds: 2.5, slot: 'station', rank: 0 },
+  ambientKnocks: { text: '[knocking, far below]', level: 'sound', withinMetres: 13, seconds: 3.5, slot: 'station', rank: 0 },
+  liftBell: { text: '[the lift bell rings]', level: 'sound', withinMetres: 50, seconds: 2.2 },
+
+  // ---- you ----
+  ownGlass: { text: '[glass crunches under your boots]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
+  ownPlate: { text: '[a floor plate clanks under you]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
+  ownCans: { text: '[cans scatter from your feet]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
+  heartbeat: { text: '[your heart is pounding]', level: 'sound', withinMetres: 0, seconds: 1.5 }
 };
 
 // Everything you can read: the three spools and the four notes.

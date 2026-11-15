@@ -89,6 +89,9 @@ function check(description, condition, detail) {
       d.hollow.graceTimer = 0; d.hollow.state = 0; d.hollow.hasHeardNoise = false;
       d.noisyFloorCounts.byPlayer = 0; d.noisyFloorCounts.byPlayerCrouched = 0;
       d.game.hasShownNoisyFloorHint = false;
+      // With captions on "every sound", your own noise on a patch is put into words. Counted from here.
+      d.settings.captions = 'all';
+      for (const key of ['ownGlass', 'ownPlate', 'ownCans']) d.captionCounts[key] = 0;
     }, [lane, listenerMetres]);
     for (const key of keys) await page.keyboard.down(key);
     const result = await inGame(([lane]) => {
@@ -101,7 +104,8 @@ function check(description, condition, detail) {
       }
       const answer = { hollowState: d.hollow.state, wentToLookAt: [d.hollow.targetX, d.hollow.targetZ], nearestToPatch: Math.round(nearestToPatch * 100) / 100,
         setOff: d.noisyFloorCounts.byPlayer, setOffCrouched: d.noisyFloorCounts.byPlayerCrouched, toldWhatItWas: d.game.hasShownNoisyFloorHint,
-        crouching: d.player.isCrouching, sprinting: d.player.isSprinting };
+        crouching: d.player.isCrouching, sprinting: d.player.isSprinting,
+        captionsForYourOwnNoise: d.captionCounts.ownGlass + d.captionCounts.ownPlate + d.captionCounts.ownCans };
       d.hollow.isActive = false;
       return answer;
     }, [lane]);
@@ -119,9 +123,10 @@ function check(description, condition, detail) {
       Math.hypot(walked.wentToLookAt[0] - lane.patch.x, walked.wentToLookAt[1] - lane.patch.z) < 1 && walkListener > carries.walk * hearing + 0.5,
       { walked: walked, listenerMetres: walkListener, plainStepCarries: carries.walk * hearing, patchCarries: carries.noisyWalk * hearing });
     check('the first time, you are told what it was and how to avoid it', walked.toldWhatItWas === true, walked.toldWhatItWas);
+    check('with captions on "every sound", the noise you made there is put into words', walked.captionsForYourOwnNoise >= 1, walked.captionsForYourOwnNoise);
     const crouched = await cross(['KeyC', 'KeyW'], 3.5);
     check('crouched, you cross the same patch and nothing carries: the Hollow three and a half metres away does not stir',
-      crouched.crouching && crouched.nearestToPatch < 0.5 && crouched.setOff === 0 && crouched.setOffCrouched >= 1 && crouched.hollowState === 0 && !crouched.toldWhatItWas, crouched);
+      crouched.crouching && crouched.nearestToPatch < 0.5 && crouched.setOff === 0 && crouched.setOffCrouched >= 1 && crouched.hollowState === 0 && !crouched.toldWhatItWas && crouched.captionsForYourOwnNoise === 0, crouched);
     const sprinted = await cross(['ShiftLeft', 'KeyW'], sprintListener);
     check('running over one carries further still: further than a running step on plain floor',
       sprinted.setOff >= 1 && sprinted.hollowState === 1 && sprintListener > carries.sprint * hearing + 0.5,
@@ -135,8 +140,10 @@ function check(description, condition, detail) {
       d.spawnHollow(patch.x - lane.stepX * 2, patch.z - lane.stepZ * 2);
       d.hollow.graceTimer = 999; // it takes no notice of the player: this is only about where it puts its feet
       d.noisyFloorCounts.byHollow = 0;
-      const captionElement = document.getElementById('hud-caption');
-      captionElement.textContent = '';
+      // What the Hollow does to a patch is put into words too, but only where it could be heard.
+      d.settings.captions = 'all';
+      const captionKey = { glass: 'hollowOnGlass', plate: 'hollowOnPlate', cans: 'hollowOnCans' }[patch.kind];
+      d.captionCounts[captionKey] = 0;
       const targetX = patch.x + lane.stepX * 2, targetZ = patch.z + lane.stepZ * 2;
       let nearest = Infinity, furthestPast = -Infinity;
       for (let time = 0; time < 12; time += 0.1) {
@@ -150,8 +157,8 @@ function check(description, condition, detail) {
       const answer = { setOffByHollow: d.noisyFloorCounts.byHollow, nearestToPatch: Math.round(nearest * 100) / 100, endedPastTheMiddleBy: Math.round(furthestPast * 100) / 100 };
       // The player was standing at the lift all that while. Out of earshot, no line comes on screen.
       answer.playerMetresAway = Math.round(Math.hypot(d.playerStart.x - patch.x, d.playerStart.z - patch.z) * 10) / 10;
-      answer.captionMetres = d.tuning.noisyFloorCaptionMetres;
-      answer.captionFromAfar = captionElement.textContent;
+      answer.captionMetres = d.captions[captionKey].withinMetres;
+      answer.captionsFromAfar = d.captionCounts[captionKey];
 
       // Then it is made to shuffle to and fro over the edge of the patch for three seconds, ten centimetres
       // either side, standing and listening (so it takes no steps of its own). That must set the patch off
@@ -174,11 +181,12 @@ function check(description, condition, detail) {
       // This time the player stands two metres from the patch, so the line does come.
       d.setDebugOption('creaturesIgnorePlayer', true);
       d.teleport(patch.x + lane.stepX * 2, patch.z + lane.stepZ * 2, 0);
-      captionElement.textContent = '';
+      d.captionCounts[captionKey] = 0;
       d.hollow.figure.x = patch.x; d.hollow.figure.z = patch.z;
       d.hollow.state = 4; d.hollow.listenTimer = 5; d.simulate(0.2);
       answer.setOffAfterComingBack = d.noisyFloorCounts.byHollow;
-      answer.captionFromNear = captionElement.textContent;
+      answer.captionsFromNear = d.captionCounts[captionKey];
+      answer.captionOnScreen = d.getCaptionLines().filter((line) => line.key === captionKey).map((line) => line.text + ' ' + line.where)[0] || '';
       d.setDebugOption('creaturesIgnorePlayer', false);
       d.hollow.isActive = false;
       return answer;
@@ -187,9 +195,9 @@ function check(description, condition, detail) {
       hollowSteps.setOffByHollow >= 1 && hollowSteps.setOffByHollow <= 3 && hollowSteps.nearestToPatch < 0.6, hollowSteps);
     check('shuffling to and fro over the edge of a patch sets it off once, not every time the edge is crossed; going clear and coming back sets it off again',
       hollowSteps.setOffWhileShufflingOnTheEdge === 1 && hollowSteps.setOffAfterComingBack === 2, hollowSteps);
-    check('when the Hollow sets one off near you a line on screen says so, and from out of earshot none does',
-      /^\[.+\]$/.test(hollowSteps.captionFromNear) && (hollowSteps.playerMetresAway < hollowSteps.captionMetres || hollowSteps.captionFromAfar === ''),
-      { near: hollowSteps.captionFromNear, fromAfar: hollowSteps.captionFromAfar, playerMetresAway: hollowSteps.playerMetresAway, captionMetres: hollowSteps.captionMetres });
+    check('with captions on "every sound": when the Hollow sets one off near you a line says so and points at it, and from out of earshot none does',
+      hollowSteps.captionsFromNear === 1 && /^\[.+\] . close$/.test(hollowSteps.captionOnScreen) && hollowSteps.playerMetresAway > hollowSteps.captionMetres && hollowSteps.captionsFromAfar === 0,
+      { onScreen: hollowSteps.captionOnScreen, near: hollowSteps.captionsFromNear, fromAfar: hollowSteps.captionsFromAfar, playerMetresAway: hollowSteps.playerMetresAway, captionMetres: hollowSteps.captionMetres });
   }
 
   check('no script errors were reported', problems.length === 0, problems);

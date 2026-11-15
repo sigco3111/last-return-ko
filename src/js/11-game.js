@@ -512,6 +512,7 @@ function completeLiftArrival() {
   liftDoor.forcedState = true;
   setLiftMachinerySound(0);
   playLiftBell();
+  showCaption('liftBell', LIFT_POSITION);
   refreshObjective();
   playRadioLine('liftArrived');
 }
@@ -623,7 +624,7 @@ function updateGameProgress(dt) {
 
   if (flags.uploadStarted && !flags.liftArrived) {
     game.liftCountdown -= dt;
-    updateLiftBell(true, game.time);
+    if (updateLiftBell(true, game.time)) showCaption('liftBell', LIFT_POSITION);
     if (game.liftCountdown <= 0) completeLiftArrival();
   }
 
@@ -666,8 +667,14 @@ function updateAtmosphere(dt) {
   updateHeartbeat(pressure, game.time);
   updateHollowVoice(hollow.figure.x, hollow.figure.z, hollow.isActive, getHollowAggression(),
     hollow.heldAmount * hollow.anger, dt, game.time);
-  const caption = updateAmbientEvents(game.time, player.x, player.z, game.flags.powerOn ? 0.6 : 0.2);
-  if (caption) showCaption(caption);
+  const ambientEvent = updateAmbientEvents(game.time, player.x, player.z, game.flags.powerOn ? 0.6 : 0.2);
+  if (ambientEvent) showCaption(ambientEvent.caption, ambientEvent);
+  // The sounds that go on and on get their captions here, for as long as they last.
+  if (hollow.isActive) {
+    showCaption(getHollowAggression() > 0.6 ? 'hollowGrowlHunting' : 'hollowGrowl', hollow.figure);
+    if (hollow.heldAmount * hollow.anger > TUNING.captionShriekLevel) showCaption('hollowShriek', hollow.figure);
+  }
+  if (pressure > TUNING.captionHeartbeatPressure) showCaption('heartbeat');
 }
 
 function updatePlaying(dt) {
@@ -925,6 +932,9 @@ function startApplication() {
     playHollowCeilingStep: playHollowCeilingStep, playHatchRattle: playHatchRattle, playHatchBurst: playHatchBurst,
     forceHollowHatchOpen: forceHollowHatchOpen, shutHollowHatches: shutHollowHatches,
     // Threat levels: the presets, the player's settings, and what the custom one comes to.
+    // Captions: the table of them, what is on screen now, how often each has been shown, and a way to show one.
+    captions: CAPTIONS, showCaption: showCaption, clearCaptions: clearCaptions, captionCounts: interfaceState.captionCounts,
+    getCaptionLines: function () { updateCaptions(); return interfaceState.captionLines.map(function (line) { return { key: line.key, text: line.textElement.textContent, where: line.whereText }; }); },
     settings: settings, difficultyPresets: DIFFICULTY_PRESETS, customDifficultyOptions: CUSTOM_DIFFICULTY_OPTIONS,
     getChosenDifficulty: getChosenDifficulty, buildCustomDifficulty: buildCustomDifficulty, createCustomDifficultyValues: createCustomDifficultyValues,
     sanitizeCustomDifficultyValues: sanitizeCustomDifficultyValues, describeCustomDifficulty: describeCustomDifficulty,
