@@ -901,6 +901,7 @@ function startApplication() {
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
     // The Hollow and locked doors: its ceiling hatches, what is shut to it right now, and its way round.
     hollowHatches: hollowHatches, tileBlocksHollow: tileBlocksHollow, auditHollowRoutes: auditHollowRoutes,
+    gridWidth: GRID_WIDTH, // tiles in one row of the map: a tile's place in tileBlocksHollow is z * gridWidth + x
     findDoorWorthBreaking: findDoorWorthBreaking, breakDoor: breakDoor, mendDoor: mendDoor, getDoorSides: getDoorSides,
     playDoorBang: playDoorBang, playDoorBreak: playDoorBreak,
     doorKinds: { automatic: DOOR_KIND_AUTOMATIC, powered: DOOR_KIND_POWERED, keycard: DOOR_KIND_KEYCARD, lift: DOOR_KIND_LIFT },

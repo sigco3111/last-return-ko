@@ -72,6 +72,14 @@ function createSoundBoardExperimentPair(switchName, name, hint, extraSeconds, en
   entry.play = function () { playSoundBoardExperiment(switchName, false, play); };
   return [entry, experiment];
 }
+// The Hollow above the ceiling: six steps at the pace it crawls in play, from where the cross is to right over
+// the listener's head, so that you hear it come and how long that takes.
+function playSoundBoardCeilingCrawl() {
+  for (let step = 0; step < 6; step++) {
+    const z = interpolateLinear(getSoundBoardSourceZ(), getSoundBoardListenerZ(), step / 5);
+    playHollowCeilingStep(getSoundBoardListenerX(), z, 1, step * 0.47);
+  }
+}
 function createSoundBoardMetalPair(entry) { return createSoundBoardExperimentPair('metalStruck', 'struck metal', 'Built from overtones that clash.', 0.8, entry); }
 function createSoundBoardWaterPair(entry) { return createSoundBoardExperimentPair('waterBubbles', 'bubbles', 'Built from ringing bubbles.', 0.2, entry); }
 
@@ -167,17 +175,17 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'The Hollow', key: 'hollowVentRoam', level: 'hollowVentStep', label: 'It crawls in a vent, roaming', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.8); } },
   ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hollowVentHunt', level: 'hollowVentStep', label: 'It crawls in a vent, hunting', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } }),
 
-  { group: 'The Hollow', key: 'hollowCeilingStep', level: 'hollowCeilingStep', label: 'It crawls above the ceiling', hint: 'On its way round a door it cannot open. One thump, from where it is.', seconds: 0.8, hasPlace: true, play: function () { playHollowCeilingStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
-  { group: 'The Hollow', key: 'hatchRattle', level: 'hatchRattle', label: 'A ceiling hatch rattles', hint: 'It has gone up through it, or it is about to drop out of it. This is the warning.', seconds: 0.7, hasPlace: true, play: function () { playHatchRattle(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
+  ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hollowCeilingStep', level: 'hollowCeilingStep', label: 'It crawls above the ceiling', hint: 'On its way round a door it cannot open. Six thumps at the pace it crawls in play, starting where the cross is and ending right over your head.', seconds: 3.4, hasPlace: true, play: playSoundBoardCeilingCrawl }),
+  ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hatchRattle', level: 'hatchRattle', label: 'A ceiling hatch rattles', hint: 'It has gone up through it, or it is about to drop out of it. This is the warning.', seconds: 0.7, hasPlace: true, play: function () { playHatchRattle(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } }),
 
-  { group: 'The Hollow', key: 'doorBang', level: 'doorBang', label: 'It pounds on a door', hint: 'One blow. A keycard door has shut in its face and it is going at it.', seconds: 1.0, hasPlace: true, play: function () { playDoorBang(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
+  ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'doorBang', level: 'doorBang', label: 'It pounds on a door', hint: 'One blow. A keycard door has shut in its face and it is going at it.', seconds: 1.0, hasPlace: true, play: function () { playDoorBang(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } }),
   { group: 'The Hollow', key: 'doorBreak', level: 'doorBreak', label: 'A door gives way', hint: 'The third bout on the same door, or sooner if it is angry.', seconds: 1.8, hasPlace: true, play: function () { playDoorBreak(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
 
   // ---- the Stills ----
   { group: 'The Stills', key: 'stillShuffle', level: 'stillShuffle', label: 'A Still moves', seconds: 0.4, hasPlace: true, play: function () { playStillShuffleSound(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
 
   // ---- apparitions ----
-  { group: 'Apparitions', key: 'phantomBreath', label: 'A breath behind you', hint: 'The only sound an apparition makes: the kind that stands at your back.', seconds: 1.6, hasPlace: true, play: function () { playPhantomBreath(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
+  { group: 'Apparitions', key: 'phantomBreath', level: 'phantomBreath', label: 'A breath behind you', hint: 'The only sound an apparition makes: the kind that stands at your back.', seconds: 1.6, hasPlace: true, play: function () { playPhantomBreath(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
 
   // ---- stingers: the music of a moment, heard in your head and not from anywhere ----
   { group: 'Stingers', key: 'stingerSpotted', level: 'stingerSpotted', label: 'It has found you', hint: 'Plays together with the roar.', seconds: 2.0, play: function () { playStinger('spotted'); } },
