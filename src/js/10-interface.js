@@ -370,9 +370,29 @@ function drawMinimap() {
   drawPlayerMarker(context, canvas.width / 2, canvas.height / 2, player.yaw, 7);
 }
 
+// The full map is drawn at 760 by 640 at least, and larger when the screen has room for more. On a small
+// screen the style sheet scales that drawing down; on a big one the station is drawn with more pixels per
+// metre, where it used to stay a small picture in the middle of the screen.
+const FULL_MAP_MINIMUM_WIDTH = 760, FULL_MAP_MINIMUM_HEIGHT = 640;
+const FULL_MAP_HEIGHT_KEPT_FREE = 150; // header, objective, legend and padding: the same 150px as in the style sheet
+
+function fitFullMapCanvasToScreen(canvas) {
+  const overlay = interfaceState.elements['map-overlay'];
+  const overlayStyle = window.getComputedStyle(overlay);
+  const canvasBorder = 2;
+  const availableWidth = overlay.clientWidth - (parseFloat(overlayStyle.paddingLeft) || 0) - (parseFloat(overlayStyle.paddingRight) || 0) - canvasBorder;
+  const availableHeight = window.innerHeight - FULL_MAP_HEIGHT_KEPT_FREE;
+  const wantedWidth = Math.max(FULL_MAP_MINIMUM_WIDTH, Math.floor(availableWidth));
+  const wantedHeight = Math.max(FULL_MAP_MINIMUM_HEIGHT, Math.floor(availableHeight));
+  // Setting the size clears the canvas, so only do it when the size really changes.
+  if (canvas.width !== wantedWidth) canvas.width = wantedWidth;
+  if (canvas.height !== wantedHeight) canvas.height = wantedHeight;
+}
+
 function drawFullMap() {
   flushMapPixels();
   const canvas = interfaceState.elements['map-canvas'];
+  fitFullMapCanvasToScreen(canvas);
   const context = canvas.getContext('2d');
   // Show only the part of the map the station occupies, as large as fits.
   const viewWidth = level.boundsMaximumX - level.boundsMinimumX, viewDepth = level.boundsMaximumZ - level.boundsMinimumZ;

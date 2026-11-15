@@ -437,6 +437,24 @@ function check(description, condition, detail) {
   await drawFrames(debugPage, 3);
   await clickInPage('touch-map'); // the full map, with creature markers
   await drawFrames(debugPage, 2);
+  // The full map uses the room a big screen has, and still fits on a small one.
+  const measureFullMap = () => debugPage.evaluate(() => {
+    const canvas = document.getElementById('map-canvas'), box = canvas.getBoundingClientRect();
+    return { drawnWidth: canvas.width, drawnHeight: canvas.height, shownWidth: Math.round(box.width), shownHeight: Math.round(box.height),
+      fitsOnScreen: box.left >= 0 && box.top >= 0 && box.right <= window.innerWidth && box.bottom <= window.innerHeight };
+  });
+  const mapOnSmallScreen = await measureFullMap();
+  await debugPage.setViewportSize({ width: 2560, height: 1440 });
+  await drawFrames(debugPage, 2);
+  await debugPage.waitForTimeout(250); // the map is redrawn about twelve times a second
+  await drawFrames(debugPage, 2);
+  const mapOnBigScreen = await measureFullMap();
+  await debugPage.setViewportSize({ width: 1280, height: 720 });
+  await drawFrames(debugPage, 2);
+  check('the full map fills a big screen and still fits on a small one',
+    mapOnSmallScreen.fitsOnScreen && mapOnBigScreen.fitsOnScreen && mapOnBigScreen.shownWidth > 2000 && mapOnBigScreen.shownHeight > 1200 &&
+    Math.abs(mapOnBigScreen.drawnWidth - mapOnBigScreen.shownWidth) <= 2 && Math.abs(mapOnBigScreen.drawnHeight - mapOnBigScreen.shownHeight) <= 2,
+    { small: mapOnSmallScreen, big: mapOnBigScreen });
   await clickInPage('touch-map');
   check('lit station, creature bodies, sense lines and map markers draw without errors',
     debugSession.problems.length === 0 && await inDebugGame(() => window.lastReturnDebug.hollow.isActive), debugSession.problems);
