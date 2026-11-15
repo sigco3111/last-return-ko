@@ -217,9 +217,9 @@ const TUNING = {
                                     // same spot 6 to 11 seconds later. 0 = never, 1 = always.
   // Listening: while wandering near you it sometimes stops dead for a few seconds. It makes no footsteps
   // while it does, and it hears better.
-  hollowListenWithinMetres: 18,     // it only stops to listen when you are within this distance
+  hollowListenWithinMetres: 20,     // it only stops to listen when you are within this distance
   hollowListenSecondsMinimum: 2,    // shortest pause
-  hollowListenSecondsMaximum: 7,  // longest pause
+  hollowListenSecondsMaximum: 10,  // longest pause
   hollowListenEverySecondsMinimum: 14, // shortest gap between two pauses
   hollowListenEverySecondsMaximum: 26, // longest gap
   hollowListenHearingFactor: 1.8,   // how much further it hears while listening (1.5 = 50 %)
@@ -253,7 +253,7 @@ const TUNING = {
                                       // level's pressureFactor.
   directorReliefShortestSeconds: 12,  // however much the cycle is sped up, a breather is never shorter than this
   hollowWakeDelaySeconds: 6,        // seconds between starting the generator and the Hollow appearing at the shaft
-  hollowImprintSeconds: 5,        // how long the red points a scan leaves on it stay visible (maximum 63)
+  hollowImprintSeconds: 4,        // how long the red points a scan leaves on it stay visible (maximum 63)
 
   // ---- The Stills (calibration dummies) ------------------------------------
   stillSpeed: 1.8,                  // walking speed while nothing is scanning them. Your walk is 2.5.
@@ -264,7 +264,7 @@ const TUNING = {
                                     // Long imprints mean old outlines linger and the room looks more crowded than it is.
 
   // ---- Apparitions ---------------------------------------------------------
-  phantomImprintSeconds: 5,       // how long the points of a figure that "was never there" stay visible
+  phantomImprintSeconds: 4,       // how long the points of a figure that "was never there" stay visible
   // Besides the few that stand at fixed places, apparitions turn up by chance, at a place chosen at that moment
   // from where you are and which way you are looking (see 08-phantoms.js). These numbers say how often.
   phantomFirstAfterSeconds: 45,     // none in the first seconds after you leave the lift
@@ -293,10 +293,10 @@ const TUNING = {
   phantomCrawlerFarthestMetres: 16, // ... and this far away
   // "In your face": you start a scan and it is standing right in front of you. Not one of the kinds above:
   // it has its own dice, thrown every time you start to scan, and its own limit.
-  phantomFaceChancePerScan: 0.01,   // the chance each time a scan starts (0.01 = one in a hundred). 0 switches it off.
+  phantomFaceChancePerScan: 0.005,   // the chance each time a scan starts (0.01 = one in a hundred). 0 switches it off.
   phantomFaceMostPerDescent: 1,     // however the dice fall, no more than this many in one descent. A scare like this wears out fast.
   phantomFaceNotBeforeSeconds: 120, // and never in the first two minutes
-  phantomFaceMetres: 1.8,           // how far in front of you its feet are (it leans in: its head is about a metre from yours)
+  phantomFaceMetres: 1.6,           // how far in front of you its feet are (it leans in: its head is about a metre from yours)
   phantomFaceSeconds: 0.7,          // how long it stays once the scan has touched it
   // The few that stand at fixed places:
   phantomPlacedNearestMetres: 3,    // a placed one is not shown while you are closer to its spot than this
@@ -397,7 +397,7 @@ const LOG_ENTRIES = {
   },
   noteSecurity: {
     heading: 'Shift note',
-    source: 'R. Halloran, site security · 14 November 1987',
+    source: 'H. Marlow, site security · 14 November 1987',
     paragraphs: [
       'Night pump crew reports knocking from Shaft 9 again. I told them it is the water table.',
       // {keycardRoom} becomes the room the card is really in ("the laboratory" in the classic station).
@@ -407,7 +407,7 @@ const LOG_ENTRIES = {
   },
   noteLocker: {
     heading: 'Note taped inside a locker',
-    source: 'Crew 2 · T. Rehn',
+    source: 'Crew 2 · N. Taylor',
     paragraphs: [
       'Dag, if you read this before I see you.',
       'I heard walking in the pump hall. Bare feet, slow, wet. I switched the scanner off and stood still, and it went past me close enough to touch.',
@@ -425,7 +425,7 @@ const LOG_ENTRIES = {
   },
   noteArchive: {
     heading: 'Inventory query',
-    source: 'Crew 2 · D. Brandt',
+    source: 'Crew 2 · C. Foster',
     paragraphs: [
       'The inventory for store C4 says nine calibration dummies.',
       'Monday’s cloud has nine. Wednesday’s has nine, but they are not standing where Monday’s stood. Nobody has been in there.',
