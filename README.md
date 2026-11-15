@@ -97,6 +97,7 @@ The screen is quiet by default: there is the dark, the points and the aiming rin
 - **Full sweep** rakes the whole view from top to bottom in about two and a half seconds. It is loud, and it costs a lot of emitter heat.
 - **Heat** builds while you scan. An overheated emitter shuts off until it cools.
 - **Colour** shows distance from where you are standing now: pale close up, deep blue far away. Doors are green when they will open and red when they will not. Amber marks things you can use.
+- **The warning colour on the floor** means the floor there is loud: broken glass, a loose plate, empty cans. Walk round it, or crouch across it.
 - Points stay where they were measured. A door that has since opened, or a thing that has since walked away, leaves its old points behind until they fade.
 
 <details>
@@ -145,6 +146,15 @@ Three things keep them fair, and are worth knowing:
 - They are silent. Everything real in the station makes its own noise; an apparition never borrows one. The breath is the only sound they have. They also scan in the colour of the walls, not in the Hollow's colour.
 - They belong to the quiet stretches. None comes while the Hollow is hunting, searching or near, or while the Stills are close, and one that is out vanishes the moment that changes. When something real is happening, everything the scanner shows you is real.
 - They are rare: about four in Kessel-9, up to ten in a massive station. One you never scanned does not count. A descent shows you as many different kinds as it can before it repeats one.
+
+**Noisy things on the floor** are broken glass, a loose floor plate and a spill of empty cans. Each is one square metre of floor, and in a scan it shows in the warning colour.
+
+- Walk over one and the Hollow hears it from eight metres on Standard, where it hears a walking step from a little over three. Run over one and it hears it from fifteen, where a running step carries eleven. It comes to look at that spot. (On Nightmare, where it hears further: eleven and a half metres, and twenty-two.)
+- **Crouched, you cross one without a sound.** That is the whole trick, and the first one you set off tells you so.
+- It goes off the moment you step onto it, and again with every footstep you take on it. It never wears out. Shuffling about on its edge does not set it off again: you have to get clear of it and come back.
+- The Hollow sets them off too. It does not care. You should: a crunch of glass two rooms away, with nobody else down here, tells you where it is. Within twenty metres of you a line on screen says so as well: `[glass crunches under something]`.
+- About half of them lie where you have to walk, in corridors and a step or two inside doors. The rest lie anywhere. Never on a doorstep, on stairs, in water, over a pit or a grate, in a vent, in the lift or its lobby, or under your feet at something you have to use.
+- Kessel-9 has eight. A generated station has about two for every five rooms and corridors, never two within six metres of each other. The seed decides where, so the same seed has them in the same places.
 
 **The lift** takes forty seconds to arrive once the spools are uploaded, and the Hollow can hear it from anywhere in the station.
 
@@ -306,6 +316,7 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/02-world.js` | Tile grid, props, signs, doors, collision, navigation, occluder mesh |
 | `src/js/03-layout.js` | Every hand-built room with its props, signs and pickups, and how Kessel-9 puts them together |
 | `src/js/03-levelgen.js` | Generated stations: the extra rooms, the room catalogue, the planner, locks, ducts and signs |
+| `src/js/03-noisy-floor.js` | Noisy things on the floor: the kinds, where a station gets them, what stepping on one does |
 | `src/js/03-workshop-rooms.js` | Rooms made in the workshop: what they can contain, and how a file in `src/rooms/` becomes a catalogue room |
 | `src/js/04-figures.js` | The capsule bodies used for everything that stands upright |
 | `src/js/05-raycast.js` | What one laser pulse hits, and how far away |
@@ -365,6 +376,8 @@ It then builds 120 generated stations (40 of each size, across the three layouts
 
 Then the Hollow and locked doors: each kind of door with the Hollow standing at it (the keycard door and the lift door stay shut, even with every card in your pocket), a keycard door shut between it and you (it never walks through, goes round through the crawlspace, and takes the time the numbers say: the climb, the metres, the full warning), a look from straight underneath it (a scan finds nothing and it cannot reach down), the landing (under the hatch that rattled, harmless for its first second), a keycard door held open by you (it simply walks through), pounding on a door (one bout, the door holds, it leaves that door alone for a while; the second bout adds to the damage; the third breaks it and it comes straight through; the broken door stays open and can be walked over; no pounding without the card, none on the lift door, harder when angry, and it stops if the door opens), short walks from under a hatch (it never takes to the ceiling for those), the lift car, the hatches being shut until it has been through them (the one it climbs into is forced as it goes in, the one it comes out of only as it drops, the rest stay shut, and a new descent shuts them all), and the hatches themselves. The 120 generated stations are each checked too: every locked-off part has a hatch, the Hollow can reach everywhere it may go, and without the crawlspace it really is shut in.
 
+Then the noisy things on the floor: Kessel-9 and a generated station get the number the size calls for, of more than one kind, none in a bad place, and the same seed puts them in the same places. Then a patch is walked over with the Hollow standing far enough away that it could not have heard a footstep (it comes to look at that very spot, and you are told what it was), crossed again crouched with the Hollow three and a half metres off (nothing carries, it does not stir), run over with the Hollow further away than a running step carries, and walked over by the Hollow itself (once or twice in a crossing; made to shuffle to and fro over the edge for three seconds, it sets it off once, not thirty times; with you two metres away a line on screen says so, and with you at the lift none does). The 120 generated stations each have theirs checked for being in a place they are allowed.
+
 Then the Custom threat level: the panel opens and closes, a moved control changes the setting and the sentence beside it, the values survive closing the page, bad stored values are put right, a descent plays by what was set, heat, temper, stamina and apparitions each change by the factor asked for, one life really offers no checkpoint, and the ending names the descent as custom and keeps its best time apart.
 
 Then the apparitions. Where and when they come is chance, so nothing there trusts one lucky try: each kind is summoned from about two thousand standing places in three stations and every one must be where its rules allow (in range, in sight, on good floor, never popping into the beam). Each kind is then played through: the watcher scanned, approached and ignored; the one behind you turned on and not turned on; the dummy coming closer and going; the crosser waiting, walking and vanishing; the crawler in its vent; the one in your face with loaded dice, with its limit, and switched off. Two long quiet walks check the timing (none too soon, never two at once, never the same kind twice running, never more than the descent is allowed), and a last part checks that none comes while the Hollow hunts or is near, and that one that is out goes when a hunt starts.
@@ -410,6 +423,8 @@ The director's rules are checked, and its rhythm was measured with scripted play
 Generated stations are proven finishable, not proven good. Nobody has yet walked one from end to end with the Hollow hunting. They have more doors than Kessel-9, and every door you open makes noise, so they may play harder. The stairs and the vents are checked for being passable, by you and by what hunts you, but how a chase through them feels is untested. Vents are only in generated stations. Kessel-9 itself is still one level.
 
 The locked doors and the crawlspace are checked for their rules and their timings. Whether half a minute overhead is the right price for a door, whether the thumps tell you enough about where it is going, and whether the rattle is enough warning, need ears and play. The numbers are in `src/js/00-config.js` under "The crawlspace", and the two sounds are on the sound board. How many bouts a door should take, and whether the pounding frightens or only delays, need play: `hollowDoorDamagePerBout` in the same place sets it (0.34 is three bouts, 0.5 two, 0 never). Dispatch has one new line for the first broken door (`doorBroken`), not yet recorded. Not done: you cannot lock or bar a door yourself. The Stills still open the doors of their own rooms.
+
+The noisy things on the floor are checked for where they lie and for what stepping on them does. Nobody has heard them: the three sounds were tuned by measuring, not by ear, and are on the sound board to be listened to and changed. How many is right, and whether half of them in the walking lines is a hazard or a nuisance, need play. The numbers are in `src/js/00-config.js` under "Noisy things on the floor", and how often each kind turns up is at the top of `src/js/03-noisy-floor.js`.
 
 The apparitions keep to their rules, which is what the test can show. How often is right, whether the dummy that comes closer frightens or annoys, and whether the one in your face reads as a face or only as a mass of points a metre away, need playing. All their numbers are in `src/js/00-config.js` under "Apparitions", and debug mode can summon each kind where you stand.
 

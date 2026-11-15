@@ -24,6 +24,7 @@ const TILE_FLAG_GRATE = 4;
 const TILE_FLAG_HAZARD = 8;
 const TILE_FLAG_DOOR = 16;
 const TILE_FLAG_VENT = 32; // a crawl-height tunnel: sheet metal underfoot, and no room to stand
+const TILE_FLAG_DEBRIS = 64; // something loose lies here that is loud to walk on (see 03-noisy-floor.js)
 
 // TWEAK: how high a vent is inside, in metres. You crouch at 1.0 m and the Hollow crawls at about the same,
 // so much lower than 1.1 and neither of you fits.
@@ -167,6 +168,7 @@ const level = {
   attractCamera: { x: 16.9, y: 1.5, z: 50.3, yaw: -1.95 },
   boundsMinimumX: 0, boundsMinimumZ: 0, boundsMaximumX: GRID_WIDTH, boundsMaximumZ: GRID_DEPTH,
   roomCount: 0,
+  noisyFloorCount: 0,     // patches of floor that are loud to walk on (see 03-noisy-floor.js)
   hatchCount: 0,          // ceiling hatches of the Hollow's crawlspace (see 08-crawlspace.js)
   description: 'Kessel-9 (classic)'
 };
@@ -272,6 +274,7 @@ function resetWorldForNewLevel() {
   worldProps.length = 0; dynamicBoxProps.length = 0; doors.length = 0; interactables.length = 0;
   roamingWaypoints.length = 0;
   clearHollowHatches();
+  clearNoisyFloor();
   clearPlacement();
   placement.isGenerating = false;
 }

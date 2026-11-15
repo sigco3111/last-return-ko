@@ -25,6 +25,9 @@ const SOUND_LEVELS = {
   footstep: 0.8,            // your footsteps on a dry floor (and the ring of a grate)
   footstepWater: 5,       // your footsteps in water
   ventCrawl: 3,           // the sheet metal under you in a vent, on top of a footstep
+  floorGlass: 1,          // broken glass underfoot (yours, and the Hollow's from where it is)
+  floorPlate: 1,          // a loose floor plate underfoot
+  floorCans: 1,           // empty cans kicked over
   heartbeat: 4,
 
   // ---- the scanner and the interface ----
@@ -1139,6 +1142,49 @@ function playVentCrawlSound() {
   }
   playResonantNoise({ frequency: 190 + Math.random() * 60, resonance: 16, duration: 0.5, gain: 0.1 * SOUND_LEVELS.ventCrawl, attack: 0.004, reverbAmount: 0.7 });
   playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 1700, gain: 0.05 * SOUND_LEVELS.ventCrawl });
+}
+
+// Something loose on the floor being stepped on: broken glass, a loose floor plate, or empty cans.
+// `weight` is how hard (crouched is about 0.2, a sprint 1). `source` is null for your own feet, or { x, z } for
+// something else's, which is then heard from there.
+// TWEAK: each kind has its layers here; how loud each kind is, is SOUND_LEVELS.floorGlass, floorPlate and floorCans.
+function playNoisyFloorSound(kind, weight, source) {
+  if (!isAudioReady()) return;
+  let destination = audio.masterGain;
+  if (source) {
+    destination = createTemporaryPanner(source.x, getFloorHeightAt(source.x, source.z) + 0.1, source.z);
+    if (!destination) return;
+  }
+  if (kind === 'glass') {
+    // A handful of short bright grains, crushed one after another, and a shard skittering off.
+    const level = weight * SOUND_LEVELS.floorGlass, grains = 4 + Math.floor(Math.random() * 3);
+    for (let grain = 0; grain < grains; grain++) {
+      playNoiseBurst({ duration: 0.035 + Math.random() * 0.03, filterType: 'bandpass', frequency: 2400 + Math.random() * 3200, resonance: 2.2,
+        gain: (2.6 - grain * 0.25) * level, attack: 0.001, delay: grain * (0.022 + Math.random() * 0.02), destination: destination });
+    }
+    playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 900, resonance: 1.1, gain: 1.6 * level, attack: 0.002, destination: destination });
+    if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: 2900 + Math.random() * 1400, duration: 0.18, hardness: 1, gain: 0.35 * level, delay: 0.09 + Math.random() * 0.06, destination: destination });
+    return;
+  }
+  if (kind === 'plate') {
+    // The plate rocks down onto its frame and back: two knocks, the second smaller.
+    const level = weight * SOUND_LEVELS.floorPlate;
+    playNoiseBurst({ duration: 0.1, filterType: 'bandpass', frequency: 520, resonance: 1.3, gain: 3.0 * level, attack: 0.002, destination: destination });
+    for (let knock = 0; knock < 2; knock++) {
+      const delay = knock * (0.13 + Math.random() * 0.05), size = knock === 0 ? 1 : 0.55;
+      if (audio.metalStruck) playMetalStrike({ shape: 'plate', frequency: 190 + Math.random() * 40, duration: 0.9, hardness: 0.7, damping: 0.5, bend: 0.03, gain: 1.1 * size * level, delay: delay, destination: destination });
+      else playResonantNoise({ frequency: 310 + Math.random() * 60, resonance: 16, duration: 0.5, gain: 1.8 * size * level, attack: 0.002, delay: delay, destination: destination });
+    }
+    return;
+  }
+  // Cans: one kicked, the rest knocked into each other and rolling to a stop.
+  const level = weight * SOUND_LEVELS.floorCans, hits = 4 + Math.floor(Math.random() * 2);
+  for (let hit = 0; hit < hits; hit++) {
+    const delay = hit * (0.07 + Math.random() * 0.07), size = 1 - hit * 0.15;
+    if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: 620 + Math.random() * 700, duration: 0.16 + Math.random() * 0.1, hardness: 0.85, damping: 0.75, gain: 0.8 * size * level, delay: delay, destination: destination });
+    else playResonantNoise({ frequency: 700 + Math.random() * 700, resonance: 14, duration: 0.14, gain: 1.6 * size * level, attack: 0.001, delay: delay, destination: destination });
+    playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 3200, gain: 0.7 * size * level, delay: delay, destination: destination });
+  }
 }
 
 // The Hollow above the ceiling, on its way round a door it cannot open. A dull, heavy thump from overhead,

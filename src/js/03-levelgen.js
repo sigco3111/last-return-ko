@@ -1317,6 +1317,8 @@ function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
   const wasBuiltAsAsked = buildStationRooms(kind, seed, sizeKey, layoutKey, levelsKey);
   // Last of all, the ceiling hatches of the Hollow's crawlspace: they depend on where the locked doors ended up.
   placeHollowHatches();
+  // And the loose things on the floor that are loud to walk on. After the hatches, so that none lies under one.
+  placeNoisyFloor();
   return wasBuiltAsAsked;
 }
 

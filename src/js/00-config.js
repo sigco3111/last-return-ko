@@ -138,6 +138,16 @@ const TUNING = {
   noiseRadiusSweep: 22,
   noiseRadiusDoor: 8,           // a door you open (doors the Hollow opens do not count)
   noiseRadiusPickup: 4,
+  // ---- Noisy things on the floor (see 03-noisy-floor.js): broken glass, a loose plate, empty cans ----
+  noiseRadiusNoisyFloorWalk: 10,    // walking over one. A plain walking step carries 4.
+  noiseRadiusNoisyFloorSprint: 19,  // running over one. A plain sprinting step carries 14. Crouched, they make no noise at all.
+  noisyFloorPerRoom: 0.4,           // how many a station has: this many for every room and corridor (Kessel-9: 8, a massive station: about 24)
+  noisyFloorFewest: 3,              // ... but never fewer than this
+  noisyFloorLeastMetresApart: 6,    // and never two closer together than this
+  noisyFloorShareWhereYouMustWalk: 0.5, // this share of them lies in corridors and a step or two inside doors; the rest anywhere
+  noisyFloorLeaveMetres: 0.25,      // you (and the Hollow) count as still on one until this far past its edge, so shuffling on the edge does not set it off again and again
+  noisyFloorShortestGapSeconds: 0.3, // and the same feet cannot set one off twice within this time
+  noisyFloorCaptionMetres: 20,      // the Hollow setting one off within this distance of you puts a line on screen, as its other warnings do
   waterStepNoiseFactor: 1.5,    // footsteps in water carry this much further
 
   // ---- How close the Hollow must be to notice you without any sound event --

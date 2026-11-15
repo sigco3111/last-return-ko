@@ -124,6 +124,9 @@ const SOUND_BOARD_ENTRIES = [
   ...createSoundBoardMetalPair({ group: 'You', key: 'stepGrate', level: 'footstep', label: 'Footstep on a grate, walking', seconds: 0.6, play: function () { playFootstepSound(false, true, 0.55); } }),
   ...createSoundBoardWaterPair({ group: 'You', key: 'stepWater', level: 'footstepWater', label: 'Footstep in water, walking', seconds: 0.6, play: function () { playFootstepSound(true, false, 0.55); } }),
   ...createSoundBoardWaterPair({ group: 'You', key: 'stepWaterSprint', level: 'footstepWater', label: 'Footstep in water, sprinting', seconds: 0.6, play: function () { playFootstepSound(true, false, 1.0); } }),
+  ...createSoundBoardMetalPair({ group: 'You', key: 'floorGlass', level: 'floorGlass', label: 'Broken glass underfoot, walking', hint: 'Carries much further than the step itself. Crouched, it makes no noise that carries.', seconds: 0.7, play: function () { playNoisyFloorSound('glass', 0.75, null); } }),
+  ...createSoundBoardMetalPair({ group: 'You', key: 'floorPlate', level: 'floorPlate', label: 'A loose floor plate underfoot, walking', seconds: 1.0, play: function () { playNoisyFloorSound('plate', 0.75, null); } }),
+  ...createSoundBoardMetalPair({ group: 'You', key: 'floorCans', level: 'floorCans', label: 'Empty cans kicked over, walking', seconds: 0.9, play: function () { playNoisyFloorSound('cans', 0.75, null); } }),
   ...createSoundBoardMetalPair({ group: 'You', key: 'ventCrawl', level: 'ventCrawl', label: 'Crawling in a vent', hint: 'A crouched footstep and the sheet metal under you, as in play.', seconds: 0.8,
     play: function () { playFootstepSound(false, false, 0.25); playVentCrawlSound(); } }),
   { group: 'You', key: 'heartbeatFaint', level: 'heartbeat', label: 'Heartbeat, something is near', hint: 'The faintest it gets: the threat has only just begun.', seconds: 0.6, play: function () { playHeartbeat(0.36); } },
@@ -179,6 +182,7 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'The Hollow', key: 'enraged', level: 'hollowEnraged', label: 'Enraged: the beam stops slowing it', seconds: 1.4, hasPlace: true, play: function () { playStinger('enraged'); } },
   { group: 'The Hollow', key: 'hollowStepRoam', level: 'hollowFootstep', label: 'Its footstep, roaming', seconds: 0.5, hasPlace: true, play: function () { playHollowFootstep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.7); } },
   { group: 'The Hollow', key: 'hollowStepHunt', level: 'hollowFootstep', label: 'Its footstep, hunting', seconds: 0.5, hasPlace: true, play: function () { playHollowFootstep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
+  ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hollowOnGlass', level: 'floorGlass', label: 'It steps on broken glass', hint: 'It sets the loose things on the floor off too. This is how you hear where it is.', seconds: 0.7, hasPlace: true, play: function () { playNoisyFloorSound('glass', 1, { x: getSoundBoardListenerX(), z: getSoundBoardSourceZ() }); } }),
   { group: 'The Hollow', key: 'hollowVentRoam', level: 'hollowVentStep', label: 'It crawls in a vent, roaming', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.8); } },
   ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hollowVentHunt', level: 'hollowVentStep', label: 'It crawls in a vent, hunting', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } }),
 

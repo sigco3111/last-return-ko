@@ -658,11 +658,13 @@ function updateHollow(dt) {
   }
   updateFigureCapsules(figure);
 
+  updateHollowOnNoisyFloor(figure.x, figure.z, isHunting); // it gives itself away on glass and loose plates as you would
   const stepSign = Math.sin(hollow.walkPhase) >= 0 ? 1 : -1;
   if (stepSign !== hollow.lastStepSign) {
     hollow.lastStepSign = stepSign;
     if (isHollowInVent) playHollowVentStep(figure.x, figure.z, isHunting ? 1 : 0.8);
     else playHollowFootstep(figure.x, figure.z, isHunting ? 1 : 0.7);
+    stepHollowOnNoisyFloor(figure.x, figure.z, isHunting); // glass and loose plates give it away as they would you
   }
 
   if (distanceToPlayer < TUNING.hollowKillDistance && hollow.graceTimer <= 0) triggerPlayerDeath('hollow', figure);

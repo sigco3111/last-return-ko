@@ -35,6 +35,7 @@ const game = {
   ascentTimer: 0,
   hasShownHollowHint: false,
   hasShownVentHint: false,
+  hasShownNoisyFloorHint: false, // the first time something loose underfoot gives you away, you are told what it was
   attract: { yaw: -0.9, pitch: 0, timer: 0, sweepTimer: 4, sweepProgress: -1, rayBudget: 0, centerRange: -1 }
 };
 
@@ -111,6 +112,8 @@ function resetWorldState() {
   game.interference = 0; game.danger = 0;
   game.hasShownHollowHint = false;
   game.hasShownVentHint = false;
+  game.hasShownNoisyFloorHint = false;
+  noisyFloorCounts.byPlayer = 0; noisyFloorCounts.byPlayerCrouched = 0; noisyFloorCounts.byHollow = 0;
   game.deathSequence = null;
   for (const interactable of interactables) {
     interactable.isAvailable = true;
@@ -907,6 +910,8 @@ function startApplication() {
     gridWidth: GRID_WIDTH, // tiles in one row of the map: a tile's place in tileBlocksHollow is z * gridWidth + x
     findDoorWorthBreaking: findDoorWorthBreaking, breakDoor: breakDoor, mendDoor: mendDoor, getDoorSides: getDoorSides,
     playDoorBang: playDoorBang, playDoorBreak: playDoorBreak,
+    // Noisy things on the floor: where they are, how often they have been set off, and a check of their placing.
+    noisyFloorPatches: noisyFloorPatches, noisyFloorCounts: noisyFloorCounts, auditNoisyFloor: auditNoisyFloor, playNoisyFloorSound: playNoisyFloorSound,
     doorKinds: { automatic: DOOR_KIND_AUTOMATIC, powered: DOOR_KIND_POWERED, keycard: DOOR_KIND_KEYCARD, lift: DOOR_KIND_LIFT },
     canHollowOpenDoor: canHollowOpenDoor, isDoorPassableToHollow: isDoorPassableToHollow, isHollowInCrawlspace: isHollowInCrawlspace,
     getHollowPartAt: function (x, z) { return isInsideGrid(Math.floor(x), Math.floor(z)) ? tileHollowPart[tileIndexAt(Math.floor(x), Math.floor(z))] : 0; },

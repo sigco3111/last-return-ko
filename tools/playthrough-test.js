@@ -62,7 +62,8 @@ function check(description, condition, detail) {
   check('"Report a problem" opens the bug form with the build, the station, the threat level and the room filled in',
     paused.mode === 'paused' && paused.address === 'https://github.com/StefanKnol/Last-Return/issues/new' && paused.fields.template === '1-bug.yml' &&
     'Version: ' + paused.fields.version === paused.buildLine && paused.fields.station === 'Kessel-9' && paused.fields.seed === undefined &&
-    paused.fields.threat === 'Standard' && /^[A-Z0-9 ]+ \(x [\d.]+, z [\d.]+\)$/.test(paused.fields.where) && paused.fields.where.indexOf('UNSURVEYED') < 0 && paused.fields.device.length > 0 && paused.fields.quality === 'Medium' &&
+    paused.fields.threat === 'Standard' && /^[A-Z0-9 ]+ \(x [\d.]+, z [\d.]+\)$/.test(paused.fields.where) && paused.fields.where.indexOf('UNSURVEYED') < 0 && paused.fields.device.length > 0 && paused.fields.quality === 'High' && // the video quality a fresh game starts on
+    
     /^(index\.html opened from disk|Served from this computer \(.+\))$/.test(paused.fields.build), paused);
   // Pausing lets go of the mouse, and the browser reports that a moment later. Resuming before it has would
   // let that report arrive in the middle of play, where it means "the player pressed Escape": paused again.
@@ -362,6 +363,10 @@ function check(description, condition, detail) {
     // The player keeps quiet for twenty seconds: it must never come nearer than it was, and it must get to a far
     // room. (Where it is at the twentieth second is not asked: if the far room was close enough to reach in
     // fourteen, it is by then on its way to the next far room, and that walk can lead back past the middle.)
+    // A wandering Hollow near the player now and then stops dead to listen, for up to ten seconds. That is a
+    // different rule with its own chance, and a long pause would eat the twenty seconds measured here, so
+    // it is put off for this stretch.
+    hollow.nextListenIn = 999;
     let nearestSteps = Infinity, farthestSteps = 0;
     const stepsAtStart = debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z);
     for (let second = 0; second < 20; second++) {

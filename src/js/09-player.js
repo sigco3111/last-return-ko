@@ -431,6 +431,7 @@ function updatePlayerMovement(dt) {
 
   // Footsteps are what the Hollow listens for.
   player.strideDistance += movedDistance;
+  updatePlayerOnNoisyFloor(); // walking onto glass, a loose plate or cans is heard at once
   // TWEAK: metres between footsteps (sprinting, crouching, walking). Each footstep is one noise the Hollow can hear,
   // so shorter strides mean more chances to be heard.
   const strideLength = player.isSprinting ? 1.15 : (player.isCrouching ? 0.62 : 0.8);
@@ -441,6 +442,8 @@ function updatePlayerMovement(dt) {
     let radius = player.isSprinting ? TUNING.noiseRadiusSprintStep : (player.isCrouching ? TUNING.noiseRadiusCrouchStep : TUNING.noiseRadiusWalkStep);
     if (isInVent) { radius = TUNING.noiseRadiusVentStep; playVentCrawlSound(); }
     if (isInWater) radius *= TUNING.waterStepNoiseFactor;
+    // Something loose underfoot (glass, a floor plate, cans) carries much further than the step itself, unless you are crouched.
+    radius = Math.max(radius, stepPlayerOnNoisyFloor());
     emitNoise(player.x, player.z, radius);
   }
 
