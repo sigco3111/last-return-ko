@@ -13,6 +13,8 @@ const interfaceState = {
   mapImageData: null,
   mapIsDirty: false,
   isMapOverlayOpen: false,
+  lastStatusSignature: '',  // objective and chip state as last shown, to notice when it changes
+  objectiveShownUntil: 0,   // on the quiet screen the objective block is visible until this moment
   messages: [],
   captionExpiresAt: 0,
   textRefreshTimer: 0,
@@ -29,7 +31,8 @@ function initializeInterface() {
   const elementIds = [
     'hud', 'hud-objective', 'chip-spools', 'chip-power', 'chip-keycard', 'minimap-canvas', 'hud-location',
     'readout-range', 'readout-flight', 'readout-returns', 'readout-heading', 'bar-heat', 'bar-stamina',
-    'bar-interference', 'meter-agitation', 'bar-agitation', 'hud-stance', 'reticle-ring', 'hud-prompt', 'hud-countdown', 'hud-messages', 'hud-caption',
+    'bar-interference', 'meter-agitation', 'bar-agitation', 'hud-stance', 'hud-block-objective', 'hud-block-map', 'hud-block-instruments', 'hud-readouts',
+    'meter-heat', 'meter-stamina', 'meter-interference', 'map-objective', 'map-status', 'reticle-ring', 'hud-prompt', 'hud-countdown', 'hud-messages', 'hud-caption',
     'touch-controls', 'map-overlay', 'map-canvas', 'map-close', 'screen-title', 'screen-intro', 'screen-pause',
     'screen-reader', 'screen-death', 'screen-ending', 'screen-rotate', 'button-play-upright', 'fatal-error', 'title-range', 'title-returns',
     'difficulty-description', 'button-begin', 'intro-lines', 'button-skip-intro', 'pause-objective', 'button-resume',
@@ -309,7 +312,7 @@ function toggleMapOverlay() {
   if (game.mode !== 'playing') return;
   interfaceState.isMapOverlayOpen = !interfaceState.isMapOverlayOpen;
   interfaceState.elements['map-overlay'].hidden = !interfaceState.isMapOverlayOpen;
-  if (interfaceState.isMapOverlayOpen) drawFullMap();
+  if (interfaceState.isMapOverlayOpen) { drawFullMap(); interfaceState.textRefreshTimer = 0; }
   playInterfaceBlip(interfaceState.isMapOverlayOpen ? 740 : 560);
 }
 
@@ -397,6 +400,27 @@ function updateHud(realDt) {
   }
   if (elements['hud'].hidden) return;
 
+  // ---- the quiet screen: every instrument is hidden until it has something to say ----
+  // TWEAK: the numbers are when each one appears. Choose "Full instruments" in the settings to see them all, always.
+  const isQuiet = settings.hud === 'quiet';
+  const statusSignature = game.objectiveText + '|' + game.flags.spoolsCollected + '|' + game.flags.powerOn + '|' + game.flags.hasKeycard;
+  if (statusSignature !== interfaceState.lastStatusSignature) {
+    interfaceState.lastStatusSignature = statusSignature;
+    interfaceState.objectiveShownUntil = now + 8; // the objective and the three chips show for 8 s when any of them changes
+  }
+  const setShown = function (elementId, isShown) { elements[elementId].classList.toggle('is-faded', !isShown); };
+  setShown('hud-block-objective', !isQuiet || now < interfaceState.objectiveShownUntil);
+  setShown('hud-block-map', !isQuiet);              // the map is on Tab / M
+  setShown('hud-readouts', !isQuiet);               // range, time of flight, returns, heading
+  setShown('meter-heat', !isQuiet || player.heat > 0.3 || player.isOverheated);
+  setShown('meter-stamina', !isQuiet || player.stamina < 0.97);
+  setShown('meter-interference', !isQuiet);         // you can hear and see interference
+  setShown('hud-stance', !isQuiet || player.isInVent);
+  // The panel they sit in goes too when none of them is showing, so no empty box is left on screen.
+  const hasMetHollowYet = hollow.isActive && hollow.figure.totalHits > 0;
+  setShown('hud-block-instruments', !isQuiet || player.heat > 0.3 || player.isOverheated || player.stamina < 0.97 || player.isInVent ||
+    (hasMetHollowYet && hollow.anger >= 0.04));
+
   elements['bar-heat'].style.width = (player.heat * 100).toFixed(1) + '%';
   elements['bar-heat'].classList.toggle('is-critical', player.isOverheated || player.heat > 0.8);
   elements['bar-stamina'].style.width = (player.stamina * 100).toFixed(1) + '%';
@@ -405,7 +429,7 @@ function updateHud(realDt) {
   // The agitation bar appears the first time the beam touches the Hollow. It is the Hollow's anger:
   // amber while a touch only makes it turn, red once the beam is giving your position away.
   const hasMetHollow = hollow.isActive && hollow.figure.totalHits > 0;
-  elements['meter-agitation'].hidden = !hasMetHollow;
+  elements['meter-agitation'].hidden = !hasMetHollow || (isQuiet && hollow.anger < 0.04);
   if (hasMetHollow) {
     elements['bar-agitation'].style.width = (hollow.anger * 100).toFixed(1) + '%';
     elements['bar-agitation'].classList.toggle('is-critical', hollow.anger >= TUNING.hollowAngerNoticeLevel);
@@ -435,6 +459,12 @@ function updateHud(realDt) {
     const zone = getZoneAtPosition(player.x, player.z);
     if (zone) interfaceState.visitedZones.add(zone);
     elements['hud-location'].textContent = ZONE_NAMES[zone] || ZONE_NAMES[0];
+    // The map screen always carries the objective and where things stand, whatever the screen setting.
+    if (interfaceState.isMapOverlayOpen) {
+      elements['map-objective'].textContent = game.objectiveText;
+      elements['map-status'].textContent = 'SPOOLS ' + spools + '/3 · ' + (game.flags.powerOn ? 'MAINS ON' : 'MAINS OFF') + ' · ' +
+        (game.flags.hasKeycard ? 'KEYCARD' : 'NO KEYCARD') + ' · ' + (ZONE_NAMES[zone] || ZONE_NAMES[0]);
+    }
 
     const rangeElement = elements['readout-range'];
     if (player.centerRange >= 0) {

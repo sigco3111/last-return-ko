@@ -88,6 +88,8 @@ On a phone the game is played sideways, with the controls on screen. Held uprigh
 
 If the browser will not capture the mouse, hold the mouse button and drag to look.
 
+The screen is quiet by default: there is the dark, the points and the aiming ring. The objective shows for a few seconds when it changes, the heat and stamina meters only while they are in use, and everything else is on the map screen (`Tab` or `M`). "Full instruments" in the settings puts the range readouts, the minimap and all the meters back, as in the pictures here.
+
 ## How the scanner works
 
 - **Paint** fires a cone of pulses for as long as you hold it. Each pulse that hits something leaves one point. Narrow the beam for detail, widen it to cover ground.

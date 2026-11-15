@@ -164,6 +164,7 @@ async function takeDebugModeShot(page) {
 
   // ---- desktop, 1920 x 1080 ----
   const { browser, page, problems } = await openGame({ deviceScaleFactor: 1.5 });
+  await page.evaluate(() => { window.noReturnDebug.settings.hud = 'full'; }); // the pictures show the full instrument screen
   if (wants('title')) {
     for (let pump = 0; pump < 45; pump++) await drawFrames(page, 1); // let the title screen scan the lobby for a while
     await page.screenshot({ path: path.join(outputDirectory, 'title.jpg'), type: 'jpeg', quality: 86 });
@@ -199,7 +200,8 @@ async function takeDebugModeShot(page) {
 
   // ---- a generated station, drawn in full with debug mode's "Reveal the whole map" ----
   if (wants('uncharted-map')) {
-    const uncharted = await openGame({ deviceScaleFactor: 1.5, dev: true }); // the dev build: debug mode is not in the game itself
+    const uncharted = await openGame({ deviceScaleFactor: 1.5, dev: true });
+    await uncharted.page.evaluate(() => { window.noReturnDebug.settings.hud = 'full'; }); // the dev build: debug mode is not in the game itself
     await uncharted.page.evaluate(() => document.getElementById('station-generated').click());
     await uncharted.page.selectOption('#title-station-size', 'medium');
     await uncharted.page.selectOption('#title-station-layout', 'mixed');
@@ -214,7 +216,8 @@ async function takeDebugModeShot(page) {
 
   // ---- phone ----
   if (wants('phone')) {
-    const phone = await openGame({ width: 844, height: 390, deviceScaleFactor: 2, isPhone: true }); // held sideways
+    const phone = await openGame({ width: 844, height: 390, deviceScaleFactor: 2, isPhone: true });
+    await phone.page.evaluate(() => { window.noReturnDebug.settings.hud = 'full'; }); // held sideways
     await startGame(phone.page, true);
     await scanFrom(phone.page, [
       { x: 14.0, z: 56.0, yaws: [-0.4, -1.1, 0.3], pitch: 0.1 },

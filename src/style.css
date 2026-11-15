@@ -47,6 +47,11 @@ body {
   color: var(--instrument);
 }
 .hud-block { position: absolute; display: flex; flex-direction: column; gap: 6px; }
+/* Parts of the screen that the quiet setting shows only while they matter. They fade; they never pop. */
+.hud-fade { transition: opacity 0.7s ease; }
+.hud-fade.is-faded { opacity: 0; pointer-events: none; }
+.map-status { margin-left: auto; margin-right: 14px; color: var(--instrument); }
+.map-objective { font-size: 14px; color: var(--text); margin: 2px 0 8px; min-height: 1.3em; }
 .hud-top-left, .hud-bottom-left { padding: 8px 10px; margin: -8px -10px; background: rgba(4, 6, 10, 0.8); border-left: 2px solid var(--panel-edge); }
 .hud-top-left { top: 14px; left: var(--gutter-left); max-width: min(46vw, 420px); }
 .hud-top-right { top: 14px; right: var(--gutter-right); align-items: flex-end; }
