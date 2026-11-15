@@ -287,6 +287,8 @@ function pauseGame() {
   closeMapOverlay();
   interfaceState.elements['pause-objective'].textContent = game.objectiveText;
   interfaceState.elements['pause-station'].textContent = 'Station: ' + level.description;
+  interfaceState.elements['pause-build'].textContent = 'Version: ' + describeBuild();
+  interfaceState.elements['link-report-problem'].href = buildReportProblemAddress();
   interfaceState.refreshSettingControls();
   showOnlyScreen('screen-pause');
   if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();

@@ -25,6 +25,21 @@ function check(description, condition, detail) {
   await inGame(() => window.noReturnDebug.simulate(4));
   check('lift door closes behind the player', (await inGame(() => window.noReturnDebug.doors[0].openFraction)) === 0);
 
+  // --- the pause screen says which build this is, and "Report a problem" carries it to the bug form ---
+  await page.keyboard.press('Escape');
+  const paused = await inGame(() => {
+    const address = new URL(document.getElementById('link-report-problem').href);
+    return { mode: window.noReturnDebug.game.mode, buildLine: document.getElementById('pause-build').textContent, address: address.origin + address.pathname,
+      fields: Object.fromEntries(address.searchParams) };
+  });
+  check('the pause screen shows the version, the build number and the commit', /^Version: \d+\.\d+\.\d+ · build \d+ · [0-9a-f]{7}\+?$/.test(paused.buildLine), paused.buildLine);
+  check('"Report a problem" opens the bug form with the build, the station, the threat level and the room filled in',
+    paused.mode === 'paused' && paused.address === 'https://github.com/StefanKnol/No-Return/issues/new' && paused.fields.template === '1-bug.yml' &&
+    'Version: ' + paused.fields.version === paused.buildLine && paused.fields.station === 'Kessel-9' && paused.fields.seed === undefined &&
+    paused.fields.threat === 'Standard' && /^[A-Z0-9 ]+ \(x [\d.]+, z [\d.]+\)$/.test(paused.fields.where) && paused.fields.where.indexOf('UNSURVEYED') < 0 && paused.fields.device.length > 0, paused);
+  await page.keyboard.press('Escape');
+  check('Escape resumes the descent', (await inGame(() => window.noReturnDebug.game.mode)) === 'playing');
+
   // --- the quiet screen: instruments stay out of the way until they have something to say ---
   await drawFrames(page, 2);
   const quiet = await inGame(() => {

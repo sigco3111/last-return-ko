@@ -176,6 +176,20 @@ Each row says what its value comes to in play ("It hunts at 3.9 m/s. You sprint 
 
 </details>
 
+## Reporting a problem
+
+The pause screen says which build you are playing: the version, the build number (how many commits it was built from) and the commit, with a `+` after it if the source had changes that were not committed. The ending screen says it too.
+
+**Report a problem** on the pause screen opens a bug report on GitHub with that line, the station, its seed and options, the threat level, the room you are standing in and your browser already filled in. Nothing is sent until you submit the form.
+
+A Docker build has no git to ask, so the image only carries the build number and the commit if you pass them in:
+
+```bash
+docker build --build-arg NO_RETURN_BUILD_NUMBER=$(git rev-list --count HEAD) --build-arg NO_RETURN_BUILD_COMMIT=$(git rev-parse --short=7 HEAD) -t no-return .
+```
+
+Without them the game shows the version alone.
+
 ## Debug mode
 
 ![Debug mode in the calibration store](docs/screenshots/debug-mode.jpg)

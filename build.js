@@ -7,6 +7,33 @@
 //                                   with its room and creature editors
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('child_process');
+
+// What this build is, for the pause screen and for bug reports: the version from package.json and, from git, how
+// many commits there are (the build number) and which one this is. A '+' after the commit means the source had
+// changes that were not committed. Where there is no git to ask, as in the Docker build, NO_RETURN_BUILD_NUMBER
+// and NO_RETURN_BUILD_COMMIT say it instead. Anything that cannot be found out is left empty.
+function readBuildStamp(root) {
+  const stamp = { version: '', number: '', commit: '' };
+  try {
+    stamp.version = String(JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')).version || '');
+  } catch (error) { /* no package.json: a test building a copy of src/ */ }
+  const askGit = function (gitArguments) {
+    try {
+      return execFileSync('git', gitArguments, { cwd: root, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    } catch (error) {
+      return ''; // no git, or not a repository
+    }
+  };
+  stamp.number = (process.env.NO_RETURN_BUILD_NUMBER || askGit(['rev-list', '--count', 'HEAD'])).trim();
+  stamp.commit = (process.env.NO_RETURN_BUILD_COMMIT || '').trim();
+  if (!stamp.commit) {
+    stamp.commit = askGit(['rev-parse', '--short=7', 'HEAD']);
+    // Only what goes into the page counts as a change.
+    if (stamp.commit && askGit(['status', '--porcelain', '--', 'src', 'assets', 'build.js', 'package.json'])) stamp.commit += '+';
+  }
+  return stamp;
+}
 
 // Reads every .json file in src/rooms/. These are rooms made in the workshop; the file name is the room's key.
 function readDesignedRooms(roomDirectory) {
@@ -66,10 +93,13 @@ function build(options) {
   const roomScript = '// ===== rooms from src/rooms (packed by build.js) =====\n' +
     'const DESIGNED_ROOMS = ' + JSON.stringify(designedRooms, null, 1) + ';\n';
 
-  const wrapScript = function (scripts) {
-    return '(function () {\n\'use strict\';\n' + voiceScript + roomScript + scripts.join('\n') + '\n})();\n';
+  const buildStamp = readBuildStamp(settings.root);
+  const wrapScript = function (scripts, isDevBuild) {
+    const stampScript = '// ===== what this build is (written by build.js) =====\n' +
+      'const BUILD_STAMP = ' + JSON.stringify(Object.assign({}, buildStamp, { isDevBuild: isDevBuild })) + ';\n';
+    return '(function () {\n\'use strict\';\n' + stampScript + voiceScript + roomScript + scripts.join('\n') + '\n})();\n';
   };
-  const wrappedScript = wrapScript(gameScripts);
+  const wrappedScript = wrapScript(gameScripts, false);
 
   const headMarkup = fs.readFileSync(path.join(sourceDirectory, 'head.html'), 'utf8').trim();
   const styleSheet = fs.readFileSync(path.join(sourceDirectory, 'style.css'), 'utf8');
@@ -115,6 +145,8 @@ function build(options) {
   const roomCount = Object.keys(designedRooms).length;
   if (roomCount > 0) messages.push('Packed ' + roomCount + ' room(s) from src/rooms.');
   messages.push('Built index.html (' + (standalonePage.length / 1024).toFixed(0) + ' KB) from ' + gameScripts.length + ' scripts.');
+  messages.push('Stamped as version ' + (buildStamp.version || 'unknown') + ', build ' + (buildStamp.number || 'unknown') +
+    ', commit ' + (buildStamp.commit || 'unknown') + '.');
 
   // The dev build: the same game with the scripts and styles from src/dev/ (debug mode, the workshop) added after it.
   // Nothing from src/dev/ ever reaches index.html.
@@ -125,7 +157,7 @@ function build(options) {
       ? fs.readdirSync(devDirectory).filter((name) => name.endsWith('.css')).sort()
         .map((name) => fs.readFileSync(path.join(devDirectory, name), 'utf8')).join('\n')
       : '';
-    workshopScript = wrapScript(gameScripts.concat(devScripts));
+    workshopScript = wrapScript(gameScripts.concat(devScripts), true);
     fs.writeFileSync(path.join(buildDirectory, 'workshop.html'), makeStandalonePage(styleSheet + '\n' + devStyles, workshopScript));
     fs.writeFileSync(path.join(buildDirectory, 'workshop-bundle.js'), workshopScript);
     messages.push('Built build/workshop.html with ' + devScripts.length + ' dev script(s).');

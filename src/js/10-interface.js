@@ -40,7 +40,7 @@ function initializeInterface() {
     'difficulty-description', 'button-begin', 'intro-lines', 'button-skip-intro', 'pause-objective', 'button-resume',
     'button-pause-restart', 'reader-source', 'reader-heading', 'reader-body', 'button-close-reader', 'death-title',
     'death-lines', 'button-retry', 'button-death-restart', 'ending-stats', 'ending-manifest', 'button-ending-restart',
-    'button-ending-uncharted', 'station-options', 'station-description', 'pause-station'
+    'button-ending-uncharted', 'station-options', 'station-description', 'pause-station', 'pause-build', 'link-report-problem'
   ];
   for (const elementId of elementIds) interfaceState.elements[elementId] = getElement(elementId);
 
@@ -693,6 +693,36 @@ function showDeathScreen(kind) {
   showOnlyScreen('screen-death');
 }
 
+// What build this is, as the pause and ending screens show it: "1.11.0 · build 214 · a5f1785".
+// BUILD_STAMP is written by build.js; a part it could not find out is left off.
+function describeBuild() {
+  const parts = [];
+  if (BUILD_STAMP.version) parts.push(BUILD_STAMP.version);
+  if (BUILD_STAMP.number) parts.push('build ' + BUILD_STAMP.number);
+  if (BUILD_STAMP.commit) parts.push(BUILD_STAMP.commit);
+  if (BUILD_STAMP.isDevBuild) parts.push('dev');
+  return parts.length > 0 ? parts.join(' · ') : 'unknown';
+}
+
+// The address "Report a problem" on the pause screen opens: the bug form in .github/ISSUE_TEMPLATE/1-bug.yml,
+// with what the game knows already filled in. Each name here is the `id` of a field in that form, so a field
+// renamed there must be renamed here. Nothing is sent anywhere: the player sees the form and decides.
+const REPORT_PROBLEM_ADDRESS = 'https://github.com/StefanKnol/No-Return/issues/new';
+function buildReportProblemAddress() {
+  const isGenerated = level.kind === 'generated';
+  const fields = {
+    template: '1-bug.yml',
+    version: describeBuild(),
+    station: isGenerated ? 'Uncharted annex' : 'Kessel-9',
+    threat: game.difficulty.label,
+    where: ZONE_NAMES[getZoneAtPosition(player.x, player.z)] + ' (x ' + player.x.toFixed(1) + ', z ' + player.z.toFixed(1) + ')',
+    quality: settings.quality.charAt(0).toUpperCase() + settings.quality.slice(1),
+    device: navigator.userAgent
+  };
+  if (isGenerated) fields.seed = [level.seed, level.sizeKey, level.layoutKey, level.levelsKey === 'two' ? 'two levels' : 'one level'].join(', ');
+  return REPORT_PROBLEM_ADDRESS + '?' + new URLSearchParams(fields).toString();
+}
+
 function showEndingScreen() {
   const elements = interfaceState.elements;
   const stats = elements['ending-stats'];
@@ -712,6 +742,7 @@ function showEndingScreen() {
   addRow('Threat level', game.difficulty.label);
   if (game.difficulty.isCustom) addRow('Custom settings', game.difficulty.description);
   addRow('Station', level.description);
+  addRow('Build', describeBuild());
   if (debugState.hasBeenUsedThisRun) addRow('Debug mode', 'used, so this run sets no best time');
   if (game.statistics.bestTime !== null) addRow('Best time', formatClockTime(game.statistics.bestTime));
   const manifest = elements['ending-manifest'];

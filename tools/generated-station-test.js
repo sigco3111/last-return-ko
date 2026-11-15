@@ -144,6 +144,12 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   await startGame(page, false);
   const loaded = await inGame(() => ({ kind: window.noReturnDebug.level.kind, seed: window.noReturnDebug.level.seed, description: window.noReturnDebug.level.description }));
   check('Begin descent loads the generated station for the typed seed', loaded.kind === 'generated' && loaded.seed === playSeed, loaded);
+  await page.keyboard.press('Escape');
+  const reported = await inGame(() => Object.fromEntries(new URL(document.getElementById('link-report-problem').href).searchParams));
+  await page.keyboard.press('Escape');
+  check('"Report a problem" on the pause screen carries the seed and the station options',
+    reported.station === 'Uncharted annex' && new RegExp('^' + playSeed + ', medium, [a-z]+, two levels$').test(reported.seed) &&
+    (await inGame(() => window.noReturnDebug.game.mode)) === 'playing', reported);
 
   await page.keyboard.down('KeyW');
   await inGame(() => window.noReturnDebug.simulate(4));
@@ -369,6 +375,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   await drawFrames(page, 1);
   const endingText = await page.evaluate(() => document.getElementById('ending-stats').textContent);
   check('the ending screen names the station and its seed', endingText.indexOf('seed ' + playSeed) >= 0, endingText);
+  check('the ending screen names the build', /Build\d+\.\d+\.\d+ · build \d+ · [0-9a-f]{7}/.test(endingText), endingText);
 
   // --- "somewhere uncharted" on the ending screen switches the title screen over ---
   await page.evaluate(() => document.getElementById('button-ending-uncharted').click());
