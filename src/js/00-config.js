@@ -257,6 +257,12 @@ const RADIO_MESSAGES = {
   // Only in stations with more than one keycard: said for every card except the last.
   lowerKeycardTaken: 'That card opens some of the doors. Not the way to Shaft 9. There is another card further in.',
   secondSpool: 'That is two. Do not stay in that room.',
+  // ---- Extra jobs. A generated station may have none, one or several of these (see "mission" in 03-levelgen.js).
+  //      They are new, so they have no recordings yet: docs/voice-lines.md lists them. ----
+  generatorNoFuel: 'Day tank reads empty from here. There will be a fuel can somewhere on your level. Bring it to Generator 2.',
+  coresWanted: 'One more thing while you are down there. The lab wants the core samples Crew 2 pulled. Grey tubes. Bring them all.',
+  winchBreakerOpen: 'Upload received. But the car is not answering. The winch breaker has tripped. I have marked the panel on your map. Close it.',
+  breakerClosed: 'Breaker is in. The car is on its way down. Forty seconds. Get back to the lobby.',
   allSpools: 'That is all three. Go back to the lift lobby and upload them.',
   uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',
   liftArrived: 'The car is at your level. Get in quick.'
@@ -337,6 +343,10 @@ const OBJECTIVE_TEXT = {
   findGenerator: 'Restore mains power. Generator 2 is off Pump Hall B.',
   collectSpools: 'Recover the three survey spools left by Crew 2.',
   returnToLift: 'Return to the lift lobby and upload the spools at the terminal.',
+  findFuel: 'Generator 2 has no fuel. Find the fuel can on this level.',
+  bringFuel: 'Carry the fuel can to Generator 2, off Pump Hall B.',
+  collectCores: 'Dispatch also wants the core samples.',   // added after the spool objective while samples are missing
+  closeBreaker: 'The lift will not come. Close the winch breaker: it is marked on the map.',
   surviveLift: 'The lift is coming. Stay alive until it arrives.',
   boardLift: 'Board the lift.'
 };

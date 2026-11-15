@@ -18,12 +18,13 @@ const ZONE_GENERATED_ROOM = 250; // stand-in zone for rooms that only exist in g
 // TWEAK: how big each size of station is. "fillers" are the extra rooms per tier (no power, power, keycard).
 const GENERATED_SIZE_PRESETS = {
   // vents: crawl-height tunnels between rooms. loops: full-height service ducts. Both join places far apart on foot.
+  // extraJobs: the fewest and the most extra jobs a station of this size is given (see EXTRA_JOBS below).
   // keycards: 1 to 3. Each card opens one more ring of doors, and the next card is somewhere inside that ring;
   //           Shaft 9 is behind the last. The third number of "fillers" is shared out between the rings.
-  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, spineLength: [10, 14] },
-  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 5, keycards: 3, spineLength: [18, 26] },
+  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], spineLength: [10, 14] },
+  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], spineLength: [13, 18] },
+  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], spineLength: [16, 22] },
+  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 5, keycards: 3, extraJobs: [2, 3], spineLength: [18, 26] },
 };
 
 // TWEAK: how spread out a station is.
@@ -36,6 +37,14 @@ const GENERATED_LAYOUT_PRESETS = {
   sprawling: { label: 'Sprawling', corridorChance: 0.7, corridorLength: [5, 12], spread: 60 },
   sparse: { label: 'Sparse', corridorChance: 0.9, corridorLength: [7, 16], spread: 70 },
 };
+
+// TWEAK: the extra jobs a generated station can be given on top of "power, three spools, lift".
+//   fuel     Generator 2 will not start until you bring it the fuel can, which is somewhere you can reach without power.
+//   cores    The lift terminal will not take the upload until you also hold every core sample (2 to 4 of them).
+//   breaker  After the upload the lift does not come: you must close the winch breaker, somewhere behind a powered
+//            door, and then get back to the lobby with the lift already on its way and the Hollow told where you are.
+// Remove a name from the list and no station will get that job.
+const EXTRA_JOBS = ['fuel', 'cores', 'breaker'];
 
 // How many levels a station has. With two, everything behind the keycard (Shaft 9 included) is down a flight of stairs.
 const GENERATED_LEVEL_PRESETS = {
@@ -852,6 +861,12 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   plan.ventCount = planLoops(plan, size.vents || 0, true, false);
   if (plan.ventCount < (size.vents || 0)) plan.ventCount += planLoops(plan, size.vents - plan.ventCount, true, true);
   plan.loopCount = planLoops(plan, size.loops, false);
+  // The extra jobs, drawn by the seed like everything else. They are drawn last, so adding a job to the
+  // list above does not change the rooms and corridors an existing seed gives.
+  const jobRange = size.extraJobs || [0, 0];
+  const jobCount = Math.min(EXTRA_JOBS.length, jobRange[0] + Math.floor(random() * (jobRange[1] - jobRange[0] + 1)));
+  const jobs = EXTRA_JOBS.map(function (job) { return [random(), job]; }).sort(function (a, b) { return a[0] - b[0]; }).slice(0, jobCount).map(function (pair) { return pair[1]; });
+  plan.mission = { needsFuel: jobs.indexOf('fuel') >= 0, coreCount: jobs.indexOf('cores') >= 0 ? 2 + Math.floor(random() * 3) : 0, needsBreaker: jobs.indexOf('breaker') >= 0 };
   return plan;
 }
 
@@ -914,6 +929,84 @@ function addCorridorWallSign(corridor, wall, firstTile, tilesUsed, text, options
   options.alongOffset = center - (tile + 0.5);
   if (corridor.runsAlongX) addWallSign(text, tile, wall === WALL_NORTH ? corridor.startZ : corridor.endZ - 1, wall, options);
   else addWallSign(text, wall === WALL_WEST ? corridor.startX : corridor.endX - 1, tile, wall, options);
+}
+
+// A place in a room to stand something on: floor that can be walked on, with walkable floor on all eight sides
+// (so whatever is put there blocks no path) and no door within two tiles. Returns [x, z] or null.
+function findDropSpot(room, random, takenSpots) {
+  const candidates = [];
+  for (let tileZ = room.startZ; tileZ < room.endZ; tileZ++) {
+    for (let tileX = room.startX; tileX < room.endX; tileX++) {
+      if (tileZone[tileIndexAt(tileX, tileZ)] !== room.zone) continue;
+      let isClear = true;
+      for (let offsetZ = -2; offsetZ <= 2 && isClear; offsetZ++) {
+        for (let offsetX = -2; offsetX <= 2 && isClear; offsetX++) {
+          const nearX = tileX + offsetX, nearZ = tileZ + offsetZ;
+          const isRing = Math.abs(offsetX) <= 1 && Math.abs(offsetZ) <= 1;
+          if (isRing && (!isWalkableAt(nearX, nearZ) || tileFloorHeight[tileIndexAt(nearX, nearZ)] !== tileFloorHeight[tileIndexAt(tileX, tileZ)])) isClear = false;
+          if (isInsideGrid(nearX, nearZ) && (tileFlags[tileIndexAt(nearX, nearZ)] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT))) isClear = false;
+        }
+      }
+      for (const taken of takenSpots) if (Math.abs(taken[0] - tileX - 0.5) < 3 && Math.abs(taken[1] - tileZ - 0.5) < 3) isClear = false;
+      if (isClear) candidates.push([tileX + 0.5, tileZ + 0.5]);
+    }
+  }
+  return candidates.length > 0 ? candidates[Math.floor(random() * candidates.length)] : null;
+}
+
+// Puts out whatever the station's extra jobs need. A job that finds no room for its things is dropped,
+// so the station is never left asking for something that is not there.
+function placeMissionObjects(plan, random) {
+  const mission = level.mission;
+  mission.needsFuel = false; mission.coreCount = 0; mission.needsBreaker = false;
+  const takenSpots = [];
+  const roomsOfTiers = function (lowestTier, highestTier) {
+    const rooms = plan.rooms.filter(function (room) {
+      return !room.isCorridor && room.tier >= lowestTier && room.tier <= highestTier &&
+        ['liftLobby', 'generatorRoom', 'calibrationStore', 'shaftChamber', 'stairwell'].indexOf(room.key) < 0;
+    });
+    return rooms.map(function (room) { return [random(), room]; }).sort(function (a, b) { return a[0] - b[0]; }).map(function (pair) { return pair[1]; });
+  };
+  const placeIn = function (rooms, place) {
+    for (const room of rooms) {
+      const spot = findDropSpot(room, random, takenSpots);
+      if (!spot) continue;
+      takenSpots.push(spot);
+      clearPlacement();
+      placement.offsetY = room.floorY;
+      place(spot[0], spot[1], room);
+      clearPlacement();
+      return room;
+    }
+    return null;
+  };
+  if (plan.mission.needsFuel) {
+    // Somewhere you can get to before the power is on.
+    mission.needsFuel = placeIn(roomsOfTiers(0, 0), function (x, z) { addFuelCan(x, z); }) !== null;
+  }
+  if (plan.mission.coreCount > 0) {
+    // Scattered through everything short of the last ring, one to a room.
+    const rooms = roomsOfTiers(0, plan.finalTier - 1);
+    for (let core = 0; core < Math.min(plan.mission.coreCount, MAXIMUM_CORE_SAMPLES); core++) {
+      const room = placeIn(rooms, function (x, z) { addCoreSample(OBJECT_CORE_FIRST + mission.coreCount, x, z, random() * 3); });
+      if (!room) break;
+      rooms.splice(rooms.indexOf(room), 1);
+      mission.coreCount++;
+    }
+    if (mission.coreCount < 2) {
+      // One sample is not a job. Take it back out.
+      for (let index = interactables.length - 1; index >= 0; index--) {
+        if (interactables[index].objectId >= OBJECT_CORE_FIRST) { for (const prop of interactables[index].props) prop.isRemoved = true; interactables.splice(index, 1); }
+      }
+      mission.coreCount = 0;
+    }
+  }
+  if (plan.mission.needsBreaker) {
+    // Behind a powered door, so it cannot be dealt with before the Hollow is awake.
+    mission.needsBreaker = placeIn(roomsOfTiers(1, 1), function (x, z) { addWinchBreaker(x, z); }) !== null;
+  }
+  // The crates and the cabinet stand on the floor: work out again where things can walk.
+  computeNavigationGrid();
 }
 
 // Direction signs, like the ones in Kessel-9: which way to the lift, and which way to where you are probably going.
@@ -1186,6 +1279,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   placement.isGenerating = false;
   computeNavigationGrid();
   computeLevelBounds();
+  placeMissionObjects(plan, random);
   addCorridorDirectionSigns(plan);
 
   // Places for the Hollow to wander between: the middle of every room and corridor.
@@ -1277,6 +1371,24 @@ function auditLevelProgression() {
       }
     } else if (!canReach(OBJECT_SPOOL_3)) problems.push('the third spool cannot be reached at all');
   }
+  // The extra jobs: each thing they need must exist, and be where its job says it is.
+  const mission = level.mission;
+  if (mission.needsFuel) {
+    reach(function (door) { return door.kind === DOOR_KIND_POWERED || door.kind === DOOR_KIND_KEYCARD; });
+    if (!canReach(OBJECT_FUEL_CAN)) problems.push('the fuel can cannot be reached without power');
+    mustExistOnce.push(OBJECT_FUEL_CAN);
+  }
+  if (mission.needsBreaker) {
+    reach(function (door) { return door.kind === DOOR_KIND_KEYCARD; });
+    if (!canReach(OBJECT_WINCH_BREAKER)) problems.push('the winch breaker cannot be reached with power alone');
+    mustExistOnce.push(OBJECT_WINCH_BREAKER);
+  }
+  reach(function () { return false; });
+  for (let core = 0; core < mission.coreCount; core++) {
+    if (!canReach(OBJECT_CORE_FIRST + core)) problems.push('core sample ' + (core + 1) + ' cannot be reached at all');
+    mustExistOnce.push(OBJECT_CORE_FIRST + core);
+  }
+  if (mission.coreCount === 1) problems.push('a station asks for exactly one core sample');
   if (!level.storeZone) problems.push('there is no calibration store');
   // Everything you must use has to be within arm's reach of somewhere you can stand.
   for (const objectId of mustExistOnce) {

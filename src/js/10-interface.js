@@ -29,7 +29,7 @@ function getElement(elementId) {
 
 function initializeInterface() {
   const elementIds = [
-    'hud', 'hud-objective', 'chip-spools', 'chip-power', 'chip-keycard', 'minimap-canvas', 'hud-location',
+    'hud', 'hud-objective', 'chip-spools', 'chip-power', 'chip-keycard', 'chip-extra', 'minimap-canvas', 'hud-location',
     'readout-range', 'readout-flight', 'readout-returns', 'readout-heading', 'bar-heat', 'bar-stamina',
     'bar-interference', 'meter-agitation', 'bar-agitation', 'hud-stance', 'hud-block-objective', 'hud-block-map', 'hud-block-instruments', 'hud-readouts',
     'meter-heat', 'meter-stamina', 'meter-interference', 'map-objective', 'map-status', 'reticle-ring', 'hud-prompt', 'hud-countdown', 'hud-messages', 'hud-caption',
@@ -385,6 +385,15 @@ function getKeycardStatusText() {
   return game.flags.hasKeycard ? 'KEYCARD' : 'NO KEYCARD';
 }
 
+// What the extra jobs of this station want shown: "FUEL CAN", "CORES 1/3", "BREAKER OPEN". Empty when there is nothing to say.
+function getExtraJobStatusText() {
+  const flags = game.flags, parts = [];
+  if (flags.hasFuel) parts.push('FUEL CAN');
+  if (level.mission.coreCount > 0) parts.push('CORES ' + flags.coresCollected + '/' + level.mission.coreCount);
+  if (flags.spoolsUploaded && !flags.breakerClosed) parts.push('BREAKER OPEN');
+  return parts.join(' · ');
+}
+
 function updateHud(realDt) {
   const elements = interfaceState.elements;
   const now = game.realTime;
@@ -410,7 +419,7 @@ function updateHud(realDt) {
   // ---- the quiet screen: every instrument is hidden until it has something to say ----
   // TWEAK: the numbers are when each one appears. Choose "Full instruments" in the settings to see them all, always.
   const isQuiet = settings.hud === 'quiet';
-  const statusSignature = game.objectiveText + '|' + game.flags.spoolsCollected + '|' + game.flags.powerOn + '|' + game.flags.keycardLevel;
+  const statusSignature = game.objectiveText + '|' + game.flags.spoolsCollected + '|' + game.flags.powerOn + '|' + game.flags.keycardLevel + '|' + getExtraJobStatusText();
   if (statusSignature !== interfaceState.lastStatusSignature) {
     interfaceState.lastStatusSignature = statusSignature;
     interfaceState.objectiveShownUntil = now + 8; // the objective and the three chips show for 8 s when any of them changes
@@ -462,6 +471,9 @@ function updateHud(realDt) {
     elements['chip-power'].classList.toggle('is-on', game.flags.powerOn);
     elements['chip-keycard'].textContent = getKeycardStatusText();
     elements['chip-keycard'].classList.toggle('is-on', game.flags.hasKeycard);
+    const extraText = getExtraJobStatusText();
+    elements['chip-extra'].hidden = extraText === '';
+    elements['chip-extra'].textContent = extraText;
 
     const zone = getZoneAtPosition(player.x, player.z);
     if (zone) interfaceState.visitedZones.add(zone);
@@ -470,7 +482,7 @@ function updateHud(realDt) {
     if (interfaceState.isMapOverlayOpen) {
       elements['map-objective'].textContent = game.objectiveText;
       elements['map-status'].textContent = 'SPOOLS ' + spools + '/3 · ' + (game.flags.powerOn ? 'MAINS ON' : 'MAINS OFF') + ' · ' +
-        getKeycardStatusText() + ' · ' + (ZONE_NAMES[zone] || ZONE_NAMES[0]);
+        getKeycardStatusText() + (extraText ? ' · ' + extraText : '') + ' · ' + (ZONE_NAMES[zone] || ZONE_NAMES[0]);
     }
 
     const rangeElement = elements['readout-range'];
