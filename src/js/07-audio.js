@@ -102,7 +102,7 @@ const SOUND_LEVELS = {
 //     not help it; more of the sound between 150 and 600 Hz does.
 // The Sounds tab has both numbers below as controls to try by ear. Numbers tried there are not kept: write them here.
 const SOUND_OUTPUT = {
-  compressorThresholdDecibels: -16, // sounds above this level are held back. 0 is the loudest a speaker can go; -16 is about a sixth of that.
+  compressorThresholdDecibels: -14, // sounds above this level are held back. 0 is the loudest a speaker can go; -16 is about a sixth of that.
                                     // Nearer 0: more room for loud sounds, and more risk of the speakers overloading.
   compressorRatio: 5                // how hard they are held back. 1 is not at all; 20 is a wall. Lower: loud sounds stand out more.
 };
