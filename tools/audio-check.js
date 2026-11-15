@@ -56,6 +56,12 @@ const { openGame, startGame } = require('./browser-harness.js');
     ['Hollow growl, hunting, 12 m away', hollowAt(2, 0.5, 0, 12), 3.0, true],
     ['Hollow shriek in the beam, 3 m away', hollowAt(2, 1, 1, 3), 2.0, true],
     ['Hollow removed (silence check setup)', `window.noReturnDebug.hollow.isActive = false; window.noReturnDebug.simulate(0.1)`, 0.6, true],
+    // The Hollow's one-shot voices. They come from where it last stood (3 m away), with its growl now off.
+    ['voice: roar (it has found you), 3 m', `window.noReturnDebug.playHollowRoar()`, 1.8, true],
+    ['voice: snarl while hunting, 3 m', `window.noReturnDebug.playHollowSnarl()`, 0.7, true],
+    ['voice: hiss (it has lost you), 3 m', `window.noReturnDebug.playHollowLostHiss()`, 1.9, true],
+    ['voice: sniffing while searching, 3 m', `window.noReturnDebug.playHollowSniff()`, 1.4, true],
+    ['voice: trill (heard something), 3 m', `window.noReturnDebug.playHollowCuriousTrill()`, 1.0, true],
     ['full sweep', `window.noReturnDebug.playSweepSound(2.4)`, 2.4, true],
     ['interface blip', `window.noReturnDebug.playInterfaceBlip(740)`, 0.4, true],
     ['radio opening', `window.noReturnDebug.playRadioBlip()`, 0.6, true],
@@ -78,7 +84,14 @@ const { openGame, startGame } = require('./browser-harness.js');
     const isContinuous = name.startsWith('Hollow') || name.startsWith('room');
     if (isContinuous) await page.waitForTimeout(450);
     else await page.evaluate(([code]) => eval(code), [action]);
-    const result = await page.evaluate((duration) => window.measureFor(duration), seconds);
+    let result = await page.evaluate((duration) => window.measureFor(duration), seconds);
+    // A very short sound can slip past the start of the measurement on a slow machine. Before calling a
+    // one-shot silent, play it and listen once more.
+    if (!isContinuous && result.peak < 0.004) {
+      await page.waitForTimeout(300);
+      await page.evaluate(([code]) => eval(code), [action]);
+      result = await page.evaluate((duration) => window.measureFor(duration), seconds);
+    }
     console.log(name.padEnd(38) + result.peak.toFixed(3) + '  ' + result.average.toFixed(4) + '   ' + Math.round(result.centre) + ' Hz');
     if (result.isInvalid) failures.push(name + ': invalid numbers in the output');
     if (result.peak < 0.004 && !name.includes('silence check')) failures.push(name + ': silent');

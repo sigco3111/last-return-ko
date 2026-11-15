@@ -386,6 +386,18 @@ function check(description, condition, detail) {
     return [changed, window.noReturnDebug.tuning.walkSpeed, field.value];
   });
   check('live tuning changes a value and reset restores it', tuned[0] === 5 && tuned[1] === 2.5 && tuned[2] === '2.5', tuned);
+  // --- leaving for the title screen must leave no sound of play running under it ---
+  await inDebugGame(() => { const debug = window.noReturnDebug; debug.spawnHollow(debug.player.x + 6, debug.player.z); debug.simulate(0.5); });
+  await drawFrames(debugSession.page, 2);
+  await debugSession.page.waitForTimeout(700);
+  const growlWhilePlaying = await inDebugGame(() => window.noReturnDebug.audio.context ? window.noReturnDebug.audio.hollowGrowlGain.gain.value : -1);
+  await debugSession.page.evaluate(() => document.getElementById('button-pause-restart').click());
+  await drawFrames(debugSession.page, 2);
+  await debugSession.page.waitForTimeout(700);
+  const afterLeaving = await inDebugGame(() => { const audio = window.noReturnDebug.audio; return { mode: window.noReturnDebug.game.mode,
+    growl: audio.context ? audio.hollowGrowlGain.gain.value : 0, staticLevel: audio.context ? audio.staticGain.gain.value : 0 }; });
+  check('abandoning to the title screen switches the growl and the static off',
+    growlWhilePlaying === -1 || (growlWhilePlaying > 0.05 && afterLeaving.mode === 'title' && afterLeaving.growl < 0.01 && afterLeaving.staticLevel < 0.01), { growlWhilePlaying: growlWhilePlaying, afterLeaving: afterLeaving });
   check('no script errors were reported in debug mode', debugSession.problems.length === 0, debugSession.problems);
   await debugSession.browser.close();
 

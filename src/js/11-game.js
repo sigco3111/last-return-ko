@@ -281,6 +281,7 @@ function resumeGame() {
 function returnToTitle() {
   suspendAudio(false);
   stopVoiceLine();
+  silenceGameplaySounds();
   if (debugHooks.hidePanel) debugHooks.hidePanel();
   if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();
   resetWorldState();
@@ -454,8 +455,7 @@ function updateDying(dt) {
   if (sequence.timer > 1.55) {
     game.mode = 'dead';
     game.fade = 0;
-    setInterferenceSound(0);
-    updateHollowVoice(0, 0, false, 0, 0, dt, game.time);
+    silenceGameplaySounds();
     if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();
     showDeathScreen(sequence.kind);
   }
@@ -661,6 +661,8 @@ function updateAttractMode(dt) {
     scannerBasis.forwardX, scannerBasis.forwardY, scannerBasis.forwardZ, TUNING.scannerMaximumRange) ? rayHit.distance : -1;
 }
 
+let lastFrameMode = '';
+
 function runFrame(timestamp) {
   window.requestAnimationFrame(runFrame);
   const realDt = Math.min(0.05, Math.max(0.001, (timestamp - lastFrameTimestamp) / 1000));
@@ -690,6 +692,13 @@ function runFrame(timestamp) {
     frameState.viewmodelSwayX = Math.cos(player.bobPhase * 0.5) * 0.006;
     frameState.viewmodelSwayY = Math.sin(player.bobPhase) * 0.005 - (player.isSprinting ? 0.03 : 0);
     frameState.viewmodelKick = isScanning && game.mode === 'playing' ? (Math.random() - 0.5) * 0.004 : 0;
+  }
+
+  // Belt and braces: whenever the game arrives at a screen that is not play, by whatever route, the sounds of
+  // play are switched off. (Abandoning from the pause menu used to leave the growl running under the title.)
+  if (game.mode !== lastFrameMode) {
+    if (game.mode === 'title' || game.mode === 'intro' || game.mode === 'dead' || game.mode === 'ending') silenceGameplaySounds();
+    lastFrameMode = game.mode;
   }
 
   frameState.time = game.time;
@@ -737,6 +746,7 @@ function startApplication() {
 
   window.noReturnDebug = {
     game: game, player: player, hollow: hollow, renderer: renderer, renderCamera: renderCamera, audio: audio,
+    playHollowRoar: playHollowRoar, playHollowSnarl: playHollowSnarl, playHollowLostHiss: playHollowLostHiss, playHollowSniff: playHollowSniff, playHollowCuriousTrill: playHollowCuriousTrill,
     playStinger: playStinger, playSweepSound: playSweepSound, playInterfaceBlip: playInterfaceBlip, playRadioBlip: playRadioBlip, playDeniedSound: playDeniedSound, stills: stills, doors: doors, pointCloud: pointCloud, settings: settings,
     auditLayout: auditFacilityLayout,
     auditProgression: auditLevelProgression,
