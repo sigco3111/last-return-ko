@@ -20,7 +20,8 @@
 
 - more cave like rooms for deeper levels (or different locations)
   - caves
-  - mineshafts
+  - bones and fossils
+  - mineshafts with deadly drops
   - open field with houses :P
   - limiting certain rooms to level sizes
 
