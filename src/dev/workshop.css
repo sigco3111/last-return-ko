@@ -67,5 +67,6 @@
 .sound-row.is-playing .button-quiet { color: var(--instrument); border-color: var(--instrument); }
 .sound-row.is-playing .debug-option { color: var(--instrument); }
 .sound-detail { display: block; margin-top: 1px; font-size: 10px; color: var(--text-dim); }
-.sound-level { min-width: 118px; text-align: right; font-size: 10.5px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sound-level { min-width: 168px; text-align: right; font-size: 10.5px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .sound-level.is-loud { color: var(--alarm); }
+.sound-level.is-held { color: var(--instrument); }

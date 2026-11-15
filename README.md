@@ -254,7 +254,9 @@ Open the address it prints (http://localhost:4471/) and press **Workshop** on th
 
 - Every sound the game makes has a row: a button for a sound that plays once, a tick box for one that goes on (room tone, the growl, static, the generator), so you can hear one sound against another. **Play all in turn** goes through the whole list.
 - Sounds that come from somewhere (the Hollow, doors, machinery, drips) are put straight ahead of you, at the distance the slider says. The cross in the hall marks the spot.
-- After a sound has played, its row shows how loud the output was (peak and average, where 1.0 is the loudest a speaker can go), in red if it would distort or nothing came out. These are the numbers `npm run audio-check` prints.
+- After a sound has played, its row shows three numbers, all measured where the sound leaves the compressor, which is what reaches the speakers. **loud** is how loud it is to an ear at its loudest moment, in decibels below the most the speakers can do (ten less is about half as loud, and deep rumble counts for little, as it does in your head). **peak** is how large the wave got at the speakers, of 1.0. **held** is how many decibels the compressor took off it. Rest the mouse on the numbers for the whole story. These are the numbers `npm run audio-check` prints.
+- Red means the peak is over 1.0 (or nothing came out). A speaker cuts such a wave off flat, which gives the sound a harsh edge, and from there a higher number adds edge, not loudness. Whether that edge is wanted is yours to judge. Amber means a big wave for how little of it is heard: most of the sound is very low (a heartbeat, knocking from the shaft, a blow on a door), and ears and small speakers make little of that, so it hits the ceiling long before it gets loud. More of the sound between 150 and 600 Hz helps; more level does not.
+- The compressor is the last thing every sound goes through. It holds little back: the loudest sounds lose 2 to 5 decibels. Its two numbers are `SOUND_OUTPUT`, just under `SOUND_LEVELS`; the board has both as controls to try by ear (what you try there is not kept).
 - How loud each sound is, is set in `SOUND_LEVELS`, the table at the top of `src/js/07-audio.js`: one multiplier per sound, where 1 is the sound as built and 2 doubles the signal (one clear step louder, not twice as loud). Under each sound's name is which number is its own and what it is now. Change it and the page reloads with the list where you left it, so the loop is: change, save, press the button again.
 - `npm run audio-check -- --listen` starts the dev server and opens this tool directly. So does an address ending in `#sounds`.
 - To add a sound to the list, add a line to `SOUND_BOARD_ENTRIES` in `src/dev/23-workshop-sounds.js`. It is then measured by `npm run audio-check` as well.
@@ -371,7 +373,7 @@ starts the dev build, with [debug mode](#debug-mode) and [the workshop](#the-wor
 npm run audio-check
 ```
 
-measures every sound, because a test cannot listen: how loud each one is and where its energy sits, and it fails if one is silent or loud enough to distort. It takes about three minutes; name one or more sounds to measure only those, for example `npm run audio-check -- hollow door`. It cannot tell you whether a sound is good. Only ears can:
+measures every sound, because a test cannot listen: how loud each one is to an ear, how large its wave is at the speakers, how much the compressor held it back and where its energy sits. It fails only if one is silent. It then lists, for you to judge, the sounds whose wave is over what a speaker can take, and the ones with a big wave that an ear hears little of. It takes about three minutes; name one or more sounds to measure only those, for example `npm run audio-check -- hollow door`. It cannot tell you whether a sound is good. Only ears can:
 
 ```bash
 npm run audio-check -- --listen

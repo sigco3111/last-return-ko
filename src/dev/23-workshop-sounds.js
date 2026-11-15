@@ -13,7 +13,11 @@ const SOUND_BOARD_HALL_WIDTH = 9;           // the hall you stand in, in metres
 const SOUND_BOARD_HALL_LENGTH = 36;
 const SOUND_BOARD_MAXIMUM_DISTANCE = 30;    // how far down the hall a sound can be put
 const SOUND_BOARD_SILENT_PEAK = 0.004;      // a peak below this: nothing came out
-const SOUND_BOARD_DISTORTING_PEAK = 0.98;   // a peak above this: loud enough to distort
+const SOUND_BOARD_DISTORTING_PEAK = 0.98;   // a peak above this at the speakers (after the compressor): it overloads them and is cut off flat
+// "A big wave for how little is heard": loudness to the ear, less the size of the wave in decibels. Speech comes
+// out around -16, a snarl around -24. At -34 or lower nearly all of the sound is too low for ears and small
+// speakers to make much of, and it will reach the ceiling long before it gets loud.
+const SOUND_BOARD_LITTLE_HEARD_FOR_ITS_WAVE = -34;
 const SOUND_BOARD_FADE_IN_SECONDS = 0.45;   // a sound that goes on gets this long to swell before it is measured
 
 const soundBoard = {
@@ -21,7 +25,10 @@ const soundBoard = {
   heldKeys: {},          // the sounds that go on until stopped, and are on now
   hollowVoice: null,     // { aggression, shriekLevel } while one of the Hollow's growls is on
   isScanning: false,     // the scanner is held on
-  measureTap: null,      // listens to everything on its way to the speakers
+  measureTap: null,      // listens to everything as it goes into the compressor
+  outputTap: null,       // listens to what comes out of the compressor: this is what reaches the speakers
+  earWeights: null,      // for every band of the spectrum, how much the ear makes of it (see measureSoundBoardOutput)
+  compressorTry: null,   // threshold and ratio being tried out with the two controls, or null for the ones in SOUND_OUTPUT
   results: {},           // per key: what came out the last time it played
   measureRun: 0,         // goes up whenever a sound is started or stopped: a measurement under way is then worthless
   playRuns: {},          // per key: goes up each time it is played or stopped, so only its latest play tidies up
@@ -251,6 +258,11 @@ function startSoundBoardAudio() {
     soundBoard.measureTap = context.createAnalyser();
     soundBoard.measureTap.fftSize = 2048;
     audio.masterGain.connect(soundBoard.measureTap);
+    soundBoard.outputTap = context.createAnalyser();
+    soundBoard.outputTap.fftSize = 2048;
+    soundBoard.outputTap.smoothingTimeConstant = 0.5;
+    audio.compressor.connect(soundBoard.outputTap);
+    applySoundBoardCompressor();
     setSoundBoardRoomTone(false); // the engine starts the room tone by itself; here it is a switch like the others
     placeSoundBoardSources();
     // Your ears and the sources are moved into place smoothly, from the corner of the map. Give them a
@@ -263,15 +275,38 @@ function startSoundBoardAudio() {
   return context.state === 'running' ? Promise.resolve() : context.resume();
 }
 
-// Listens to everything on its way to the speakers for the given time. Resolves with how loud it was
-// (peak and average, where 1.0 is the loudest a speaker can go) and where its energy sits ("centre" in Hz:
-// low is dull or deep, high is bright or harsh).
+// How much the ear makes of each band of the spectrum (the standard "A" curve): nearly nothing of a 50 Hz rumble,
+// most of sound between 1000 and 5000 Hz. Worked out once for the bands the output tap has.
+function getSoundBoardEarWeights() {
+  if (soundBoard.earWeights) return soundBoard.earWeights;
+  const tap = soundBoard.outputTap, weights = new Float32Array(tap.frequencyBinCount);
+  for (let bin = 1; bin < weights.length; bin++) {
+    const squared = Math.pow(bin * audio.context.sampleRate / tap.fftSize, 2);
+    const response = 148693636 * squared * squared /
+      ((squared + 424.36) * Math.sqrt((squared + 11599.29) * (squared + 544496.41)) * (squared + 148693636));
+    weights[bin] = response * response * 1.585; // as power, with the curve's usual 2 dB lift
+  }
+  soundBoard.earWeights = weights;
+  return weights;
+}
+
+// Listens for the given time to what comes out of the compressor, which is what reaches the speakers.
+// Resolves with:
+//   peak        the largest the wave got at the speakers (1.0 is the most a speaker can take; above it, it overloads)
+//   peakBefore  the same as it went into the compressor: how hard the sound was pushed
+//   heldBack    how many decibels the compressor took off it at its loudest moment
+//   loudness    how loud it is to an ear at its loudest moment, in decibels (0 would be a pure tone at full scale).
+//               Low rumble counts for little here, as it does in your head.
+//   average     the level of the wave over the whole time
+//   centre      where its energy sits, in Hz: low is dull or deep, high is bright or harsh
 function measureSoundBoardOutput(seconds) {
   return new Promise(function (resolve) {
-    const tap = soundBoard.measureTap, sampleRate = audio.context.sampleRate;
-    const samples = new Float32Array(tap.fftSize);
+    const tap = soundBoard.outputTap, before = soundBoard.measureTap, sampleRate = audio.context.sampleRate;
+    const samples = new Float32Array(tap.fftSize), samplesBefore = new Float32Array(before.fftSize);
     const spectrum = new Float32Array(tap.frequencyBinCount);
-    let peak = 0, squareSum = 0, sampleCount = 0, weighted = 0, weightTotal = 0, isInvalid = false;
+    const earWeights = getSoundBoardEarWeights();
+    let peak = 0, peakBefore = 0, squareSum = 0, sampleCount = 0, weighted = 0, weightTotal = 0, isInvalid = false;
+    let loudestToTheEar = 0, mostHeldBack = 0;
     const started = window.performance.now();
     const timer = window.setInterval(function () {
       tap.getFloatTimeDomainData(samples);
@@ -281,18 +316,39 @@ function measureSoundBoardOutput(seconds) {
         squareSum += value * value;
         sampleCount++;
       }
+      before.getFloatTimeDomainData(samplesBefore);
+      for (const value of samplesBefore) peakBefore = Math.max(peakBefore, Math.abs(value));
+      mostHeldBack = Math.max(mostHeldBack, -audio.compressor.reduction);
       tap.getFloatFrequencyData(spectrum);
+      let toTheEar = 0;
       for (let bin = 1; bin < spectrum.length; bin++) {
         const power = Math.pow(10, spectrum[bin] / 10);
         weighted += power * bin * sampleRate / tap.fftSize;
         weightTotal += power;
+        toTheEar += power * earWeights[bin];
       }
+      loudestToTheEar = Math.max(loudestToTheEar, toTheEar);
       if (window.performance.now() - started > seconds * 1000) {
         window.clearInterval(timer);
-        resolve({ peak: peak, average: Math.sqrt(squareSum / Math.max(1, sampleCount)), centre: weightTotal > 0 ? weighted / weightTotal : 0, isInvalid: isInvalid });
+        resolve({ peak: peak, peakBefore: peakBefore, heldBack: mostHeldBack, loudness: loudestToTheEar > 0 ? 10 * Math.log10(loudestToTheEar) : -120,
+          average: Math.sqrt(squareSum / Math.max(1, sampleCount)), centre: weightTotal > 0 ? weighted / weightTotal : 0, isInvalid: isInvalid });
       }
     }, 20);
   });
+}
+
+// Puts the compressor on the threshold and ratio being tried with the two controls, or back on the ones in SOUND_OUTPUT.
+function applySoundBoardCompressor() {
+  if (!audio.compressor) return;
+  const tried = soundBoard.compressorTry || { threshold: SOUND_OUTPUT.compressorThresholdDecibels, ratio: SOUND_OUTPUT.compressorRatio };
+  audio.compressor.threshold.value = tried.threshold;
+  audio.compressor.ratio.value = tried.ratio;
+}
+
+function trySoundBoardCompressor(name, value) {
+  if (!soundBoard.compressorTry) soundBoard.compressorTry = { threshold: SOUND_OUTPUT.compressorThresholdDecibels, ratio: SOUND_OUTPUT.compressorRatio };
+  soundBoard.compressorTry[name] = value;
+  applySoundBoardCompressor();
 }
 
 function waitSoundBoardSeconds(seconds) {
@@ -308,10 +364,29 @@ function showSoundBoardResult(key) {
   if (!row) return;
   const isDistorting = Boolean(result) && result.peak > SOUND_BOARD_DISTORTING_PEAK;
   const isSilent = Boolean(result) && result.peak < SOUND_BOARD_SILENT_PEAK;
-  row.level.textContent = result ? (isSilent ? 'silent' : 'peak ' + result.peak.toFixed(2) + ' avg ' + result.average.toFixed(3)) : '';
-  row.level.title = !result ? '' : isDistorting ? 'Loud enough to distort (a peak above ' + SOUND_BOARD_DISTORTING_PEAK + ').'
-    : isSilent ? 'Nothing came out.' : 'Its energy sits around ' + Math.round(result.centre) + ' Hz.';
+  const isMostlyTooLow = Boolean(result) && isSoundBoardResultMostlyTooLow(result);
+  row.level.textContent = !result ? '' : isSilent ? 'silent'
+    : 'loud ' + Math.round(result.loudness) + ' · peak ' + result.peak.toFixed(2) + (result.heldBack >= 1 ? ' · held ' + Math.round(result.heldBack) : '');
+  row.level.title = !result ? '' : isSilent ? 'Nothing came out.' : describeSoundBoardResult(result, isDistorting, isMostlyTooLow);
   row.level.classList.toggle('is-loud', isDistorting || isSilent);
+  row.level.classList.toggle('is-held', isMostlyTooLow && !isDistorting);
+}
+
+// True for a sound whose wave is big for how little of it an ear hears (see SOUND_BOARD_LITTLE_HEARD_FOR_ITS_WAVE).
+// Sounds with a small wave are left out: they are simply quiet.
+function isSoundBoardResultMostlyTooLow(result) {
+  return result.peak >= 0.3 && result.loudness - 20 * Math.log10(result.peak) <= SOUND_BOARD_LITTLE_HEARD_FOR_ITS_WAVE;
+}
+
+// What a row's three numbers mean for this sound, in sentences (shown when the mouse rests on them).
+function describeSoundBoardResult(result, isDistorting, isMostlyTooLow) {
+  const lines = ['Loudness to an ear, at its loudest moment: ' + Math.round(result.loudness) + ' dB. (0 would be a pure tone as loud as the speakers go. Ten less sounds about half as loud.)',
+    'Peak at the speakers: ' + result.peak.toFixed(2) + ' of 1.0. It went into the compressor at ' + result.peakBefore.toFixed(2) +
+    (result.heldBack >= 1 ? ', and the compressor held it back by ' + Math.round(result.heldBack) + ' dB.' : '.'),
+    'Its energy sits around ' + Math.round(result.centre) + ' Hz.'];
+  if (isDistorting) lines.push('The peak is over what a speaker can take, so it is cut off flat at 1.0. That gives it a harsh edge. It is also the ceiling: a higher number in SOUND_LEVELS adds edge, not loudness.');
+  if (isMostlyTooLow) lines.push('A big wave for how little of it is heard: most of this sound is too low for ears and small speakers to make much of. Turning it up reaches the ceiling long before it gets loud. More of the sound between 150 and 600 Hz would make it louder at the same size of wave.');
+  return lines.join('\n');
 }
 
 function markSoundBoardRow(key, isPlaying) {
@@ -547,7 +622,12 @@ function renderSoundBoardPanel(body) {
   addWorkshopButton(row, 'Stop', stopSoundBoard, 'Stops "play all" and everything that is switched on').id = 'sound-stop';
   addWorkshopNumber(body, 'Distance to sounds that come from somewhere (m). They are at the cross, and show their distance under their name.',
     soundBoard.distance, 1, SOUND_BOARD_MAXIMUM_DISTANCE, 0.5, setSoundBoardDistance);
-  addWorkshopNote(body, 'After a sound has played, its row shows how loud the output was: the peak and the average, where 1.0 is the loudest a speaker can go. ' +
+  addWorkshopNumber(body, 'Compressor threshold (dB), to try by ear. Sounds above this are held back. Lower holds loud sounds back more (fewer red rows, less punch); nearer 0 holds them back less.',
+    soundBoard.compressorTry ? soundBoard.compressorTry.threshold : SOUND_OUTPUT.compressorThresholdDecibels, -40, 0, 1, function (value) { trySoundBoardCompressor('threshold', value); });
+  addWorkshopNumber(body, 'Compressor ratio, to try by ear. How hard they are held back: 1 not at all, 20 a wall. To keep either number, write it into SOUND_OUTPUT in src/js/07-audio.js.',
+    soundBoard.compressorTry ? soundBoard.compressorTry.ratio : SOUND_OUTPUT.compressorRatio, 1, 20, 0.5, function (value) { trySoundBoardCompressor('ratio', value); });
+  addWorkshopNote(body, 'After a sound has played, its row shows three numbers, measured where the sound leaves the compressor, which is what reaches the speakers. "loud": how loud it is to an ear at its loudest moment, in decibels below the most the speakers can do (ten less is about half as loud; deep rumble counts for little, as it does in your head). ' +
+    '"peak": how large the wave got at the speakers, of 1.0. "held": how many decibels the compressor took off it. Red: the peak is over 1.0, so the speakers cut it off flat (a harsh edge, and no louder for being turned up), or nothing came out. Amber: a big wave for how little is heard, because most of the sound is very low. Rest the mouse on the numbers for the whole story. ' +
     'Whatever else was already playing is counted too; start or stop another sound before it is over and it is not measured. Measured at the volume from the settings (' + Math.round(settings.volume * 100) + ' %).');
 
   let group = null;
@@ -591,6 +671,7 @@ const soundBoardForTools = {
   state: soundBoard,
   silentPeak: SOUND_BOARD_SILENT_PEAK,
   distortingPeak: SOUND_BOARD_DISTORTING_PEAK,
+  isMostlyTooLow: isSoundBoardResultMostlyTooLow,
   list: function () {
     return SOUND_BOARD_ENTRIES.map(function (entry) {
       return { key: entry.key, group: entry.group, label: entry.label, goesOn: !entry.play, hasPlace: Boolean(entry.hasPlace) };

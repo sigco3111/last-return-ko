@@ -87,9 +87,29 @@ const SOUND_LEVELS = {
   voiceRecorder: 0.8        // the spools read aloud
 };
 
+// The last thing every sound goes through on its way to the speakers is a compressor. It leaves quiet sounds
+// alone and holds loud ones back a little.
+//
+// Three things worth knowing when you tune SOUND_LEVELS (the workshop's Sounds tab measures all of them):
+//   - It does not hold much back. With the numbers below, the loudest sounds in the game lose 2 to 5 decibels.
+//     It will not make a loud sound quiet, and it will not stop one overloading the speakers.
+//   - A speaker can take a wave of size 1.0. Whatever is larger when it gets there is cut off flat at 1.0. That
+//     puts a harsh edge on the sound, and it is also the ceiling: past it, a higher number adds edge, not loudness.
+//   - How large the wave is and how loud it seems are different things. Very low sound (under about 120 Hz: the
+//     shaft knocking, a heartbeat, a door being hit) makes a big wave that ears, small speakers and many
+//     headphones make little of. Such a sound can be at the ceiling and still be hard to hear. More level does
+//     not help it; more of the sound between 150 and 600 Hz does.
+// The Sounds tab has both numbers below as controls to try by ear. Numbers tried there are not kept: write them here.
+const SOUND_OUTPUT = {
+  compressorThresholdDecibels: -16, // sounds above this level are held back. 0 is the loudest a speaker can go; -16 is about a sixth of that.
+                                    // Nearer 0: more room for loud sounds, and more risk of the speakers overloading.
+  compressorRatio: 5                // how hard they are held back. 1 is not at all; 20 is a wall. Lower: loud sounds stand out more.
+};
+
 const audio = {
   context: null,
   masterGain: null,
+  compressor: null,        // see SOUND_OUTPUT above
   reverbInput: null,
   whiteNoiseBuffer: null,
   brownNoiseBuffer: null,
@@ -218,8 +238,9 @@ function initializeAudioEngine() {
   audio.masterGain = context.createGain();
   audio.masterGain.gain.value = audio.volume;
   const compressor = context.createDynamicsCompressor();
-  compressor.threshold.value = -16;
-  compressor.ratio.value = 5;
+  compressor.threshold.value = SOUND_OUTPUT.compressorThresholdDecibels;
+  compressor.ratio.value = SOUND_OUTPUT.compressorRatio;
+  audio.compressor = compressor;
   audio.masterGain.connect(compressor);
   compressor.connect(context.destination);
 
@@ -1127,15 +1148,19 @@ function playHollowCeilingStep(x, z, weight, delay) {
   const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + getHeadroomAt(x, z) + 0.3, z);
   if (!panner) return;
   const level = weight * SOUND_LEVELS.hollowCeilingStep, wait = delay || 0;
-  playNoiseBurst({ duration: 0.34, frequency: 170, gain: 1.3 * level, useBrownNoise: true, playbackRate: 0.7, delay: wait, destination: panner });
+  playNoiseBurst({ duration: 0.34, frequency: 170, gain: 0.9 * level, useBrownNoise: true, playbackRate: 0.7, delay: wait, destination: panner });
+  // The part an ear picks up: the dull knock of the panel itself, a few hundred hertz up from the weight on it.
+  playNoiseBurst({ duration: 0.13, filterType: 'bandpass', frequency: 430 + Math.random() * 90, resonance: 1.6, gain: 2.4 * level, attack: 0.003, delay: wait, destination: panner });
   if (audio.metalStruck) {
     // A ceiling panel in its frame with something heavy on it: lower and duller than a vent, and it does not
     // ring for long, because it is bolted down. Now and then a second, looser panel answers.
-    playMetalStrike({ shape: 'plate', frequency: 52 + Math.random() * 18, duration: 0.95, hardness: 0.22, damping: 0.85, bend: 0.045, gain: 0.6 * level, delay: wait, destination: panner });
+    playMetalStrike({ shape: 'plate', frequency: 52 + Math.random() * 18, duration: 0.95, hardness: 0.22, damping: 0.85, bend: 0.045, gain: 0.4 * level, delay: wait, destination: panner });
+    playMetalStrike({ shape: 'plate', frequency: 168 + Math.random() * 40, duration: 0.5, hardness: 0.4, damping: 0.75, bend: 0.03, gain: 0.55 * level, delay: wait, destination: panner });
     if (Math.random() < 0.4) playMetalStrike({ shape: 'plate', frequency: 118 + Math.random() * 40, duration: 0.4, hardness: 0.5, damping: 0.7, gain: 0.2 * level, delay: wait + 0.06, destination: panner });
     return;
   }
-  playResonantNoise({ frequency: 92 + Math.random() * 26, resonance: 14, duration: 0.6, gain: 0.7 * level, attack: 0.005, delay: wait, destination: panner });
+  playResonantNoise({ frequency: 92 + Math.random() * 26, resonance: 14, duration: 0.6, gain: 0.5 * level, attack: 0.005, delay: wait, destination: panner });
+  playResonantNoise({ frequency: 215 + Math.random() * 40, resonance: 10, duration: 0.35, gain: 1.2 * level, attack: 0.004, delay: wait, destination: panner });
   playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 1300, gain: 0.25 * level, delay: wait + 0.05, destination: panner });
 }
 
@@ -1165,10 +1190,18 @@ function playDoorBang(x, z, weight) {
   const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 1.3, z);
   if (!panner) return;
   const level = weight * SOUND_LEVELS.doorBang;
-  playNoiseBurst({ duration: 0.3, frequency: 210, gain: 1.4 * level, useBrownNoise: true, playbackRate: 0.75, reverbAmount: 0.5, destination: panner });
-  playTone({ waveform: 'triangle', frequency: 74, frequencyEnd: 46, duration: 0.34, gain: 0.9 * level, attack: 0.004, destination: panner });
-  if (audio.metalStruck) playMetalStrike({ shape: 'plate', frequency: 96 + Math.random() * 20, duration: 0.9, hardness: 0.45, bend: 0.03, gain: 0.65 * level, destination: panner });
-  else playResonantNoise({ frequency: 190 + Math.random() * 40, resonance: 16, duration: 0.5, gain: 0.62 * level, attack: 0.003, destination: panner });
+  playNoiseBurst({ duration: 0.3, frequency: 210, gain: 0.7 * level, useBrownNoise: true, playbackRate: 0.75, reverbAmount: 0.5, destination: panner });
+  playTone({ waveform: 'triangle', frequency: 74, frequencyEnd: 46, duration: 0.34, gain: 0.45 * level, attack: 0.004, destination: panner });
+  // What makes it a blow on a door and not a thump in the dark: the smack of the hit, and the slab answering.
+  playNoiseBurst({ duration: 0.11, filterType: 'bandpass', frequency: 520 + Math.random() * 120, resonance: 1.3, gain: 4.2 * level, attack: 0.002, reverbAmount: 0.5, destination: panner });
+  if (audio.metalStruck) {
+    // The slab as struck metal: its low boom, and a higher ring that carries.
+    playMetalStrike({ shape: 'plate', frequency: 96 + Math.random() * 20, duration: 0.9, hardness: 0.45, bend: 0.03, gain: 0.45 * level, destination: panner });
+    playMetalStrike({ shape: 'plate', frequency: 250 + Math.random() * 50, duration: 0.7, hardness: 0.65, damping: 0.6, bend: 0.02, gain: 1.1 * level, destination: panner });
+  } else {
+    playResonantNoise({ frequency: 190 + Math.random() * 40, resonance: 16, duration: 0.5, gain: 0.62 * level, attack: 0.003, destination: panner });
+    playResonantNoise({ frequency: 390 + Math.random() * 60, resonance: 12, duration: 0.4, gain: 1.5 * level, attack: 0.003, destination: panner });
+  }
 }
 
 // A door giving way: the last blow, the slab tearing out of its track, and the clatter of it landing.
@@ -1176,9 +1209,12 @@ function playDoorBreak(x, z) {
   const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 1.0, z);
   if (!panner) return;
   const level = SOUND_LEVELS.doorBreak;
-  playNoiseBurst({ duration: 0.5, frequency: 260, gain: 1.6 * level, useBrownNoise: true, playbackRate: 0.7, reverbAmount: 0.7, destination: panner });
-  playNoiseBurst({ duration: 0.9, filterType: 'bandpass', frequency: 2600, frequencyEnd: 700, resonance: 2.2, gain: 0.7 * level, attack: 0.02, delay: 0.08, reverbAmount: 0.6, destination: panner });
-  playTone({ waveform: 'triangle', frequency: 62, frequencyEnd: 34, duration: 0.7, gain: 1.0 * level, attack: 0.005, destination: panner });
+  playNoiseBurst({ duration: 0.5, frequency: 260, gain: 1.0 * level, useBrownNoise: true, playbackRate: 0.7, reverbAmount: 0.7, destination: panner });
+  playNoiseBurst({ duration: 0.9, filterType: 'bandpass', frequency: 2600, frequencyEnd: 700, resonance: 2.2, gain: 1.7 * level, attack: 0.02, delay: 0.08, reverbAmount: 0.6, destination: panner });
+  playTone({ waveform: 'triangle', frequency: 62, frequencyEnd: 34, duration: 0.7, gain: 0.55 * level, attack: 0.005, destination: panner });
+  // The slab itself, torn loose: this is the part that is heard.
+  playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 560, resonance: 1.2, gain: 4.0 * level, attack: 0.002, reverbAmount: 0.7, destination: panner });
+  if (audio.metalStruck) playMetalStrike({ shape: 'plate', frequency: 230 + Math.random() * 40, duration: 1.3, hardness: 0.7, damping: 0.5, bend: 0.05, gain: 1.0 * level, destination: panner });
   for (let clatter = 0; clatter < 4; clatter++) {
     const delay = 0.55 + clatter * (0.16 + Math.random() * 0.08);
     playResonantNoise({ frequency: 240 + Math.random() * 260, resonance: 20, duration: 0.3, gain: (0.56 - clatter * 0.1) * level, attack: 0.002, delay: delay, destination: panner });
