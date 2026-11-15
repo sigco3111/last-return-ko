@@ -17,6 +17,19 @@
   - multiple generators, could be only objective (3 or more if only objective, random fuel required per generator)
   - fuel spawn closer to generators, not across the map and back
 
+- more cave like rooms for deeper levels (or different locations)
+  - caves
+  - mineshafts
+  - open field with houses :P
+  - limiting certain rooms to level sizes
+
+- extract hard-coded rooms to json files (with a few exceptions?)
+
+- 'event' periods with event decorations
+  - christmas
+  - halloween
+  - easter
+
 - multiplayer? (mostly for item collection, like extraction looters), more interesting with the 
 
 ### Implemented
