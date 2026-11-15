@@ -207,7 +207,7 @@ function initializeAudioEngine() {
   // ---- the Hollow: a positional voice that follows it around ----
   audio.hollowPanner = createPannerNode(0, 1.6, 0, 2.2, 1.3);
   audio.hollowGrowlGain = context.createGain();
-  audio.hollowGrowlGain.gain.value = 0.4;
+  audio.hollowGrowlGain.gain.value = 0; // silent until updateHollowVoice says there is a Hollow to hear
   audio.hollowGrowlGain.connect(audio.hollowPanner);
   // 1. The throat rattle, rounded off and pushed through three "formants": the resonances of a mouth and chest.
   audio.hollowThroatSource = context.createBufferSource();
@@ -776,6 +776,61 @@ function updateHollowVoice(x, z, isActive, aggression, shriekLevel, dt, gameTime
     else playHollowClickTrain(4 + Math.floor(Math.random() * 7), 0.13, 0.05, 0.55);
     audio.nextHollowClickTime = gameTime + (aggression > 0.6 ? randomBetween(0.9, 1.8) : randomBetween(2.5, 6.5));
   }
+}
+
+// Turns off everything that belongs to play itself: the growl, the shriek, the static and the scanner's ticking.
+// Called whenever the game leaves play for a screen (title, death, ending), so nothing is left running under it.
+function silenceGameplaySounds() {
+  if (!isAudioReady()) return;
+  const now = audio.context.currentTime;
+  for (const node of [audio.hollowGrowlGain, audio.hollowScreechGain, audio.staticGain, audio.scannerGain, audio.scannerWhineGain]) {
+    node.gain.cancelScheduledValues(now);
+    node.gain.setTargetAtTime(0, now, 0.05);
+  }
+}
+
+// ---- The Hollow's voice, by what it is doing. All of these come from where it stands. ----
+
+// The moment it knows where you are: a roar from the chest, tearing at the top.
+function playHollowRoar() {
+  if (!isAudioReady()) return;
+  const out = audio.hollowPanner;
+  playResonantNoise({ frequency: 150, frequencyEnd: 92, resonance: 6, duration: 1.7, gain: 3.06, attack: 0.05, destination: out });
+  playResonantNoise({ frequency: 430, frequencyEnd: 240, resonance: 5, duration: 1.5, gain: 2.16, attack: 0.04, destination: out });
+  playNoiseBurst({ duration: 1.3, filterType: 'bandpass', frequency: 1600, frequencyEnd: 800, gain: 1.44, resonance: 3, attack: 0.03, destination: out });
+  playTone({ waveform: 'sawtooth', frequency: 98, frequencyEnd: 56, duration: 1.6, gain: 0.81, attack: 0.05, destination: out });
+}
+
+// While it is after you: a short snarl every few seconds, never twice at the same pitch.
+function playHollowSnarl() {
+  if (!isAudioReady()) return;
+  const out = audio.hollowPanner, pitch = 0.85 + Math.random() * 0.4;
+  playResonantNoise({ frequency: 210 * pitch, frequencyEnd: 130 * pitch, resonance: 5, duration: 0.55, gain: 3.25, attack: 0.02, destination: out });
+  playNoiseBurst({ duration: 0.45, filterType: 'bandpass', frequency: 1300 * pitch, frequencyEnd: 700 * pitch, gain: 1.25, resonance: 3, attack: 0.02, destination: out });
+}
+
+// It has lost you: one long breath out through its teeth.
+function playHollowLostHiss() {
+  if (!isAudioReady()) return;
+  playNoiseBurst({ duration: 1.8, filterType: 'bandpass', frequency: 3200, frequencyEnd: 1100, gain: 1.00, resonance: 2, attack: 0.25, destination: audio.hollowPanner });
+  playResonantNoise({ frequency: 260, frequencyEnd: 150, resonance: 8, duration: 1.4, gain: 1.00, attack: 0.3, destination: audio.hollowPanner });
+}
+
+// Searching: it tests the air. Two or three short pulls of breath, then a low huff.
+function playHollowSniff() {
+  if (!isAudioReady()) return;
+  const out = audio.hollowPanner, pulls = 2 + Math.floor(Math.random() * 2);
+  for (let pull = 0; pull < pulls; pull++) {
+    playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 900, frequencyEnd: 2400, gain: 3.63, resonance: 2.5, attack: 0.03, delay: pull * 0.24, destination: out });
+  }
+  playResonantNoise({ frequency: 170, frequencyEnd: 120, resonance: 7, duration: 0.5, gain: 3.96, attack: 0.05, delay: pulls * 0.24 + 0.1, destination: out });
+}
+
+// It has heard something and is coming to look: a quick run of clicks that speeds up, ending on a rising note.
+function playHollowCuriousTrill() {
+  if (!isAudioReady()) return;
+  playHollowClickTrain(7, 0.11, 0.035, 1.6);
+  playResonantNoise({ frequency: 520, frequencyEnd: 860, resonance: 20, duration: 0.35, gain: 2.2, attack: 0.03, delay: 0.5, destination: audio.hollowPanner });
 }
 
 function playHeartbeat(strength) {

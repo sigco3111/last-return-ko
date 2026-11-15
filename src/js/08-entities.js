@@ -35,6 +35,8 @@ const hollow = {
   heldAmount: 0,
   walkPhase: 0,
   lastStepSign: 1,
+  voiceTimer: 0,     // seconds until its next snarl or sniff
+  trillCooldown: 0,  // seconds before it may make its "heard something" sound again
   graceTimer: 0,
   stingerCooldown: 0,
   armRaise: 0,
@@ -84,6 +86,7 @@ function emitNoise(x, z, radius) {
   if (distance < effectiveRadius * 0.3) {
     beginHollowHunt(x, z);
   } else {
+    if (hollow.state !== HOLLOW_STATE_INVESTIGATE && hollow.trillCooldown <= 0) { playHollowCuriousTrill(); hollow.trillCooldown = 8; }
     hollow.state = HOLLOW_STATE_INVESTIGATE;
     hollow.targetX = x; hollow.targetZ = z;
     hollow.doubleBackTimer = 0;
@@ -357,6 +360,9 @@ function beginHollowHunt(x, z) {
   if (hollow.state !== HOLLOW_STATE_HUNT) {
     hollow.state = HOLLOW_STATE_HUNT;
     hollow.timeSinceLastHunt = 0;
+    // The roar is its own voice and comes every time. The stinger is the game's, and is rationed.
+    playHollowRoar();
+    hollow.voiceTimer = randomBetween(2.0, 3.2);
     if (hollow.stingerCooldown <= 0) {
       playStinger('spotted');
       showCaption('[it has found you]');
@@ -449,6 +455,15 @@ function updateHollow(dt) {
   hollow.stingerCooldown -= dt;
   hollow.turnCaptionCooldown -= dt;
   hollow.timeSinceLastHunt += dt;
+  hollow.trillCooldown -= dt;
+  // Its voice says what it is doing: snarls while it is after you, pulls of breath while it searches.
+  // TWEAK: the pairs of numbers are the shortest and longest gap between two of them, in seconds.
+  hollow.voiceTimer -= dt;
+  if (hollow.voiceTimer <= 0) {
+    if (hollow.state === HOLLOW_STATE_HUNT) { playHollowSnarl(); hollow.voiceTimer = randomBetween(2.2, 4.0); }
+    else if (hollow.state === HOLLOW_STATE_SEARCH) { playHollowSniff(); hollow.voiceTimer = randomBetween(2.8, 5.0); }
+    else hollow.voiceTimer = 1;
+  }
   updateDirector(dt);
   const distanceToPlayer = distanceBetweenPoints(figure.x, figure.z, player.x, player.z);
   const beamHits = figure.hitsThisFrame;
@@ -513,6 +528,8 @@ function updateHollow(dt) {
       hollow.searchTimer = TUNING.hollowSearchSeconds;
       chooseHollowSearchCenter();
       showCaption('[it has lost you]');
+      playHollowLostHiss();
+      hollow.voiceTimer = randomBetween(2.5, 4);
     }
   } else if (hollow.state === HOLLOW_STATE_INVESTIGATE) {
     speed = TUNING.hollowInvestigateSpeed;
