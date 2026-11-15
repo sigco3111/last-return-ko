@@ -236,14 +236,18 @@ function check(description, condition, detail) {
     hollow.state = 0; hollow.doubleBackTimer = 3;
     debug.simulate(0.3);
     result.started = { phase: director.phase, targetSteps: debug.stepsFromPlayerTo(hollow.targetX, hollow.targetZ), feint: hollow.doubleBackTimer };
-    // The player keeps quiet for twenty seconds: it must stay away the whole time.
-    let nearestSteps = Infinity;
+    // The player keeps quiet for twenty seconds: it must never come nearer than it was, and it must get to a far
+    // room. (Where it is at the twentieth second is not asked: if the far room was close enough to reach in
+    // fourteen, it is by then on its way to the next far room, and that walk can lead back past the middle.)
+    let nearestSteps = Infinity, farthestSteps = 0;
     const stepsAtStart = debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z);
     for (let second = 0; second < 20; second++) {
       debug.simulate(1);
-      nearestSteps = Math.min(nearestSteps, debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z));
+      const stepsNow = debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z);
+      nearestSteps = Math.min(nearestSteps, stepsNow);
+      farthestSteps = Math.max(farthestSteps, stepsNow);
     }
-    result.away = { stepsAtStart: stepsAtStart, nearestSteps: nearestSteps, stepsAfter: debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z), phase: director.phase, mode: debug.game.mode };
+    result.away = { stepsAtStart: stepsAtStart, nearestSteps: nearestSteps, farthestSteps: farthestSteps, stepsAfter: debug.stepsFromPlayerTo(hollow.figure.x, hollow.figure.z), phase: director.phase, mode: debug.game.mode };
     // Noise the player makes still reaches it: the breather protects nobody who shouts.
     debug.emitNoise(debug.player.x, debug.player.z, 80);
     result.afterNoise = { state: hollow.state };
@@ -260,7 +264,7 @@ function check(description, condition, detail) {
   check('once the chase is over it gets a real breather: sent to a far room, with no pretending to leave',
     breather.started.phase === 1 && breather.started.targetSteps >= 30 && breather.started.feint === 0, breather.started);
   check('during the breather it stays away from a player who keeps quiet',
-    breather.away.phase === 1 && breather.away.mode === 'playing' && breather.away.nearestSteps >= breather.away.stepsAtStart - 2 && breather.away.stepsAfter >= 25, breather.away);
+    breather.away.phase === 1 && breather.away.mode === 'playing' && breather.away.nearestSteps >= breather.away.stepsAtStart - 2 && breather.away.farthestSteps >= 30, breather.away);
   check('noise during a breather still brings it', breather.afterNoise.state === 1 || breather.afterNoise.state === 2, breather.afterNoise);
   check('the breather ends by itself, after at least 25 seconds, and the closing-in starts again',
     breather.ended.phase === 0 && breather.ended.seconds >= 25 && breather.ended.seconds < 90 && breather.ended.mode === 'playing', breather.ended);
