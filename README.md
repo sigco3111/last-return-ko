@@ -219,7 +219,7 @@ Open the address it prints (http://localhost:4471/) and press **Workshop** on th
 - Every sound the game makes has a row: a button for a sound that plays once, a tick box for one that goes on (room tone, the growl, static, the generator), so you can hear one sound against another. **Play all in turn** goes through the whole list.
 - Sounds that come from somewhere (the Hollow, doors, machinery, drips) are put straight ahead of you, at the distance the slider says. The cross in the hall marks the spot.
 - After a sound has played, its row shows how loud the output was (peak and average, where 1.0 is the loudest a speaker can go), in red if it would distort or nothing came out. These are the numbers `npm run audio-check` prints.
-- How loud each sound is, is set in `src/js/07-audio.js`. Change a number there and the page reloads with the list where you left it, so the loop is: change, save, press the button again.
+- How loud each sound is, is set in `SOUND_LEVELS`, the table at the top of `src/js/07-audio.js`: one multiplier per sound, where 1 is the sound as built and 2 doubles the signal (one clear step louder, not twice as loud). Under each sound's name is which number is its own and what it is now. Change it and the page reloads with the list where you left it, so the loop is: change, save, press the button again.
 - `npm run audio-check -- --listen` starts the dev server and opens this tool directly. So does an address ending in `#sounds`.
 - To add a sound to the list, add a line to `SOUND_BOARD_ENTRIES` in `src/dev/23-workshop-sounds.js`. It is then measured by `npm run audio-check` as well.
 
@@ -233,7 +233,7 @@ How the Hollow is paced is the block headed "The director" there: how fast menac
 
 How bent the Hollow is has two values there: `hollowBaseStoop` (how bent it always is) and `hollowCeilingGap` (how much room it keeps over its head, so how deeply it ducks under low ceilings and doors). Its size is in `FIGURE_PROPORTIONS_HOLLOW`, best changed in the workshop; whatever size you give it, it fits itself to the ceilings.
 
-For looks and feel that live elsewhere (point colours and size, glow, mouse sensitivity, footstep spacing, door speed, body shapes, sound levels), search the `src/js` folder for `TWEAK`. Each one marks a number that is safe to change and says what it does.
+For looks and feel that live elsewhere (point colours and size, glow, mouse sensitivity, footstep spacing, door speed, body shapes), search the `src/js` folder for `TWEAK`. How loud each sound is, is in one table: `SOUND_LEVELS` at the top of `src/js/07-audio.js`, best tuned with [the sound board](#the-workshop). Each one marks a number that is safe to change and says what it does.
 
 To change rooms, objects or wall lettering, see the short guide at the top of `buildFacilityLayout` in `src/js/03-layout.js`. To see what a change to a room or a body looks like while you make it, use [the workshop](#the-workshop).
 

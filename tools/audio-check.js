@@ -38,7 +38,7 @@ async function listen() {
   try {
     address = (await startDevServer({ port: port })).address;
     console.log('Sound board: ' + address + '#sounds');
-    console.log('Every sound is on a button. Change a number in src/js/07-audio.js and the page reloads with it.');
+    console.log('Every sound is on a button. Change its number in SOUND_LEVELS (top of src/js/07-audio.js) and the page reloads with it.');
     console.log('Ctrl+C stops.');
   } catch (error) {
     if (error.code !== 'EADDRINUSE') throw error;
