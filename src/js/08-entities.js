@@ -58,7 +58,6 @@ const stills = [];
 let stillsAreHunting = false;
 const stillDistanceField = new Int16Array(TILE_COUNT);
 let stillDistanceFieldAge = 99;
-let stillShiftCaptionCooldown = 0;
 
 
 // ---------------------------------------------------------------------------
@@ -90,7 +89,7 @@ function emitNoise(x, z, radius) {
   if (distance < effectiveRadius * 0.3) {
     beginHollowHunt(x, z);
   } else {
-    if (hollow.state !== HOLLOW_STATE_INVESTIGATE && hollow.trillCooldown <= 0) { playHollowCuriousTrill(); hollow.trillCooldown = 8; }
+    if (hollow.state !== HOLLOW_STATE_INVESTIGATE && hollow.trillCooldown <= 0) { playHollowCuriousTrill(); showCaption('hollowTrill', hollow.figure); hollow.trillCooldown = 8; }
     hollow.state = HOLLOW_STATE_INVESTIGATE;
     hollow.targetX = x; hollow.targetZ = z;
     hollow.doubleBackTimer = 0;
@@ -106,6 +105,13 @@ function canPlayerOpenDoor(door) {
   if (door.kind === DOOR_KIND_POWERED) return game.flags.powerOn;
   if (door.kind === DOOR_KIND_KEYCARD) return game.flags.powerOn && game.flags.keycardLevel >= (door.cardLevel || 1);
   return false;
+}
+
+// A door somewhere else opening or closing is worth a caption: nothing but you and what hunts you opens doors.
+// The one you are standing at is your own doing and gets none.
+function captionDoorSound(door, isOpening) {
+  if (distanceBetweenPoints(door.centerX, door.centerZ, player.x, player.z) < TUNING.captionOwnDoorMetres) return;
+  showCaption(isOpening ? 'doorOpens' : 'doorCloses', { x: door.centerX, z: door.centerZ });
 }
 
 function updateDoors(dt) {
@@ -153,6 +159,7 @@ function updateDoors(dt) {
           door.centerX + slab.halfX + 0.1, door.baseY + 2.5, door.centerZ + slab.halfZ + 0.1,
           convertSecondsToPointLifeCode(TUNING.doorImprintSeconds));
         playDoorSound(door.centerX, door.centerZ, true);
+        captionDoorSound(door, true);
         if (openedByPlayer) emitNoise(door.centerX, door.centerZ, TUNING.noiseRadiusDoor);
       }
     } else {
@@ -161,7 +168,7 @@ function updateDoors(dt) {
     const target = wantsOpen || door.closeDelay > 0 ? 1 : 0;
     const previousFraction = door.openFraction;
     door.openFraction = approachValue(door.openFraction, target, dt * 1.7); // TWEAK: 1.7 = a door takes about 0.6 s to open
-    if (previousFraction === 1 && door.openFraction < 1) playDoorSound(door.centerX, door.centerZ, false);
+    if (previousFraction === 1 && door.openFraction < 1) { playDoorSound(door.centerX, door.centerZ, false); captionDoorSound(door, false); }
     const slab = door.slab;
     slab.centerY = door.baseY + 1.15 + door.openFraction * DOOR_TRAVEL_HEIGHT;
     slab.minimumY = slab.centerY - slab.halfY;
@@ -276,7 +283,7 @@ function beginDirectorBreather() {
   director.avoidTimer = 4;
   hollow.doubleBackTimer = 0; // a breather is a real one: no pretending to leave and coming straight back
   chooseHollowRoamTarget();
-  if (distanceBetweenPoints(hollow.figure.x, hollow.figure.z, player.x, player.z) < 22) showCaption('[it is moving off]');
+  showCaption('hollowMovingOff', hollow.figure);
 }
 
 function updateDirector(dt) {
@@ -388,8 +395,10 @@ function beginHollowHunt(x, z) {
     hollow.voiceTimer = randomBetween(2.0, 3.2);
     if (hollow.stingerCooldown <= 0) {
       playStinger('spotted');
-      showCaption('[it has found you]');
+      showCaption('hollowFound', hollow.figure);
       hollow.stingerCooldown = 14;
+    } else {
+      showCaption('hollowRoar', hollow.figure); // without the stinger there is still the roar to put into words
     }
   }
 }
@@ -496,8 +505,8 @@ function updateHollow(dt) {
   // TWEAK: the pairs of numbers are the shortest and longest gap between two of them, in seconds.
   hollow.voiceTimer -= dt;
   if (hollow.voiceTimer <= 0) {
-    if (hollow.state === HOLLOW_STATE_HUNT) { playHollowSnarl(); hollow.voiceTimer = randomBetween(2.2, 4.0); }
-    else if (hollow.state === HOLLOW_STATE_SEARCH) { playHollowSniff(); hollow.voiceTimer = randomBetween(2.8, 5.0); }
+    if (hollow.state === HOLLOW_STATE_HUNT) { playHollowSnarl(); showCaption('hollowSnarl', figure); hollow.voiceTimer = randomBetween(2.2, 4.0); }
+    else if (hollow.state === HOLLOW_STATE_SEARCH) { playHollowSniff(); showCaption('hollowSniff', figure); hollow.voiceTimer = randomBetween(2.8, 5.0); }
     else hollow.voiceTimer = 1;
   }
   updateDirector(dt);
@@ -516,7 +525,7 @@ function updateHollow(dt) {
   if (isInBeam && !isEnraged) {
     hollow.anger = Math.min(1, hollow.anger + dt * TUNING.hollowAngerPerBeamSecond * game.difficulty.angerFactor);
     if (!hollow.wasInBeam && hollow.turnCaptionCooldown <= 0 && hollow.state !== HOLLOW_STATE_HUNT) {
-      showCaption('[it turns toward the light]');
+      showCaption('hollowTurns', figure);
       hollow.turnCaptionCooldown = 12;
     }
   } else if (!isEnraged && hollow.state !== HOLLOW_STATE_HUNT) {
@@ -548,7 +557,7 @@ function updateHollow(dt) {
   if (hollow.anger >= 1 && !isEnraged) {
     hollow.enragedTimer = TUNING.hollowEnragedDurationSeconds;
     playStinger('enraged');
-    showCaption('[the beam no longer holds it]');
+    showCaption('hollowEnraged', figure);
   }
   if (hollow.enragedTimer > 0) {
     hollow.enragedTimer -= dt;
@@ -571,7 +580,7 @@ function updateHollow(dt) {
       hollow.state = HOLLOW_STATE_SEARCH;
       hollow.searchTimer = TUNING.hollowSearchSeconds;
       chooseHollowSearchCenter();
-      showCaption('[it has lost you]');
+      showCaption('hollowLost', figure);
       playHollowLostHiss();
       hollow.voiceTimer = randomBetween(2.5, 4);
     }
@@ -664,6 +673,7 @@ function updateHollow(dt) {
     hollow.lastStepSign = stepSign;
     if (isHollowInVent) playHollowVentStep(figure.x, figure.z, isHunting ? 1 : 0.8);
     else playHollowFootstep(figure.x, figure.z, isHunting ? 1 : 0.7);
+    showCaption(isHollowInVent ? 'hollowVentSteps' : (isHunting ? 'hollowStepsHunting' : 'hollowSteps'), figure);
     stepHollowOnNoisyFloor(figure.x, figure.z, isHunting); // glass and loose plates give it away as they would you
   }
 
@@ -790,7 +800,6 @@ function updateStills(dt) {
   const isPlayerInStore = playerZone === level.storeZone;
   const isPlayerInReach = level.stillZones.indexOf(playerZone) >= 0;
   if (!isPlayerInReach || debugState.options.creaturesIgnorePlayer) return;
-  stillShiftCaptionCooldown -= dt;
   stillDistanceFieldAge += dt;
   if (stillsAreHunting && stillDistanceFieldAge > 0.3) {
     computeDistanceField(stillDistanceField, findNearestWalkableTileIndex(player.x, player.z), 0, level.stillZones);
@@ -856,7 +865,7 @@ function updateStills(dt) {
     if (still.distanceMovedSinceSound > 0.7) {
       still.distanceMovedSinceSound = 0;
       playStillShuffleSound(figure.x, figure.z);
-      if (stillShiftCaptionCooldown <= 0) { showCaption('[something shifts behind you]'); stillShiftCaptionCooldown = 9; }
+      showCaption('stillShifts', figure);
     }
   }
 }

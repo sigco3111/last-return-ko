@@ -19,6 +19,7 @@ const labSource = String(function () {
     d.hollow.isActive = false;
     d.setDebugOption('invulnerable', true);
     d.setDebugOption('unlimitedScanner', true);
+    d.settings.captions = 'all'; // every sound is put into words, so that the last check can ask which ones were
   };
   // True once the Hollow is on its feet and has reached the player.
   lab.hasReachedPlayer = function () {
@@ -480,6 +481,15 @@ const labSource = String(function () {
   check('a generated station with two keycards: the same',
     hatches.generated.keycards === 2 && hatches.generated.parts >= 3 && hatches.generated.hatches >= hatches.generated.parts && hatches.generated.problems.length === 0, hatches.generated);
   check('the same station always gets the same hatches', hatches.classicSame && hatches.generatedSame, [hatches.classicSame, hatches.generatedSame]);
+
+  // --- everything above made its noises with captions on "every sound": each of those sounds has been put into words ---
+  const captioned = await inGame(() => {
+    const counts = window.lastReturnDebug.captionCounts, shown = {};
+    for (const key of ['hollowOverhead', 'hatchRattle', 'hatchForced', 'hatchBurst', 'doorPounded', 'doorPoundedAgain', 'doorPoundedLast', 'doorBreaks']) shown[key] = counts[key] || 0;
+    return shown;
+  });
+  check('crawling overhead, a hatch rattling, a hatch forced, each of the three kinds of pounding and a door giving way were all captioned',
+    Object.keys(captioned).every((key) => captioned[key] > 0), captioned);
 
   check('no script errors were reported', problems.length === 0, problems);
   await browser.close();

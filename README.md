@@ -91,6 +91,60 @@ If the browser will not capture the mouse, hold the mouse button and drag to loo
 
 The screen is quiet by default: there is the dark, the points and the aiming ring. The objective shows for a few seconds when it changes, the heat and stamina meters only while they are in use, and everything else is on the map screen (`Tab` or `M`). "Full instruments" in the settings puts the range readouts, the minimap and all the meters back, as in the pictures here.
 
+## Captions
+
+The lines in square brackets at the bottom of the screen. **Captions** in the settings (title screen and pause menu) has three levels:
+
+| Level | What you get |
+|---|---|
+| **Off** | No captions. You go by your ears. |
+| **Tells** | Only what the Hollow has just done: `[it has found you]`, `[it has lost you]`, `[it is moving off]`, `[it turns toward the light]`, `[the beam no longer holds it]`. A new game starts here. |
+| **Every sound** | The tells, and every sound that matters, each with an arrow to where it comes from and how near it is. For playing without hearing the game. |
+
+Messages are not captions and always show: a locked door, lift control, a hint, and everything Dispatch says.
+
+On **every sound**:
+
+- Each line ends in an arrow and a word: `[heavy footsteps] ← near`. The arrow pointing up is straight ahead of you, down is behind. The word is `close` (under 5 m), `near` (under 12 m) or `far`. Both follow the sound as it moves and as you turn.
+- A caption only shows where its sound could be heard. Each has a distance, worked out from how loud the sound measures: the Hollow's calm growl carries about 6 m, its footsteps 10, a door 26, its roar 50. Walls do not stop sound in this game, so they do not stop a caption.
+- A sound that goes on is one steady line for as long as it lasts. The Hollow's footsteps are one line and its voice another, so when it stops dead to listen the footsteps line goes and the growl stays. That is the same tell ears get.
+- Never more than four lines. When there are more, the ones that say least make way.
+- A door you open yourself gets no caption. A door that opens somewhere else does: nothing but you and what hunts you opens doors.
+
+<details>
+<summary><strong>Every caption (spoilers)</strong></summary>
+
+| Caption | When |
+|---|---|
+| `[it has found you]` | It starts to hunt you, with the stinger. Tell. |
+| `[it has lost you]` | It gives up the chase and starts to search. Tell. |
+| `[it is moving off]` | A breather begins while it is within 22 m. Tell. |
+| `[it turns toward the light]` | The beam first touches it while it is not hunting. Tell. |
+| `[the beam no longer holds it]` | Its anger is full. Tell. |
+| `[a low, rattling growl]` / `[growling, loud and fast]` | It is near: calm, or hunting. |
+| `[it roars]` | It finds you again too soon after the last time for the stinger. |
+| `[it snarls]` / `[it sniffs the air]` / `[a short, rising trill]` | While it hunts / while it searches / it heard something and goes to look. |
+| `[it shrieks in the beam]` | Held in the beam and angry. |
+| `[heavy footsteps]` / `[heavy footsteps, fast]` | It walks / it hunts. |
+| `[sheet metal booms: something is in a vent]` | It crawls through a vent. |
+| `[something crawls overhead]` | It is above the ceiling. |
+| `[a ceiling hatch rattles]` | It goes into an open hatch, or is about to drop out of one. |
+| `[a ceiling hatch is forced open]` / `[a ceiling hatch bursts open]` | The first time it goes in through a hatch / comes out of one. |
+| `[it is at the door]` / `[it is at the door again]` / `[it is at the door again. The door will not hold]` | It pounds on a door: untouched, battered, about to go. |
+| `[the door gives way]` | The door breaks. |
+| `[a door opens]` / `[a door closes]` | A door more than 3.5 m from you. |
+| `[glass crunches under something]`, `[a floor plate clanks under something]`, `[cans scatter, and not by you]` | The Hollow sets off a noisy patch of floor. |
+| `[glass crunches under your boots]`, `[a floor plate clanks under you]`, `[cans scatter from your feet]` | You do. |
+| `[something shifts]` | One of the Stills moves. |
+| `[a breath behind you]` | The apparition that stands behind you. |
+| `[water drips]`, `[a pipe groans]`, `[metal ticks as it settles]`, `[knocking, far below]` | The station. |
+| `[the lift bell rings]` | The lift is on its way down, or has arrived. |
+| `[your heart is pounding]` | Something is pressing you hard. |
+
+</details>
+
+Not captioned: your own footsteps, the scanner, the hum of the generator and the lift machinery, and the stingers. The stance, heat and interference meters and the lift countdown already show those.
+
 ## How the scanner works
 
 - **Paint** fires a cone of pulses for as long as you hold it. Each pulse that hits something leaves one point. Narrow the beam for detail, widen it to cover ground.
@@ -123,7 +177,7 @@ The screen is quiet by default: there is the dark, the points and the aiming rin
 - It has no keycard. A door that opens by itself opens for it, and so does a powered door once the mains is on. A keycard door never opens for it, and neither does the lift door. It gets through one of those only while it stands open for you, so a keycard door closing behind you is a real way to break a chase.
 - It has its own way round: the **crawlspace** above the ceilings. Every part of the station that keycard doors close off has at least one ceiling hatch, which shows in a scan in the warning colour. A hatch starts shut, a flat square in the ceiling. The first time the Hollow goes up or comes down through one it forces the cover with a bang you hear from a long way off, and from then on that cover hangs down: an open hatch is one it has been through. The Hollow reaches up into one, crawls, and drops out of another.
 - That way round is slow and loud. You hear it thumping overhead, from where it is, all the way. The hatch it is about to come out of rattles for two and a half seconds before it drops, and for its first second on the floor it cannot catch you. Up there a scan finds nothing, and it cannot reach down.
-- Before it goes round, it goes at the door. Hunting you, with a keycard door shut in its face that you hold the card for, it walks up to it and **pounds** on it for a few seconds. A door takes two bouts of that. In the third it gives way for good: the slab lies in the doorway and the opening stays open for the rest of the descent. Angry, it hits harder and the door goes sooner. So a door will save you twice, and the caption tells you when it is at a door it has battered before, and when that door will not hold.
+- Before it goes round, it goes at the door. Hunting you, with a keycard door shut in its face that you hold the card for, it walks up to it and **pounds** on it for a few seconds. A door takes two bouts of that. In the third it gives way for good: the slab lies in the doorway and the opening stays open for the rest of the descent. Angry, it hits harder and the door goes sooner. So a door will save you twice. Each blow lands heavier on a door it has battered before, and with captions on "every sound" the line says so in words: at the door, at the door again, and when that door will not hold.
 - It only goes at a door you could open yourself, so a door it breaks was never one that kept you out, and it cannot be baited into opening a lock for you. The lift door cannot be broken.
 - It only goes up when walking is much further or impossible. In Kessel-9, getting round one shut keycard door to a player nine metres away on the other side takes it a little under forty seconds.
 
@@ -152,7 +206,7 @@ Three things keep them fair, and are worth knowing:
 - Walk over one and the Hollow hears it from eight metres on Standard, where it hears a walking step from a little over three. Run over one and it hears it from fifteen, where a running step carries eleven. It comes to look at that spot. (On Nightmare, where it hears further: eleven and a half metres, and twenty-two.)
 - **Crouched, you cross one without a sound.** That is the whole trick, and the first one you set off tells you so.
 - It goes off the moment you step onto it, and again with every footstep you take on it. It never wears out. Shuffling about on its edge does not set it off again: you have to get clear of it and come back.
-- The Hollow sets them off too. It does not care. You should: a crunch of glass two rooms away, with nobody else down here, tells you where it is. Within twenty metres of you a line on screen says so as well: `[glass crunches under something]`.
+- The Hollow sets them off too. It does not care. You should: a crunch of glass two rooms away, with nobody else down here, tells you where it is. With captions on "every sound" a line says so as well, from as far as it can be heard: `[glass crunches under something]`.
 - About half of them lie where you have to walk, in corridors and a step or two inside doors. The rest lie anywhere. Never on a doorstep, on stairs, in water, over a pit or a grate, in a vent, in the lift or its lobby, or under your feet at something you have to use.
 - Kessel-9 has eight. A generated station has about two for every five rooms and corridors, never two within six metres of each other. The seed decides where, so the same seed has them in the same places.
 
@@ -291,6 +345,8 @@ How bent the Hollow is has two values there: `hollowBaseStoop` (how bent it alwa
 
 For looks and feel that live elsewhere (point colours and size, glow, mouse sensitivity, footstep spacing, door speed, body shapes), search the `src/js` folder for `TWEAK`. How loud each sound is, is in one table: `SOUND_LEVELS` at the top of `src/js/07-audio.js`, best tuned with [the sound board](#the-workshop). Each one marks a number that is safe to change and says what it does.
 
+Every caption is one line in `CAPTIONS` in `src/js/00-config.js`: what it says, whether it is a tell or a sound, from how far it shows, how long it stays, and which captions it shares a line with. If you make a sound louder in `SOUND_LEVELS`, it carries further; `npm run audio-check` prints a **heard to** distance for every sound that comes from somewhere, which is the number to put in that caption's `withinMetres`. To caption a new sound, add a line to the table and call `showCaption('itsName', whereItComesFrom)` next to the line that plays the sound.
+
 To change rooms, objects or wall lettering, see the short guide at the top of `buildFacilityLayout` in `src/js/03-layout.js`. To see what a change to a room or a body looks like while you make it, use [the workshop](#the-workshop).
 
 Generated stations are tuned at the top of `src/js/03-levelgen.js`: `GENERATED_SIZE_PRESETS` sets how many extra rooms and ducts each size gets, and `GENERATED_LAYOUT_PRESETS` sets how often rooms get corridors and how far from the lift they spread. `STAIR_STEP_COUNT` and `STAIR_STEP_HEIGHT` set how long and steep the stairs are, and so how deep the lower level is. Each size's `vents` is how many vents it tries to fit; `VENT_HEIGHT` in `src/js/02-world.js` is how high they are inside. To add a kind of room, build it in [the workshop](#the-workshop), or write a `furnish...` function for it there (the room's north-west corner is at 0, 0) and add one entry to `ROOM_CATALOGUE` with its size, the places a door may go, and which lock tiers it may sit behind. Keep the floor just inside each door clear. Then run `npm test`: it builds 120 stations and reports any that cannot be walked or finished.
@@ -327,7 +383,7 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/08-phantoms.js` | The apparitions: each kind, and the part that decides when one comes |
 | `src/js/09-difficulty.js` | Threat levels: turns the "Custom" settings into the same kind of record a preset is |
 | `src/js/09-player.js` | Keyboard, mouse and touch input, movement, the scanner |
-| `src/js/10-interface.js` | HUD, map, messages and overlay screens |
+| `src/js/10-interface.js` | HUD, map, messages, captions and overlay screens |
 | `src/js/11-game.js` | Objectives, checkpoints, death, ending and the main loop |
 | `src/js/12-debug.js` | The little the game itself knows about debug mode: switches that are all off, and hooks that stay empty |
 | `src/js/13-start.js` | One line that starts the game once everything above is loaded |
@@ -378,6 +434,8 @@ Then the Hollow and locked doors: each kind of door with the Hollow standing at 
 
 Then the noisy things on the floor: Kessel-9 and a generated station get the number the size calls for, of more than one kind, none in a bad place, and the same seed puts them in the same places. Then a patch is walked over with the Hollow standing far enough away that it could not have heard a footstep (it comes to look at that very spot, and you are told what it was), crossed again crouched with the Hollow three and a half metres off (nothing carries, it does not stir), run over with the Hollow further away than a running step carries, and walked over by the Hollow itself (once or twice in a crossing; made to shuffle to and fro over the edge for three seconds, it sets it off once, not thirty times; with you two metres away a line on screen says so, and with you at the lift none does). The 120 generated stations each have theirs checked for being in a place they are allowed.
 
+Then the captions: every caption the game asks for is in the table and every one in the table is used; a new game starts on "tells", both menus change the level, and it is kept between visits; off shows none, tells shows only the tells, every sound shows all; each caption shows just inside its distance and not just outside it; the arrow is right in all eight directions and follows both a sound that moves and a player who turns; the growl waits for a snarl on the line they share; a sound that goes on is one steady line; there are never more than four. Then each caption is made to happen in play, from the Hollow wandering past (footsteps and growl; footsteps gone when it stops to listen) to a door it opens eight metres away, the Stills, the breath, the lift bell, the station's own sounds and a vent in a generated station. The locked-door and noisy-floor tests run with captions on every sound and check theirs.
+
 Then the Custom threat level: the panel opens and closes, a moved control changes the setting and the sentence beside it, the values survive closing the page, bad stored values are put right, a descent plays by what was set, heat, temper, stamina and apparitions each change by the factor asked for, one life really offers no checkpoint, and the ending names the descent as custom and keeps its best time apart.
 
 Then the apparitions. Where and when they come is chance, so nothing there trusts one lucky try: each kind is summoned from about two thousand standing places in three stations and every one must be where its rules allow (in range, in sight, on good floor, never popping into the beam). Each kind is then played through: the watcher scanned, approached and ignored; the one behind you turned on and not turned on; the dummy coming closer and going; the crosser waiting, walking and vanishing; the crawler in its vent; the one in your face with loaded dice, with its limit, and switched off. Two long quiet walks check the timing (none too soon, never two at once, never the same kind twice running, never more than the descent is allowed), and a last part checks that none comes while the Hollow hunts or is near, and that one that is out goes when a hunt starts.
@@ -394,7 +452,7 @@ starts the dev build, with [debug mode](#debug-mode) and [the workshop](#the-wor
 npm run audio-check
 ```
 
-measures every sound, because a test cannot listen: how loud each one is to an ear, how large its wave is at the speakers, how much the compressor held it back and where its energy sits. It fails only if one is silent. It then lists, for you to judge, the sounds whose wave is over what a speaker can take, and the ones with a big wave that an ear hears little of. It takes about three minutes; name one or more sounds to measure only those, for example `npm run audio-check -- hollow door`. It cannot tell you whether a sound is good. Only ears can:
+measures every sound, because a test cannot listen: how loud each one is to an ear, how large its wave is at the speakers, how much the compressor held it back, where its energy sits, and for a sound that comes from somewhere, how far away it can still be heard (the distance its caption should have). It fails only if one is silent. It then lists, for you to judge, the sounds whose wave is over what a speaker can take, and the ones with a big wave that an ear hears little of. It takes about three minutes; name one or more sounds to measure only those, for example `npm run audio-check -- hollow door`. It cannot tell you whether a sound is good. Only ears can:
 
 ```bash
 npm run audio-check -- --listen
@@ -425,6 +483,8 @@ Generated stations are proven finishable, not proven good. Nobody has yet walked
 The locked doors and the crawlspace are checked for their rules and their timings. Whether half a minute overhead is the right price for a door, whether the thumps tell you enough about where it is going, and whether the rattle is enough warning, need ears and play. The numbers are in `src/js/00-config.js` under "The crawlspace", and the two sounds are on the sound board. How many bouts a door should take, and whether the pounding frightens or only delays, need play: `hollowDoorDamagePerBout` in the same place sets it (0.34 is three bouts, 0.5 two, 0 never). Dispatch has one new line for the first broken door (`doorBroken`), not yet recorded. Not done: you cannot lock or bar a door yourself. The Stills still open the doors of their own rooms.
 
 The noisy things on the floor are checked for where they lie and for what stepping on them does. Nobody has heard them: the three sounds were tuned by measuring, not by ear, and are on the sound board to be listened to and changed. How many is right, and whether half of them in the walking lines is a hazard or a nuisance, need play. The numbers are in `src/js/00-config.js` under "Noisy things on the floor", and how often each kind turns up is at the top of `src/js/03-noisy-floor.js`.
+
+The captions are checked for what shows when and where. Whether "every sound" is enough to play by has not been tried by anyone who cannot hear the game, and that is the only test that counts. The distances come from measurements of each sound alone in silence, down to the level of the room tone; with the growl and a heartbeat going, ears lose the quiet ones sooner than the captions do. The wording, the three distance words and the limit of four lines are first guesses.
 
 The apparitions keep to their rules, which is what the test can show. How often is right, whether the dummy that comes closer frightens or annoys, and whether the one in your face reads as a face or only as a mass of points a metre away, need playing. All their numbers are in `src/js/00-config.js` under "Apparitions", and debug mode can summon each kind where you stand.
 

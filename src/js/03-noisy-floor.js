@@ -14,11 +14,12 @@
 // ---------------------------------------------------------------------------
 
 // TWEAK: the kinds. `share` is how often a kind turns up compared with the others. `hint` is what you are told the
-// first time you set one off; `caption` is the line you get when the Hollow sets one off within earshot.
+// first time you set one off. `ownCaption` and `hollowCaption` name the captions for you and for the Hollow
+// setting one off; what those say is in CAPTIONS in 00-config.js.
 const NOISY_FLOOR_KINDS = {
-  glass: { label: 'broken glass', share: 4.5, hint: 'Broken glass. That carried. Crouch and you can cross it without a sound.', caption: '[glass crunches under something]' },
-  plate: { label: 'a loose floor plate', share: 3, hint: 'A loose floor plate. That carried. Crouch and you can cross it without a sound.', caption: '[a floor plate clanks under something]' },
-  cans: { label: 'empty cans', share: 2.5, hint: 'Empty cans. That carried. Crouch and you can pick your way through without a sound.', caption: '[cans scatter, and not by you]' }
+  glass: { label: 'broken glass', share: 4.5, hint: 'Broken glass. That carried. Crouch and you can cross it without a sound.', ownCaption: 'ownGlass', hollowCaption: 'hollowOnGlass' },
+  plate: { label: 'a loose floor plate', share: 3, hint: 'A loose floor plate. That carried. Crouch and you can cross it without a sound.', ownCaption: 'ownPlate', hollowCaption: 'hollowOnPlate' },
+  cans: { label: 'empty cans', share: 2.5, hint: 'Empty cans. That carried. Crouch and you can pick your way through without a sound.', ownCaption: 'ownCans', hollowCaption: 'hollowOnCans' }
 };
 
 // The patches of this station: { x, z, index, kind }. `index` is the tile; a patch is one tile.
@@ -209,6 +210,7 @@ function stepPlayerOnNoisyFloor() {
   }
   noisyFloorCounts.byPlayer++;
   playNoisyFloorSound(patch.kind, player.isSprinting ? 1 : 0.75, null);
+  showCaption(NOISY_FLOOR_KINDS[patch.kind].ownCaption);
   if (!game.hasShownNoisyFloorHint) {
     game.hasShownNoisyFloorHint = true;
     showMessage(NOISY_FLOOR_KINDS[patch.kind].hint, 6, 'warning');
@@ -223,7 +225,7 @@ function stepHollowOnNoisyFloor(x, z, isHunting) {
   hollowNoisyFloorLastTime = game.time;
   noisyFloorCounts.byHollow++;
   playNoisyFloorSound(patch.kind, isHunting ? 1.9 : 1.6, patch); // louder than yours on purpose: it is heavier, and this is your warning
-  if (distanceBetweenPoints(patch.x, patch.z, player.x, player.z) < TUNING.noisyFloorCaptionMetres) showCaption(NOISY_FLOOR_KINDS[patch.kind].caption);
+  showCaption(NOISY_FLOOR_KINDS[patch.kind].hollowCaption, patch);
 }
 
 // Checks the patches of the station that is loaded. Returns a list of problems (empty when fine).

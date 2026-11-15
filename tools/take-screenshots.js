@@ -8,7 +8,7 @@ async function capture(page, name) {
   // Messages and captions are part of play, but they cover the picture.
   await page.evaluate(() => {
     document.getElementById('hud-messages').replaceChildren();
-    document.getElementById('hud-caption').classList.remove('is-visible');
+    document.getElementById('hud-caption').replaceChildren();
   });
   await drawFrames(page, 3);
   await page.evaluate(() => document.getElementById('hud-messages').replaceChildren());
