@@ -94,7 +94,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     const other = debug.getStationFingerprint();
     debug.loadStation('generated', 4471, 'medium', 'mixed');
     const again = debug.getStationFingerprint();
-    return { same: first === again, different: first !== other, wordSeed: debug.chooseSeedFromText('okafor') === debug.chooseSeedFromText('okafor'),
+    return { same: first === again, different: first !== other, wordSeed: debug.chooseSeedFromText('ripley') === debug.chooseSeedFromText('ripley'),
       numberSeed: debug.chooseSeedFromText('4471'), emptySeedsDiffer: debug.chooseSeedFromText('') !== debug.chooseSeedFromText('') };
   });
   check('the same seed builds the same station, and another seed a different one', repeat.same && repeat.different, repeat);

@@ -35,7 +35,7 @@ A night-shift controller at the surface, talking to you over a poor radio link. 
 | `uploadStarted.mp3` | Upload received. The car is on its way down. Forty seconds. It is not a quiet machine. | Businesslike. The last sentence is a dry understatement. |
 | `liftArrived.mp3` | The car is at your level. Get in quick. | Urgent now, but still quiet. He does not raise his voice. |
 
-## Voice 2: I. Okafor, survey lead of Crew 2 (optional)
+## Voice 2: A. Ripley, survey lead of Crew 2 (optional)
 
 The three survey spools are her dictated field notes. With a recording, a spool is read aloud while its text is open, through a softer "dictation machine" effect. A different voice from Dispatch: a professional in her thirties or forties, exact with words. Each spool is one file; leave a short pause between paragraphs.
 

@@ -56,7 +56,7 @@ for (const key of Object.keys(config.RADIO_MESSAGES)) {
   lines.push('| `' + key + '.mp3` | ' + config.RADIO_MESSAGES[key] + ' | ' + (dispatchDirections[key] || '') + ' |');
 }
 lines.push('');
-lines.push('## Voice 2: I. Okafor, survey lead of Crew 2 (optional)');
+lines.push('## Voice 2: A. Ripley, survey lead of Crew 2 (optional)');
 lines.push('');
 lines.push('The three survey spools are her dictated field notes. With a recording, a spool is read aloud while its text is open, through a softer "dictation machine" effect. A different voice from Dispatch: a professional in her thirties or forties, exact with words. Each spool is one file; leave a short pause between paragraphs.');
 lines.push('');
