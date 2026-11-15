@@ -9,11 +9,12 @@
   - same for shaft number and rooms, allowing the same room multiple times with different indicator?
 - random 'locations' to go along with work orders (not just Kessel-9 pumping annex)
   - random objectives and rooms tied to location types? pumping annex has shaft 9, others might not. 
+- captions as setting, not for normal play (and then for more things, for accessibility)
 
 - more random objectives
   - item collection, multi-stage generators, activate and escape
   - only relevant objectives on map
-  - fuel not always required
+  - fuel not always required (already a thing it seems)
   - multiple generators, could be only objective (3 or more if only objective, random fuel required per generator)
   - fuel spawn closer to generators, not across the map and back
 
@@ -30,7 +31,7 @@
   - halloween
   - easter
 
-- multiplayer? (mostly for item collection, like extraction looters), more interesting with the 
+- multiplayer? (mostly for item collection, like extraction looters), more interesting with the opened github issue #1
   - dev backdoor to mess with people :P (play/direct the monsters, play sounds, control doors, disco mode with random lidar dots coming out of a disco ball and music)
     - only on same server host, not other hosted
 
