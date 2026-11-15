@@ -263,6 +263,162 @@ function updateHollowInCrawlspace(dt) {
 }
 
 // ---------------------------------------------------------------------------
+// Breaking a door down
+//
+// Hunting, with a keycard door shut between it and you, it does not turn away for the crawlspace at once.
+// It goes to the door and pounds on it. One bout of pounding does not break a door; it gives up, leaves that
+// door alone for a while and goes round. But the damage stays. The third bout on the same door (sooner if it
+// is angry) and the door gives way for good: the slab is on the floor and the doorway stands open.
+//
+// Two limits:
+//   - It only goes at a door you could open yourself, with the card you are carrying. So a door it breaks is
+//     never one that was keeping you out, and it cannot be used to skip a lock.
+//   - The lift door cannot be broken.
+// ---------------------------------------------------------------------------
+
+function isDoorBreakable(door) {
+  return door.kind === DOOR_KIND_KEYCARD && !door.isBroken;
+}
+
+// The middle of the floor tile on each side of a door: [{ x, z, index }, { x, z, index }], or null if it has
+// no walkable floor on both sides.
+function getDoorSides(door) {
+  const runsAlongX = isWalkableAt(door.tileX - 1, door.tileZ) && isWalkableAt(door.tileX + 1, door.tileZ);
+  const first = runsAlongX ? [door.tileX - 1, door.tileZ] : [door.tileX, door.tileZ - 1];
+  const second = runsAlongX ? [door.tileX + 1, door.tileZ] : [door.tileX, door.tileZ + 1];
+  if (!isWalkableAt(first[0], first[1]) || !isWalkableAt(second[0], second[1])) return null;
+  return [first, second].map(function (tile) { return { x: tile[0] + 0.5, z: tile[1] + 0.5, index: tileIndexAt(tile[0], tile[1]) }; });
+}
+
+// While it hunts: is there a shut door close by that would be a much shorter way to where it is going?
+// Returns { door, stand } (`stand` is the floor on its own side of the door), or null.
+// Uses the Hollow's own distance field, so it must be called while that field is for where it is hunting to.
+function findDoorWorthBreaking() {
+  if (TUNING.hollowDoorBangSeconds <= 0 || !game.flags.powerOn) return null;
+  const figure = hollow.figure, field = hollow.distanceField;
+  const hereIndex = findNearestWalkableTileIndex(figure.x, figure.z);
+  if (hereIndex < 0) return null;
+  const stepsRound = field[hereIndex]; // the way it would have to go as things stand (maybe "no way at all")
+  let best = null, bestSaving = TUNING.hollowDoorBangWorthSteps;
+  for (const door of doors) {
+    if (!isDoorBreakable(door) || door.bangCooldown > 0) continue;
+    if (tileBlocksHollow[tileIndexAt(door.tileX, door.tileZ)] !== 1) continue;  // it is open: just walk through
+    if (game.flags.keycardLevel < door.cardLevel) continue;                     // not one you could open: leave it be
+    const sides = getDoorSides(door);
+    if (!sides) continue;
+    for (let order = 0; order < 2; order++) {
+      const near = sides[order], far = sides[1 - order];
+      const metres = distanceBetweenPoints(figure.x, figure.z, near.x, near.z);
+      if (metres > TUNING.hollowDoorBangWithinMetres || field[far.index] >= NAVIGATION_UNREACHABLE) continue;
+      if (!hasClearHollowWalkingLine(figure.x, figure.z, near.x, near.z)) continue;
+      const stepsThrough = metres + 2 + field[far.index];
+      const saving = stepsRound - stepsThrough;
+      if (saving >= bestSaving) { bestSaving = saving; best = { door: door, stand: near }; }
+    }
+  }
+  return best;
+}
+
+// Called every frame while it hunts. Decides whether to go at a door, and walks it up to the door it chose.
+function updateHollowDoorChoice(dt) {
+  const figure = hollow.figure;
+  if (hollow.doorBang) {
+    const bang = hollow.doorBang;
+    bang.timer += dt;
+    // The door opened after all (you came back to it), or it is taking too long to get there: forget it.
+    if (isDoorPassableToHollow(bang.door) || bang.timer > 6) { hollow.doorBang = null; return; }
+    if (distanceBetweenPoints(figure.x, figure.z, bang.standX, bang.standZ) < 0.45) {
+      bang.isPounding = true; bang.timer = 0; bang.hits = 0; bang.hitTimer = 0.35;
+    }
+    return;
+  }
+  hollow.doorCheckTimer -= dt;
+  if (hollow.doorCheckTimer > 0) return;
+  hollow.doorCheckTimer = 0.4;
+  // Its distance field has to be the one for where it is hunting to, or the sums below mean nothing.
+  if (hollow.fieldTargetIndex !== findNearestWalkableTileIndex(hollow.lastKnownPlayerX, hollow.lastKnownPlayerZ)) return;
+  if (hollow.fieldVersion !== hollowNavigationVersion) return;
+  const found = findDoorWorthBreaking();
+  if (found) hollow.doorBang = { door: found.door, standX: found.stand.x, standZ: found.stand.z, isPounding: false, timer: 0, hits: 0, hitTimer: 0 };
+}
+
+// One frame of the Hollow pounding on a door. Like the crawlspace, this is all it does while it lasts.
+function updateHollowDoorBang(dt) {
+  const bang = hollow.doorBang, door = bang.door, figure = hollow.figure, pose = figure.pose;
+  figure.hitsThisFrame = 0;
+  hollow.currentSpeed = 0;
+  if (isDoorPassableToHollow(door)) { hollow.doorBang = null; hollow.fieldTargetIndex = -1; return; } // it opened: through it
+  bang.timer += dt;
+  bang.hitTimer -= dt;
+  // Squared up to the door, both arms going up and coming down on it.
+  const towardDoor = Math.atan2(door.centerX - figure.x, -(door.centerZ - figure.z));
+  figure.yaw += clampNumber(wrapAngleToPi(towardDoor - figure.yaw), -dt * 8, dt * 8);
+  const windUp = clampNumber(bang.hitTimer / TUNING.hollowDoorBangEverySeconds, 0, 1); // 1 just after a blow, 0 as the next lands
+  pose.armRaise = interpolateLinear(1.25, 2.5, Math.sin(windUp * Math.PI));
+  pose.elbowBend = 0.2; pose.lean = 0.22 + 0.12 * (1 - windUp); pose.legSwing = 0; pose.armSwing = 0; pose.fingerSplay = 0.2;
+  const fit = fitHollowUnderCeiling(figure, getHeadroomAt(figure.x, figure.z), 0.3, TUNING.hollowCeilingGap);
+  pose.stretch = approachValue(pose.stretch, fit.stretch, dt * 2); pose.stoop = approachValue(pose.stoop, fit.stoop, dt * 3);
+  updateFigureCapsules(figure);
+
+  if (bang.hitTimer <= 0) {
+    const blowsInOneBout = Math.max(1, Math.round(TUNING.hollowDoorBangSeconds / TUNING.hollowDoorBangEverySeconds));
+    const isEnraged = hollow.enragedTimer > 0;
+    bang.hitTimer = TUNING.hollowDoorBangEverySeconds * (0.85 + Math.random() * 0.3);
+    bang.hits++;
+    // Every blow takes its share of what a bout does. Anger makes each one count for more; enraged, for twice as much.
+    const damagePerBlow = TUNING.hollowDoorDamagePerBout * (1 + TUNING.hollowDoorDamageAngerBonus * hollow.anger) * (isEnraged ? 2 : 1) / blowsInOneBout;
+    door.damage = Math.min(1, door.damage + damagePerBlow);
+    playDoorBang(door.centerX, door.centerZ, 0.8 + 0.3 * hollow.anger + 0.25 * door.damage);
+    if (bang.hits === 1) {
+      // What you are told depends on the state of the door: untouched, already battered, or about to go.
+      const damageBefore = door.damage - damagePerBlow;
+      const willGoThisBout = damageBefore + damagePerBlow * blowsInOneBout >= 0.999;
+      showCaption(willGoThisBout ? '[it is at the door again. The door will not hold]' : (damageBefore > 0.01 ? '[it is at the door again]' : '[it is at the door]'));
+    }
+    if (door.damage >= 1) { breakDoor(door); hollow.doorBang = null; hollow.fieldTargetIndex = -1; return; }
+    if (bang.hits >= blowsInOneBout) {
+      // The door held. It leaves it for now and goes round; what it did to the door stays done.
+      door.bangCooldown = TUNING.hollowDoorBangCooldownSeconds;
+      hollow.doorBang = null;
+      hollow.fieldTargetIndex = -1;
+    }
+  }
+}
+
+// The door gives way. From now on the doorway stands open, for everyone, and what is left of the slab lies in it.
+function breakDoor(door) {
+  if (door.isBroken) return;
+  const slab = door.slab;
+  door.isBroken = true; door.damage = 1; door.openFraction = 1; door.closeDelay = 0;
+  // Remember how the slab stood, so that the next descent can have its door back.
+  door.slabStanding = { halfX: slab.halfX, halfY: slab.halfY, halfZ: slab.halfZ, boundsHalfX: slab.boundsHalfX, boundsHalfZ: slab.boundsHalfZ, blocksMovement: slab.blocksMovement };
+  removePointsInsideBox(door.centerX - 0.6, door.baseY, door.centerZ - 0.6, door.centerX + 0.6, door.baseY + 2.5, door.centerZ + 0.6);
+  // Flat on the floor of the doorway, buckled: something to scan and to step over, nothing that stops anyone.
+  slab.halfX = 0.46; slab.halfZ = 0.46; slab.halfY = 0.04;
+  slab.boundsHalfX = 0.46; slab.boundsHalfZ = 0.46;
+  slab.centerY = door.baseY + 0.04; slab.minimumY = door.baseY; slab.maximumY = door.baseY + 0.08;
+  slab.blocksMovement = false; slab.isRemoved = false;
+  playDoorBreak(door.centerX, door.centerZ);
+  showCaption('[the door gives way]');
+  if (!game.flags.hasHeardOfBrokenDoor) {
+    game.flags.hasHeardOfBrokenDoor = true;
+    scheduleEvent(3.5, function () { playRadioLine('doorBroken'); });
+  }
+  refreshHollowDoorBlocks();
+}
+
+// Puts a door back as it was built: whole, undamaged, standing. For the start of a new descent.
+function mendDoor(door) {
+  door.damage = 0; door.bangCooldown = 0;
+  if (!door.isBroken) return;
+  door.isBroken = false;
+  const slab = door.slab, standing = door.slabStanding;
+  slab.halfX = standing.halfX; slab.halfY = standing.halfY; slab.halfZ = standing.halfZ;
+  slab.boundsHalfX = standing.boundsHalfX; slab.boundsHalfZ = standing.boundsHalfZ;
+  slab.blocksMovement = standing.blocksMovement;
+}
+
+// ---------------------------------------------------------------------------
 // Putting the hatches in. Done once for each station, after everything else is built.
 // ---------------------------------------------------------------------------
 

@@ -30,6 +30,7 @@ A night-shift controller at the surface, talking to you over a poor radio link. 
 | `coresWanted.mp3` | One more thing while you are down there. The lab wants the core samples Crew 2 pulled. Grey tubes. Bring them all. | An afterthought, as if someone has just handed him a note. Only in stations with the core sample job. |
 | `winchBreakerOpen.mp3` | Upload received. But the car is not answering. The winch breaker has tripped. I have marked the panel on your map. Close it. | The first two sentences flat. Then a beat. Then quicker: he knows what this means for you. Only with the breaker job. |
 | `breakerClosed.mp3` | Breaker is in. The car is on its way down. Forty seconds. Get back to the lobby. | Fast and low. The last sentence is an order. Only with the breaker job. |
+| `doorBroken.mp3` | I just lost a door on the board. Those are rated for the whole shaft coming down. Do not count on the ones you have left. | Shaken, and trying not to sound it. The second sentence is disbelief. The last is advice, quietly. Heard the first time it breaks a door down. |
 | `allSpools.mp3` | That is all three. Go back to the lift lobby and upload them. | Relief he is trying not to show. |
 | `uploadStarted.mp3` | Upload received. The car is on its way down. Forty seconds. It is not a quiet machine. | Businesslike. The last sentence is a dry understatement. |
 | `liftArrived.mp3` | The car is at your level. Get in quick. | Urgent now, but still quiet. He does not raise his voice. |

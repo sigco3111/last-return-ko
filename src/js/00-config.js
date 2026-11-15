@@ -175,6 +175,18 @@ const TUNING = {
                                       // square metres of floor ...
   hollowHatchMostPerPart: 3,          // ... up to this many ...
   hollowHatchLeastMetresApart: 10,    // ... and never two closer together than this
+
+  // ---- Breaking a door down (see 08-crawlspace.js) ----
+  // Hunting, with a keycard door shut between it and you that you have the card for, it goes at the door first.
+  // It pounds on it for a while. A door takes so much of that, and then it gives way for good.
+  hollowDoorBangSeconds: 3.3,         // how long one bout of pounding lasts
+  hollowDoorBangEverySeconds: 0.55,   // the time between two blows
+  hollowDoorDamagePerBout: 0.34,      // how much of a door one bout uses up. 0.34: the third bout breaks it. 0 switches breaking off
+                                      // (it still pounds). 1: any door goes in one bout.
+  hollowDoorDamageAngerBonus: 0.5,    // the angrier it is the harder it hits: at full anger a bout does this much more (0.5 = half as much again)
+  hollowDoorBangCooldownSeconds: 20,  // after a bout that did not break the door it leaves that door alone for this long, and goes round
+  hollowDoorBangWithinMetres: 7,      // it only goes at a door it is this close to, with a clear walk to it
+  hollowDoorBangWorthSteps: 15,       // and only if through the door is at least this many steps shorter than the way round
   // How the Hollow holds itself. Its size is in FIGURE_PROPORTIONS_HOLLOW (04-figures.js); these two decide how bent it is.
   hollowBaseStoop: 0.3,             // how bent it always is, from 0 (as upright as its hunch allows) to 1 (folded right over).
                                     // It still draws itself up when it stops to listen.
@@ -347,6 +359,7 @@ const RADIO_MESSAGES = {
   coresWanted: 'One more thing while you are down there. The lab wants the core samples Crew 2 pulled. Grey tubes. Bring them all.',
   winchBreakerOpen: 'Upload received. But the car is not answering. The winch breaker has tripped. I have marked the panel on your map. Close it.',
   breakerClosed: 'Breaker is in. The car is on its way down. Forty seconds. Get back to the lobby.',
+  doorBroken: 'I just lost a door on the board. Those are rated for the whole shaft coming down. Do not count on the ones you have left.',
   allSpools: 'That is all three. Go back to the lift lobby and upload them.',
   uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',
   liftArrived: 'The car is at your level. Get in quick.'

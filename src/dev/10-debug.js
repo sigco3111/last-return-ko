@@ -437,6 +437,10 @@ function buildDebugReadout() {
     lines.push('  in beam   ' + (hollow.wasInBeam ? 'yes' : 'no') + '   anger ' + hollow.anger.toFixed(2) + ' (notices at ' + TUNING.hollowAngerNoticeLevel + ')');
     if (hollow.doubleBackTimer > 0) lines.push('  feint     doubling back in ' + hollow.doubleBackTimer.toFixed(1) + ' s');
     lines.push('  sensed    ' + (hollow.timeSinceSensed < 90 ? hollow.timeSinceSensed.toFixed(1) + ' s ago' : 'never'));
+    if (hollow.doorBang) {
+      lines.push('  AT A DOOR ' + (hollow.doorBang.isPounding ? 'pounding, blow ' + hollow.doorBang.hits : 'walking up to it') + '; the door has taken ' +
+        Math.round(hollow.doorBang.door.damage * 100) + ' % of what it can');
+    }
     if (isHollowInCrawlspace()) {
       const crawl = hollow.crawlspace;
       const secondsLeft = crawl.phase === CRAWL_PHASE_CLIMBING ? TUNING.hollowCrawlClimbSeconds - crawl.timer :

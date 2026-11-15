@@ -45,6 +45,8 @@ const hollow = {
   fieldVersion: -1,           // the value of hollowNavigationVersion its way was last worked out for
   isTargetOutOfReach: false,  // where it was last sent is behind a door it cannot pass, with no way round
   crawlspace: null,           // while it is going through the crawlspace: where from, where to, how far along (08-crawlspace.js)
+  doorBang: null,             // while it is going at a door: which door, which side it stands on, how far along
+  doorCheckTimer: 0,          // it looks for a door worth breaking a few times a second, not every frame
   currentSpeed: 0,
   knowsPlayerPositionAlways: false
 };
@@ -108,6 +110,8 @@ function canPlayerOpenDoor(door) {
 
 function updateDoors(dt) {
   for (const door of doors) {
+    door.bangCooldown = Math.max(0, door.bangCooldown - dt);
+    if (door.isBroken) continue; // broken down: it stays as it fell
     let wantsOpen = false;
     let openedByPlayer = false;
     if (door.forcedState !== null) {
@@ -182,6 +186,7 @@ function activateHollow(x, z, graceSeconds) {
   hollow.graceTimer = graceSeconds;
   hollow.fieldTargetIndex = -1;
   cancelHollowCrawl();
+  hollow.doorBang = null;
   resetDirector(false);
   updateFigureCapsules(hollow.figure);
   setFigureRaycastable(hollow.figure, true);
@@ -190,6 +195,7 @@ function activateHollow(x, z, graceSeconds) {
 function deactivateHollow() {
   hollow.isActive = false;
   cancelHollowCrawl();
+  hollow.doorBang = null;
   setFigureRaycastable(hollow.figure, false);
 }
 
@@ -354,6 +360,7 @@ function relocateHollowAwayFromPlayer(graceSeconds) {
     if (steps < NAVIGATION_UNREACHABLE && steps > bestSteps && tileZone[index] !== level.storeZone) { bestSteps = steps; best = waypoint; }
   }
   cancelHollowCrawl();
+  hollow.doorBang = null;
   setFigureRaycastable(hollow.figure, true);
   hollow.figure.x = best[0]; hollow.figure.z = best[1];
   hollow.state = HOLLOW_STATE_ROAM;
@@ -495,6 +502,8 @@ function updateHollow(dt) {
   updateDirector(dt);
   // Above the ceiling, on its way round a locked door: nothing else happens until it has dropped out again.
   if (isHollowInCrawlspace()) { updateHollowInCrawlspace(dt); return; }
+  // Standing at a door, pounding on it: the same.
+  if (hollow.doorBang && hollow.doorBang.isPounding) { updateHollowDoorBang(dt); return; }
   const distanceToPlayer = distanceBetweenPoints(figure.x, figure.z, player.x, player.z);
   const beamHits = figure.hitsThisFrame;
   figure.hitsThisFrame = 0;
@@ -549,8 +558,12 @@ function updateHollow(dt) {
 
   // ---- decide where to go ----
   let speed = TUNING.hollowRoamSpeed;
+  if (hollow.state !== HOLLOW_STATE_HUNT) hollow.doorBang = null; // it only goes at doors while it is after you
   if (hollow.state === HOLLOW_STATE_HUNT) {
     hollow.targetX = hollow.lastKnownPlayerX; hollow.targetZ = hollow.lastKnownPlayerZ;
+    // A door shut in its face that it thinks it can get through: it goes and stands at it (see 08-crawlspace.js).
+    updateHollowDoorChoice(dt);
+    if (hollow.doorBang) { hollow.targetX = hollow.doorBang.standX; hollow.targetZ = hollow.doorBang.standZ; }
     speed = TUNING.hollowHuntSpeed * (1 + TUNING.hollowAngerSpeedBonus * hollow.anger);
     const reachedLastKnown = distanceBetweenPoints(figure.x, figure.z, hollow.targetX, hollow.targetZ) < 1.2;
     if (hollow.timeSinceSensed > TUNING.hollowMemorySeconds && (reachedLastKnown || hollow.timeSinceSensed > TUNING.hollowMemorySeconds + 7)) {
