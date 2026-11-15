@@ -2,7 +2,7 @@
   <canvas id="view-canvas" tabindex="0" aria-label="Scanner view of the station"></canvas>
 
   <div id="hud" hidden>
-    <div class="hud-block hud-top-left">
+    <div class="hud-block hud-top-left hud-fade" id="hud-block-objective">
       <div class="hud-label">WORK ORDER 4471-B</div>
       <div id="hud-objective" class="hud-objective"></div>
       <div class="hud-chips">
@@ -12,25 +12,25 @@
       </div>
     </div>
 
-    <div class="hud-block hud-top-right">
+    <div class="hud-block hud-top-right hud-fade" id="hud-block-map">
       <canvas id="minimap-canvas" width="168" height="168" aria-label="Map of scanned points"></canvas>
       <div id="hud-location" class="hud-label hud-location"></div>
     </div>
 
-    <div class="hud-block hud-bottom-left">
-      <dl class="readouts">
+    <div class="hud-block hud-bottom-left hud-fade" id="hud-block-instruments">
+      <dl class="readouts hud-fade" id="hud-readouts">
         <div><dt>RANGE</dt><dd id="readout-range">--.-- m</dd></div>
         <div><dt>TIME OF FLIGHT</dt><dd id="readout-flight">--- ns</dd></div>
         <div><dt>RETURNS</dt><dd id="readout-returns">0</dd></div>
         <div><dt>HEADING</dt><dd id="readout-heading">000&deg;</dd></div>
       </dl>
       <div class="meters">
-        <div class="meter"><span class="meter-name">EMITTER HEAT</span><span class="meter-track"><span id="bar-heat" class="meter-fill"></span></span></div>
-        <div class="meter"><span class="meter-name">STAMINA</span><span class="meter-track"><span id="bar-stamina" class="meter-fill meter-fill-calm"></span></span></div>
-        <div class="meter"><span class="meter-name">INTERFERENCE</span><span class="meter-track"><span id="bar-interference" class="meter-fill meter-fill-alarm"></span></span></div>
+        <div class="meter hud-fade" id="meter-heat"><span class="meter-name">EMITTER HEAT</span><span class="meter-track"><span id="bar-heat" class="meter-fill"></span></span></div>
+        <div class="meter hud-fade" id="meter-stamina"><span class="meter-name">STAMINA</span><span class="meter-track"><span id="bar-stamina" class="meter-fill meter-fill-calm"></span></span></div>
+        <div class="meter hud-fade" id="meter-interference"><span class="meter-name">INTERFERENCE</span><span class="meter-track"><span id="bar-interference" class="meter-fill meter-fill-alarm"></span></span></div>
         <div class="meter" id="meter-agitation" hidden><span class="meter-name">AGITATION</span><span class="meter-track"><span id="bar-agitation" class="meter-fill"></span></span></div>
       </div>
-      <div id="hud-stance" class="hud-label"></div>
+      <div id="hud-stance" class="hud-label hud-fade"></div>
     </div>
 
     <div id="reticle" aria-hidden="true"><div id="reticle-ring"></div><div id="reticle-dot"></div></div>
@@ -62,8 +62,10 @@
     <div class="map-frame">
       <div class="map-header">
         <span class="hud-label">POINT CLOUD · PLAN VIEW · NORTH UP</span>
+        <span id="map-status" class="hud-label map-status"></span>
         <button type="button" id="map-close" class="button-quiet">Close map</button>
       </div>
+      <div id="map-objective" class="map-objective"></div>
       <canvas id="map-canvas" width="760" height="640" aria-label="Plan view of everything scanned so far"></canvas>
       <div class="map-legend">
         <span><i class="legend-swatch legend-you"></i>You</span>
@@ -157,6 +159,11 @@
           <input type="range" id="title-sensitivity" data-setting="sensitivity" min="0.2" max="3" step="0.1" value="1">
           <label for="title-volume">Volume</label>
           <input type="range" id="title-volume" data-setting="volume" min="0" max="1" step="0.05" value="0.8">
+          <label for="title-hud">Screen</label>
+          <select id="title-hud" data-setting="hud">
+            <option value="quiet">Quiet: only what matters right now</option>
+            <option value="full">Full instruments</option>
+          </select>
         </div>
       </aside>
     </div>
@@ -180,6 +187,11 @@
         <input type="range" id="pause-sensitivity" data-setting="sensitivity" min="0.2" max="3" step="0.1" value="1">
         <label for="pause-volume">Volume</label>
         <input type="range" id="pause-volume" data-setting="volume" min="0" max="1" step="0.05" value="0.8">
+        <label for="pause-hud">Screen</label>
+        <select id="pause-hud" data-setting="hud">
+          <option value="quiet">Quiet</option>
+          <option value="full">Full instruments</option>
+        </select>
         <label for="pause-palette">Point colours</label>
         <select id="pause-palette" data-setting="palette">
           <option value="0">Range (ice)</option>

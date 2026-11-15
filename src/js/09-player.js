@@ -61,7 +61,8 @@ const settings = {
   stationSize: 'medium',    // a key of GENERATED_SIZE_PRESETS
   stationLayout: 'mixed',   // a key of GENERATED_LAYOUT_PRESETS
   stationLevels: 'two',     // a key of GENERATED_LEVEL_PRESETS
-  seedText: ''              // what is typed in the seed box; empty means a new random station each descent
+  seedText: '',             // what is typed in the seed box; empty means a new random station each descent
+  hud: 'quiet'              // 'quiet' shows instruments only while they matter; 'full' shows everything all the time
 };
 
 function loadSettings() {
@@ -78,6 +79,7 @@ function loadSettings() {
       if (GENERATED_LAYOUT_PRESETS[stored.stationLayout]) settings.stationLayout = stored.stationLayout;
       if (GENERATED_LEVEL_PRESETS[stored.stationLevels]) settings.stationLevels = stored.stationLevels;
       if (typeof stored.seedText === 'string') settings.seedText = stored.seedText.slice(0, 24);
+      if (stored.hud === 'quiet' || stored.hud === 'full') settings.hud = stored.hud;
     }
   } catch (error) { /* storage is optional */ }
 }

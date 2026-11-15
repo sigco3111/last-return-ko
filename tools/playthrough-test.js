@@ -25,6 +25,33 @@ function check(description, condition, detail) {
   await inGame(() => window.noReturnDebug.simulate(4));
   check('lift door closes behind the player', (await inGame(() => window.noReturnDebug.doors[0].openFraction)) === 0);
 
+  // --- the quiet screen: instruments stay out of the way until they have something to say ---
+  await drawFrames(page, 2);
+  const quiet = await inGame(() => {
+    const debug = window.noReturnDebug, faded = (id) => document.getElementById(id).classList.contains('is-faded');
+    const result = { setting: debug.settings.hud, readouts: faded('hud-readouts'), minimap: faded('hud-block-map'), heatCold: faded('meter-heat'), objectiveJustChanged: faded('hud-block-objective') };
+    debug.player.heat = 0.6;
+    return result;
+  });
+  await drawFrames(page, 2);
+  const quietLater = await inGame(() => {
+    const debug = window.noReturnDebug, faded = (id) => document.getElementById(id).classList.contains('is-faded');
+    const result = { heatWarm: faded('meter-heat') };
+    debug.player.heat = 0;
+    debug.settings.hud = 'full';
+    return result;
+  });
+  await drawFrames(page, 2);
+  const full = await inGame(() => {
+    const faded = (id) => document.getElementById(id).classList.contains('is-faded');
+    const result = { readouts: faded('hud-readouts'), minimap: faded('hud-block-map'), heatCold: faded('meter-heat') };
+    window.noReturnDebug.settings.hud = 'quiet';
+    return result;
+  });
+  check('the quiet screen hides the readouts, the minimap and a cold heat meter, shows the objective when it has just changed, and shows the heat meter once the emitter is warm',
+    quiet.setting === 'quiet' && quiet.readouts && quiet.minimap && quiet.heatCold && !quiet.objectiveJustChanged && !quietLater.heatWarm, { quiet: quiet, later: quietLater });
+  check('"Full instruments" shows them all', !full.readouts && !full.minimap && !full.heatCold, full);
+
   // --- voice recordings: a line with a recording is played, one without stays text only ---
   // Made-up line names are used, so this works whether or not real recordings are in assets/voice.
   const voice = await inGame(async () => {
