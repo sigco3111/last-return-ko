@@ -5,8 +5,8 @@
 // ---------------------------------------------------------------------------
 
 // The whole map, in one-metre tiles. The classic station uses the top-left 76 x 64; generated stations may use it all.
-const GRID_WIDTH = 256;
-const GRID_DEPTH = 256;
+const GRID_WIDTH = 512;
+const GRID_DEPTH = 512;
 const TILE_COUNT = GRID_WIDTH * GRID_DEPTH;
 
 const tileIsOpen = new Uint8Array(TILE_COUNT);
