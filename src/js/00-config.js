@@ -90,10 +90,10 @@ const QUALITY_PRESETS = {
   // raysPerSecond: pulses fired per second while painting. Higher fills surfaces in faster.
   // sweepRays:     pulses fired by one full sweep.
   // renderScale:   1.0 draws at full screen resolution, 0.75 draws smaller and stretches (faster, softer).
-  low: { key: 'low', maximumPoints: 250000, raysPerSecond: 5000, sweepRays: 15000, renderScale: 0.75 },
-  medium: { key: 'medium', maximumPoints: 500000, raysPerSecond: 5000, sweepRays: 15000, renderScale: 0.8 },
-  high: { key: 'high', maximumPoints: 1000000, raysPerSecond: 5000, sweepRays: 15000, renderScale: 1.0 },
-  ultra: { key: 'ultra', maximumPoints: 2000000, raysPerSecond: 5000, sweepRays: 15000, renderScale: 1.0 },
+  low: { key: 'low', maximumPoints: 250000, raysPerSecond: 6000, sweepRays: 20000, renderScale: 0.75 },
+  medium: { key: 'medium', maximumPoints: 500000, raysPerSecond: 6000, sweepRays: 20000, renderScale: 0.8 },
+  high: { key: 'high', maximumPoints: 1000000, raysPerSecond: 6000, sweepRays: 20000, renderScale: 1.0 },
+  ultra: { key: 'ultra', maximumPoints: 2000000, raysPerSecond: 6000, sweepRays: 20000, renderScale: 1.0 },
 };
 
 const TUNING = {
@@ -120,9 +120,9 @@ const TUNING = {
   heatCoolingPerSecond: 0.2,        // 0.2 = five seconds from overheated back to cold when not scanning
   overheatRecoveryLevel: 0.4,       // after overheating, the scanner stays locked until heat drops to this
   sweepDurationSeconds: 2.4,        // how long one full sweep takes. You walk at half speed during it.
-  sweepHeatCost: 0.28,              // heat added by one sweep. Sweeps are refused above 0.78 heat.
-  sweepHalfWidthDegrees: 52,        // how far left and right of centre a sweep reaches
-  sweepHalfHeightDegrees: 36,       // how far above and below centre a sweep reaches
+  sweepHeatCost: 0.35,              // heat added by one sweep. Sweeps are refused above 0.78 heat.
+  sweepHalfWidthDegrees: 55,        // how far left and right of centre a sweep reaches
+  sweepHalfHeightDegrees: 40,       // how far above and below centre a sweep reaches
 
   // ---- Noise you make ------------------------------------------------------
   // Each of these is a one-off sound. If the Hollow is within this many metres it hears it
