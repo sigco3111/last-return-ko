@@ -676,7 +676,7 @@ function updatePlaying(dt) {
     updateHollow(dt);
     updateStills(dt);
   }
-  updatePhantoms();
+  updatePhantoms(dt);
   if (game.mode === 'playing') updateGameProgress(dt);
   updateAtmosphere(dt);
 }
@@ -894,6 +894,11 @@ function startApplication() {
     missionObjectIds: { fuelCan: OBJECT_FUEL_CAN, winchBreaker: OBJECT_WINCH_BREAKER, firstCore: OBJECT_CORE_FIRST },
     grantSpools: function () { game.flags.spoolsCollected = 3; refreshObjective(); },
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
+    // Apparitions: the list of those that exist, the part that decides when the chance ones come, and a way to call one up.
+    phantoms: phantoms, phantomDirector: phantomDirector, phantomKindKeys: PHANTOM_KIND_KEYS, phantomVentMouths: phantomVentMouths,
+    summonPhantom: summonPhantom, getPhantomHoldReason: getPhantomHoldReason, isRealThreatNearPlayer: isRealThreatNearPlayer,
+    canPlayerSeePoint: canPlayerSeePoint, getAngleFromPlayerView: getAngleFromPlayerView, getScannedHalfAngle: getScannedHalfAngle,
+    canPhantomStandOnTile: canPhantomStandOnTile, playPhantomBreath: playPhantomBreath,
     use: function (objectId) { useInteractable(findInteractableByObjectId(objectId)); },
     sweep: function () { input.wantsSweep = true; },
     simulate: function (seconds) {

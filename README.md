@@ -125,6 +125,21 @@ The screen is quiet by default: there is the dark, the points and the aiming rin
 - They only move while nothing is scanning them.
 - A scan shows where each one stood at that moment. Their old outlines linger for a while, so a room can look more crowded, or less, than it is.
 
+**Apparitions** are figures that are only in the point cloud. They cannot touch you. A few stand at fixed places, there the first time you walk into their room. The rest come by chance, at a place chosen at that moment from where you are standing and which way you are looking, so no two descents have them in the same spots, and a seed does not fix them.
+
+- **The watcher** stands some way off, facing you, at the end of a corridor or the far side of a room. Gone once you have had a proper look, or if you walk toward it.
+- **Behind you.** A breath at your back. Turn and scan, and something is reaching for you from a few metres away. Gone almost as soon as the scan finds it.
+- **The dummy.** One of the calibration mannequins, standing where none should be. Scan it and look away, and it is closer. Look away again and it is gone.
+- **The crosser** walks across the far end of whatever you are scanning, from one side to the other, and does not come back.
+- **The crawler** is on its knees and hands in the mouth of a vent, looking out into the room. Only in stations that have vents.
+- **In your face.** About one scan in a hundred, at most once a descent and never in the first two minutes, you start a scan and it is bent down right in front of you. It is gone a moment later.
+
+Three things keep them fair, and are worth knowing:
+
+- They are silent. Everything real in the station makes its own noise; an apparition never borrows one. The breath is the only sound they have. They also scan in the colour of the walls, not in the Hollow's colour.
+- They belong to the quiet stretches. None comes while the Hollow is hunting, searching or near, or while the Stills are close, and one that is out vanishes the moment that changes. When something real is happening, everything the scanner shows you is real.
+- They are rare: about four in Kessel-9, up to ten in a massive station. One you never scanned does not count. A descent shows you as many different kinds as it can before it repeats one.
+
 **The lift** takes forty seconds to arrive once the spools are uploaded, and the Hollow can hear it from anywhere in the station.
 
 **Extra jobs** only come up in the Uncharted annex. The seed decides which of the three a station has: a small station has none or one, a medium one, a large one or two, a massive two or all three.
@@ -166,6 +181,7 @@ Open the address it prints (http://localhost:4471/) and start a descent. Press `
 **Do**
 
 - Restore power, give the keycard or all spools, summon, send away or remove the Hollow, wake the Stills, bring the lift, reveal the whole map, clear the point cloud, and jump to any room.
+- **Apparition**: pick a kind and summon it where you stand. Each kind wants its own sort of place (the crosser a crossing in view, the crawler a vent), and the game says so if there is none. The readout shows how many this descent has had, and why none may come right now.
 
 **Live tuning** lists every number from `src/js/00-config.js` and lets you change it while the game runs. Changes are lost on reload, so copy the ones you like into the file.
 
@@ -249,7 +265,8 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/05-raycast.js` | What one laser pulse hits, and how far away |
 | `src/js/06-renderer.js` | Point cloud, depth-only world, scanner model, post-processing |
 | `src/js/07-audio.js` | Every sound, synthesised with the Web Audio API |
-| `src/js/08-entities.js` | Doors, the Hollow, the Stills and the apparitions |
+| `src/js/08-entities.js` | Doors, the Hollow and its director, the Stills |
+| `src/js/08-phantoms.js` | The apparitions: each kind, and the part that decides when one comes |
 | `src/js/09-player.js` | Keyboard, mouse and touch input, movement, the scanner |
 | `src/js/10-interface.js` | HUD, map, messages and overlay screens |
 | `src/js/11-game.js` | Objectives, checkpoints, death, ending and the main loop |
@@ -298,6 +315,8 @@ plays the whole objective chain in a headless browser and checks each step: leav
 
 It then builds 120 generated stations (40 of each size, across the three layouts, half with one level and half with two) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, each keycard only with the one before it, the shaft only with the last, and the fuel can, the core samples and the winch breaker where their rules say they must be. It checks that a seed always gives the same station (also after the browser has warmed up, which is what once broke it), plays the rules of each extra job, builds eight massive stations with three keycards each, walks down a flight of stairs on foot, tries a vent standing (no) and crouched (yes), sends the Hollow through it, and plays one two-level station from lift to lift, whatever extra job that station has, which includes the Hollow climbing the stairs from the shaft. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
 
+Then the apparitions. Where and when they come is chance, so nothing there trusts one lucky try: each kind is summoned from about two thousand standing places in three stations and every one must be where its rules allow (in range, in sight, on good floor, never popping into the beam). Each kind is then played through: the watcher scanned, approached and ignored; the one behind you turned on and not turned on; the dummy coming closer and going; the crosser waiting, walking and vanishing; the crawler in its vent; the one in your face with loaded dice, with its limit, and switched off. Two long quiet walks check the timing (none too soon, never two at once, never the same kind twice running, never more than the descent is allowed), and a last part checks that none comes while the Hollow hunts or is near, and that one that is out goes when a hunt starts.
+
 It ends with the workshop: on a copy of `src/` in a temporary folder it builds a room by clicking and dragging, saves it, finds it again in generated stations, changes a creature's proportions and writes them to the file, and checks that the page survives a source file that does not parse.
 
 ```bash
@@ -337,5 +356,7 @@ The rules are covered by the scripted test above. The test teleports between obj
 The director's rules are checked, and its rhythm was measured with scripted players who cannot hear or scan, which is not the same as playing against it. Whether a breather feels like relief or like the game going slack is for a real playthrough to decide.
 
 Generated stations are proven finishable, not proven good. Nobody has yet walked one from end to end with the Hollow hunting. They have more doors than Kessel-9, and every door you open makes noise, so they may play harder. The stairs and the vents are checked for being passable, by you and by what hunts you, but how a chase through them feels is untested. Vents are only in generated stations. Kessel-9 itself is still one level.
+
+The apparitions keep to their rules, which is what the test can show. How often is right, whether the dummy that comes closer frightens or annoys, and whether the one in your face reads as a face or only as a mass of points a metre away, need playing. All their numbers are in `src/js/00-config.js` under "Apparitions", and debug mode can summon each kind where you stand.
 
 The extra jobs and the stations with two or three keycards are checked the same way: they can always be finished, and the rules do what this page says. Whether a second walk for a fuel can is dread or a chore has not been played. Dispatch's five new lines for them (`lowerKeycardTaken`, `generatorNoFuel`, `coresWanted`, `winchBreakerOpen`, `breakerClosed`) have no recordings yet and show as text.

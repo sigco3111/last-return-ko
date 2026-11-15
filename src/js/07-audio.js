@@ -753,6 +753,16 @@ function playHollowFootstep(x, z, weight) {
   playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 1400, gain: 0.22 * weight, delay: 0.03, destination: panner });
 }
 
+// An apparition standing close behind you: one slow breath out, from where it stands. Nothing real in the
+// station makes this sound, so once you know it you know what it means.
+// TWEAK: `gain` is how loud each part is. The first line is the air, the second the faint low note under it.
+function playPhantomBreath(x, z) {
+  const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 1.7, z);
+  if (!panner) return;
+  playNoiseBurst({ duration: 1.5, filterType: 'bandpass', frequency: 950, frequencyEnd: 520, resonance: 1.4, gain: 1.0, attack: 0.55, destination: panner });
+  playResonantNoise({ frequency: 233, frequencyEnd: 207, resonance: 30, duration: 1.4, gain: 0.32, attack: 0.5, destination: panner });
+}
+
 // A Still moving while nothing is scanning it: one dry scrape of a foot.
 function playStillShuffleSound(x, z) {
   const panner = createTemporaryPanner(x, 0.1, z);

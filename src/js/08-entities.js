@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------------
 // Things that move: doors, the Hollow, the calibration dummies ("Stills")
-// and the apparitions that only ever exist as points.
+// (The apparitions that only ever exist as points are in 08-phantoms.js.)
 // ---------------------------------------------------------------------------
 
 const HOLLOW_STATE_ROAM = 0;
@@ -55,7 +55,6 @@ const stillDistanceField = new Int16Array(TILE_COUNT);
 let stillDistanceFieldAge = 99;
 let stillShiftCaptionCooldown = 0;
 
-const phantoms = [];
 
 // ---------------------------------------------------------------------------
 // Noise: anything loud the player does is reported here
@@ -831,50 +830,4 @@ function getNearestHuntingStillDistance() {
     nearest = Math.min(nearest, distanceBetweenPoints(still.figure.x, still.figure.z, player.x, player.z));
   }
   return nearest;
-}
-
-// ---------------------------------------------------------------------------
-// Phantoms: figures that show up in one scan and are gone in the next
-// ---------------------------------------------------------------------------
-
-function createPhantoms() {
-  phantoms.length = 0;
-  for (const definition of phantomDefinitions) {
-    const figure = createFigure(FIGURE_PROPORTIONS_HOLLOW, SURFACE_PROP, 'phantomImprintSeconds');
-    figure.x = definition.x; figure.z = definition.z; figure.yaw = definition.yaw;
-    figure.pose.lean = 0.05; figure.pose.headTilt = 0.4; figure.pose.armRaise = 0.03; figure.pose.fingerSplay = 0.5;
-    // Half drawn up, or as near to that as the ceiling where it stands allows.
-    const fit = fitHollowUnderCeiling(figure, getHeadroomAt(figure.x, figure.z), 0.35, 0.05);
-    figure.pose.stretch = fit.stretch; figure.pose.stoop = fit.stoop;
-    updateFigureCapsules(figure);
-    phantoms.push({ figure: figure, definition: definition, state: 0, firstHitTime: -1 });
-  }
-}
-
-function updatePhantoms() {
-  const playerZone = getZoneAtPosition(player.x, player.z);
-  for (const phantom of phantoms) {
-    if (phantom.state === 2) continue;
-    const figure = phantom.figure;
-    const distance = distanceBetweenPoints(figure.x, figure.z, player.x, player.z);
-    if (phantom.definition.onlyBeforePower && game.flags.powerOn) {
-      phantom.state = 2;
-      setFigureRaycastable(figure, false);
-      continue;
-    }
-    if (phantom.state === 0) {
-      if (playerZone === phantom.definition.triggerZone && distance > 7) {
-        phantom.state = 1;
-        setFigureRaycastable(figure, true);
-      }
-      continue;
-    }
-    if (figure.totalHits > 0 && phantom.firstHitTime < 0) phantom.firstHitTime = game.time;
-    const wasSeenLongEnough = phantom.firstHitTime >= 0 && figure.totalHits > 60 && game.time - phantom.firstHitTime > 1.5;
-    if (wasSeenLongEnough || distance < 5.5) {
-      phantom.state = 2;
-      setFigureRaycastable(figure, false);
-      if (figure.totalHits > 25) playStinger('phantom');
-    }
-  }
 }

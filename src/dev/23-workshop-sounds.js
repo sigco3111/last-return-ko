@@ -144,6 +144,9 @@ const SOUND_BOARD_ENTRIES = [
   // ---- the Stills ----
   { group: 'The Stills', key: 'stillShuffle', label: 'A Still moves', seconds: 0.4, hasPlace: true, play: function () { playStillShuffleSound(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
 
+  // ---- apparitions ----
+  { group: 'Apparitions', key: 'phantomBreath', label: 'A breath behind you', hint: 'The only sound an apparition makes: the kind that stands at your back.', seconds: 1.6, hasPlace: true, play: function () { playPhantomBreath(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
+
   // ---- stingers: the music of a moment, heard in your head and not from anywhere ----
   { group: 'Stingers', key: 'stingerSpotted', label: 'It has found you', hint: 'Plays together with the roar.', seconds: 2.0, play: function () { playStinger('spotted'); } },
   { group: 'Stingers', key: 'stingerStill', label: 'The Stills wake', seconds: 1.8, play: function () { playStinger('still'); } },
