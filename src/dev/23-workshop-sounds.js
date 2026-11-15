@@ -41,11 +41,13 @@ function getSoundBoardSourceZ() { return getSoundBoardListenerZ() - soundBoard.d
 // ---------------------------------------------------------------------------
 
 // The Hollow's growl is one voice in several moods, so only one of these can be on at a time.
-function createSoundBoardGrowl(key, level, label, hint, aggression, shriekLevel) {
+// `isVoicedShriek` picks which of the two shrieks is heard (audio.hollowShriekVoiced); play gets its own choice back after.
+const soundBoardShriekVoicedInPlay = audio.hollowShriekVoiced;
+function createSoundBoardGrowl(key, level, label, hint, aggression, shriekLevel, isVoicedShriek) {
   return {
     group: 'The Hollow', key: key, level: level, label: label, hint: hint, seconds: 3, hasPlace: true, only: 'hollowVoice',
-    start: function () { soundBoard.hollowVoice = { aggression: aggression, shriekLevel: shriekLevel }; applySoundBoardHollowVoice(0); },
-    stop: function () { soundBoard.hollowVoice = null; applySoundBoardHollowVoice(0); }
+    start: function () { audio.hollowShriekVoiced = isVoicedShriek === true; soundBoard.hollowVoice = { aggression: aggression, shriekLevel: shriekLevel }; applySoundBoardHollowVoice(0); },
+    stop: function () { audio.hollowShriekVoiced = soundBoardShriekVoicedInPlay; soundBoard.hollowVoice = null; applySoundBoardHollowVoice(0); }
   };
 }
 
@@ -134,7 +136,9 @@ const SOUND_BOARD_ENTRIES = [
   createSoundBoardGrowl('growlHunt', 'hollowGrowl', 'Growl, hunting', 'With its faster knocking.', 0.8, 0),
   createSoundBoardGrowl('growlEnraged', 'hollowGrowl', 'Growl, enraged', 'As loud as the growl gets.', 1, 0),
   createSoundBoardGrowl('shriek', 'hollowShriek', 'Shriek, held in the beam', 'Over its hunting growl, as in play.', 0.8, 1),
-  { group: 'The Hollow', key: 'roar', level: 'hollowRoar', label: 'Roar: it has found you', seconds: 1.8, hasPlace: true, play: playHollowRoar },
+  createSoundBoardGrowl('shriekVoiced', 'hollowShriek', 'Shriek, voiced (experiment)', 'Built on a custom waveform. In play when audio.hollowShriekVoiced is true.', 0.8, 1, true),
+  { group: 'The Hollow', key: 'roar', level: 'hollowRoar', label: 'Roar: it has found you', seconds: 1.8, hasPlace: true, play: playHollowNoiseRoar },
+  { group: 'The Hollow', key: 'roarVoiced', level: 'hollowRoar', label: 'Roar, voiced (experiment)', hint: 'Built on a custom waveform. In play when audio.hollowRoarVoiced is true.', seconds: 2.4, hasPlace: true, play: playHollowVoicedRoar },
   { group: 'The Hollow', key: 'snarl', level: 'hollowSnarl', label: 'Snarl, while hunting', seconds: 0.7, hasPlace: true, play: playHollowSnarl },
   { group: 'The Hollow', key: 'hiss', level: 'hollowHiss', label: 'Hiss: it has lost you', seconds: 1.9, hasPlace: true, play: playHollowLostHiss },
   { group: 'The Hollow', key: 'sniff', level: 'hollowSniff', label: 'Sniffing, while searching', seconds: 1.4, hasPlace: true, play: playHollowSniff },

@@ -22,10 +22,10 @@
 // ---------------------------------------------------------------------------
 const SOUND_LEVELS = {
   // ---- you ----
-  footstep: 1,            // your footsteps on a dry floor (and the ring of a grate)
-  footstepWater: 1,       // your footsteps in water
-  ventCrawl: 1,           // the sheet metal under you in a vent, on top of a footstep
-  heartbeat: 1,
+  footstep: 0.8,            // your footsteps on a dry floor (and the ring of a grate)
+  footstepWater: 5,       // your footsteps in water
+  ventCrawl: 3,           // the sheet metal under you in a vent, on top of a footstep
+  heartbeat: 4,
 
   // ---- the scanner and the interface ----
   scanner: 1,             // ticking and whine while it is held on
@@ -56,6 +56,8 @@ const SOUND_LEVELS = {
   hollowEnraged: 1,       // the beam stops slowing it
   hollowFootstep: 1,
   hollowVentStep: 1,      // crawling in a vent
+  hollowRumble: 1,
+  hollowBreath: 1,
 
   // ---- the Stills ----
   stillShuffle: 1,        // one of them moves
@@ -92,7 +94,13 @@ const audio = {
   hollowScreechGain: null,
   hollowScreechFilter: null,
   hollowScreechFilterHigh: null,
+  hollowShriekVoiced: true, // EXPERIMENT: true makes the shriek in play the voiced one. The sound board has both.
+  hollowRoarVoiced: true,   // EXPERIMENT: the same for the roar
+  hollowVoicedShriekGain: null,
+  hollowVoicedShriekThroats: [],  // { oscillator, pitch }: see initializeAudioEngine
+  hollowVoicedShriekFormants: [], // { filter, restFrequency, rise }
   hollowThroatSource: null,
+  throatWaves: {},        // custom waveforms made by createThroatWave, kept per roughness
   generatorPanner: null,
   liftPanner: null,
   generatorGain: null,
@@ -318,9 +326,15 @@ function initializeAudioEngine() {
   chestRumble.loop = true;
   const chestFilter = context.createBiquadFilter();
   chestFilter.type = 'lowpass';
-  chestFilter.frequency.value = 95;
+  chestFilter.frequency.value = 90;
   const chestLevel = context.createGain();
-  chestLevel.gain.value = 2.8;
+  chestLevel.gain.value = 1.3 * SOUND_LEVELS.hollowRumble;
+  const chestSwell = context.createOscillator();
+  chestSwell.frequency.value = 0.27; // one breath roughly every four seconds
+  const chestSwellDepth = context.createGain();
+  chestSwellDepth.gain.value = 0.07 * SOUND_LEVELS.hollowRumble;
+  chestSwellDepth.connect(chestSwellDepth); chestSwellDepth.connect(chestLevel.gain)
+  chestSwell.start();
   chestRumble.connect(chestFilter); chestFilter.connect(chestLevel); chestLevel.connect(audio.hollowGrowlGain);
   chestRumble.start();
   // 3. Breath: a slow swell of air between the rattles.
@@ -328,15 +342,15 @@ function initializeAudioEngine() {
   breath.buffer = audio.whiteNoiseBuffer;
   breath.loop = true;
   const breathFilter = context.createBiquadFilter();
-  breathFilter.type = 'bandpass';
+  breathFilter.type = 'notch';
   breathFilter.frequency.value = 1100;
   breathFilter.Q.value = 0.8;
   const breathLevel = context.createGain();
-  breathLevel.gain.value = 0.15;
+  breathLevel.gain.value = 0.12 * SOUND_LEVELS.hollowBreath;
   const breathSwell = context.createOscillator();
   breathSwell.frequency.value = 0.27; // one breath roughly every four seconds
   const breathSwellDepth = context.createGain();
-  breathSwellDepth.gain.value = 0.05;
+  breathSwellDepth.gain.value = 0.07 * SOUND_LEVELS.hollowBreath;
   breathSwell.connect(breathSwellDepth); breathSwellDepth.connect(breathLevel.gain);
   breathSwell.start();
   breath.connect(breathFilter); breathFilter.connect(breathLevel); breathLevel.connect(audio.hollowGrowlGain);
@@ -373,6 +387,69 @@ function initializeAudioEngine() {
   screechHighLevel.connect(screechRasp);
   screechRasp.connect(audio.hollowScreechGain);
   screechNoise.start();
+
+  // EXPERIMENT: the same shriek built on a real voice (see createThroatWave) instead of noise. Two throats at
+  // pitches that do not fit together, as in an animal's scream, each shaking on its own. They are overdriven
+  // with a little breath and pushed through the formants of a mouth held wide open. updateHollowVoice plays
+  // this one or the one above (audio.hollowShriekVoiced), and raises the pitch and the formants with the shriek.
+  audio.hollowVoicedShriekGain = context.createGain();
+  audio.hollowVoicedShriekGain.gain.value = 0;
+  audio.hollowVoicedShriekGain.connect(audio.hollowPanner);
+  const shriekOverdrive = context.createWaveShaper();
+  shriekOverdrive.curve = createOverdriveCurve(6); // TWEAK: 1 is clean, 8 is torn
+  shriekOverdrive.oversample = '2x';
+  const shriekWave = createThroatWave(context, 0.7); // TWEAK: 0 is a clean scream, 1 has broken an octave down
+  // TWEAK: one line per throat: [the pitch you hear in Hz before it rises, loudness, how far the pitch shakes in cents].
+  // Pitches in a simple ratio (600 and 900) sing together. Ones that are not (620 and 911) fight.
+  const shriekThroats = [[920, 0.6, 170], [1211, 0.4, 220]];
+  for (const throat of shriekThroats) {
+    const oscillator = context.createOscillator();
+    oscillator.setPeriodicWave(shriekWave);
+    oscillator.frequency.value = throat[0] * 0.5; // half the pitch: see createThroatWave
+    const shake = context.createBufferSource();
+    shake.buffer = audio.brownNoiseBuffer;
+    shake.loop = true;
+    const shakeSmoother = context.createBiquadFilter();
+    shakeSmoother.type = 'lowpass';
+    shakeSmoother.frequency.value = 45; // TWEAK: how fast the pitch shakes. 8 is a wobble, 60 is a rasp
+    const shakeDepth = context.createGain();
+    shakeDepth.gain.value = throat[2] * 12; // the smoothed noise is quiet: about 0.08
+    shake.connect(shakeSmoother); shakeSmoother.connect(shakeDepth); shakeDepth.connect(oscillator.detune);
+    const level = context.createGain();
+    level.gain.value = throat[1];
+    oscillator.connect(level); level.connect(shriekOverdrive);
+    oscillator.start();
+    shake.start(0, Math.random() * 1.5);
+    audio.hollowVoicedShriekThroats.push({ oscillator: oscillator, pitch: throat[0] });
+  }
+  const shriekBreath = context.createBufferSource();
+  shriekBreath.buffer = audio.whiteNoiseBuffer;
+  shriekBreath.loop = true;
+  const shriekBreathLevel = context.createGain();
+  shriekBreathLevel.gain.value = 0.2; // TWEAK: air in the scream. 0 is all voice, 1 is mostly hiss
+  shriekBreath.connect(shriekBreathLevel); shriekBreathLevel.connect(shriekOverdrive);
+  shriekBreath.start();
+  // The same 58-times-a-second chop as the noise shriek, lighter: the voice is rough enough by itself.
+  const voicedShriekRasp = context.createGain();
+  const voicedShriekRaspOscillator = context.createOscillator();
+  voicedShriekRaspOscillator.frequency.value = 58;
+  const voicedShriekRaspDepth = context.createGain();
+  voicedShriekRaspDepth.gain.value = 0.3;
+  voicedShriekRaspOscillator.connect(voicedShriekRaspDepth); voicedShriekRaspDepth.connect(voicedShriekRasp.gain);
+  voicedShriekRaspOscillator.start();
+  voicedShriekRasp.connect(audio.hollowVoicedShriekGain);
+  // TWEAK: one line per resonance: [Hz before the shriek rises, Hz added at full shriek, sharpness, loudness].
+  const shriekFormants = [[950, 700, 5, 1.6], [1900, 900, 7, 1.2], [3300, 1400, 9, 0.7]];
+  for (const formant of shriekFormants) {
+    const filter = context.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = formant[0];
+    filter.Q.value = formant[2];
+    const level = context.createGain();
+    level.gain.value = formant[3];
+    shriekOverdrive.connect(filter); filter.connect(level); level.connect(voicedShriekRasp);
+    audio.hollowVoicedShriekFormants.push({ filter: filter, restFrequency: formant[0], rise: formant[1] });
+  }
 
   // ---- generator and lift machinery (started later) ----
   // An engine is a low hum plus a rumble that pulses with each firing stroke.
@@ -589,6 +666,100 @@ function playResonantNoise(options) {
   source.stop(now + options.duration + 0.05);
 }
 
+// A custom waveform for a throat. An oscillator normally repeats one fixed shape (sine, sawtooth, ...). A
+// PeriodicWave is a shape of our own, written as a list of how loud each harmonic is. Two things make this
+// one sound like an animal instead of a synthesiser:
+//   - the harmonics fall away gently, like the buzz of vocal folds, so there is plenty for formant filters to shape;
+//   - the oscillator runs at HALF the pitch you hear. The even harmonics are the voice itself. The odd ones sit
+//     in between, an octave under it: the broken, doubled rattle of a throat pushed too hard.
+// `roughness` is how loud those in-between harmonics are: 0 is a clean voice, 1 has dropped a full octave.
+function createThroatWave(context, roughness) {
+  const harmonicCount = 96;
+  const real = new Float32Array(harmonicCount + 1); // cosine parts, left at 0. Entry 0 is a constant offset, also 0.
+  const imag = new Float32Array(harmonicCount + 1); // sine parts: entry 1 is the oscillator's own pitch, 2 is twice that, ...
+  for (let harmonic = 1; harmonic <= harmonicCount; harmonic++) {
+    const isVoice = harmonic % 2 === 0;
+    // TWEAK: the power is the brightness of the buzz. -1 is a sawtooth (harsh), -2 is dull and hooty.
+    imag[harmonic] = Math.pow(harmonic / 2, -1.15) * (isVoice ? 1 : roughness);
+  }
+  return context.createPeriodicWave(real, imag);
+}
+
+// A voice: a buzzing throat (createThroatWave) that is never quite steady, overdriven with some breath, then
+// pushed through formants, the resonances of a mouth. Unlike playResonantNoise this has real vocal pulses in it.
+//   pitch, pitchEnd   the note you hear, in Hz. It starts a little under `pitch`, swells to it, and falls to `pitchEnd`.
+//   roughness         see createThroatWave (default 0.6)
+//   unsteadiness      how far the pitch shakes, in cents. 0 is a machine, 40 is alive, 150 is tearing (default 60)
+//   breath            how much air is mixed into the throat before the overdrive, 0 to 1 (default 0.25)
+//   drive             how hard the throat is overdriven: 1 is clean, 8 is torn (default 4)
+//   formants          one line per resonance: [Hz with the mouth shut, Hz with it open, sharpness, loudness].
+//                     The mouth opens over the first third and closes again. Lower numbers are a larger animal.
+function playThroatVoice(options) {
+  if (!isAudioReady()) return;
+  const context = audio.context;
+  const now = context.currentTime + (options.delay || 0);
+  const duration = options.duration;
+  const end = now + duration;
+  const mouthOpenTime = now + duration * 0.3;
+  const roughness = options.roughness === undefined ? 0.6 : options.roughness;
+  if (!audio.throatWaves[roughness]) audio.throatWaves[roughness] = createThroatWave(context, roughness);
+
+  const throat = context.createOscillator();
+  throat.setPeriodicWave(audio.throatWaves[roughness]);
+  const pitchEnd = options.pitchEnd || options.pitch;
+  throat.frequency.setValueAtTime(options.pitch * 0.5 * 0.8, now); // half the pitch: see createThroatWave
+  throat.frequency.exponentialRampToValueAtTime(options.pitch * 0.5, now + duration * 0.18);
+  throat.frequency.exponentialRampToValueAtTime(pitchEnd * 0.5, end);
+
+  // Slow noise pushes the pitch around, so no two pulses are the same length.
+  const shake = context.createBufferSource();
+  shake.buffer = audio.brownNoiseBuffer;
+  shake.loop = true;
+  const shakeSmoother = context.createBiquadFilter();
+  shakeSmoother.type = 'lowpass';
+  shakeSmoother.frequency.value = 30; // TWEAK: how fast the pitch shakes. 8 is a wobble, 60 is a rasp
+  const shakeDepth = context.createGain();
+  shakeDepth.gain.value = (options.unsteadiness === undefined ? 60 : options.unsteadiness) * 12; // the smoothed noise is quiet: about 0.08
+  shake.connect(shakeSmoother); shakeSmoother.connect(shakeDepth); shakeDepth.connect(throat.detune);
+
+  const breath = context.createBufferSource();
+  breath.buffer = audio.whiteNoiseBuffer;
+  breath.loop = true;
+  const breathLevel = context.createGain();
+  breathLevel.gain.value = options.breath === undefined ? 0.25 : options.breath;
+  const overdrive = context.createWaveShaper();
+  overdrive.curve = createOverdriveCurve(options.drive || 4);
+  overdrive.oversample = '2x';
+  throat.connect(overdrive);
+  breath.connect(breathLevel); breathLevel.connect(overdrive);
+
+  const gain = context.createGain();
+  gain.gain.setValueAtTime(0.0001, now);
+  gain.gain.linearRampToValueAtTime(options.gain === undefined ? 0.3 : options.gain, now + (options.attack || 0.06));
+  gain.gain.linearRampToValueAtTime(options.gain === undefined ? 0.3 : options.gain, now + duration * 0.5);
+  gain.gain.exponentialRampToValueAtTime(0.0001, end);
+  for (const formant of options.formants) {
+    const filter = context.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = formant[2];
+    filter.frequency.setValueAtTime(formant[0], now);
+    filter.frequency.linearRampToValueAtTime(formant[1], mouthOpenTime);
+    filter.frequency.linearRampToValueAtTime(formant[0], end);
+    const level = context.createGain();
+    level.gain.value = formant[3];
+    overdrive.connect(filter); filter.connect(level); level.connect(gain);
+  }
+  gain.connect(options.destination || audio.masterGain);
+  if (options.reverbAmount) {
+    const send = context.createGain();
+    send.gain.value = options.reverbAmount;
+    gain.connect(send); send.connect(audio.reverbInput);
+  }
+  throat.start(now); throat.stop(end + 0.05);
+  shake.start(now, Math.random() * 1.5); shake.stop(end + 0.05);
+  breath.start(now, Math.random() * 1.5); breath.stop(end + 0.05);
+}
+
 function createTemporaryPanner(x, y, z) {
   if (!isAudioReady()) return null;
   const panner = createPannerNode(x, y, z, 2.5, 1.2);
@@ -743,13 +914,13 @@ function playVoiceLine(key, treatmentName, startDelay, whenLengthKnown) {
 
 function playFootstepSound(isInWater, isOnGrate, loudness) {
   if (isInWater) {
-    playNoiseBurst({ duration: 0.32, frequency: 1500, frequencyEnd: 420, gain: 0.3 * loudness * SOUND_LEVELS.footstepWater, resonance: 1.4, reverbAmount: 0.5 });
-    playNoiseBurst({ duration: 0.18, filterType: 'bandpass', frequency: 3200, gain: 0.1 * loudness * SOUND_LEVELS.footstepWater, delay: 0.05 });
+    playNoiseBurst({ duration: 0.32, frequency: 1500, frequencyEnd: 420, gain: 2.3 * loudness * SOUND_LEVELS.footstepWater, resonance: 1.4, reverbAmount: 0.5 });
+    playNoiseBurst({ duration: 0.18, filterType: 'bandpass', frequency: 3200, gain: 2.1 * loudness * SOUND_LEVELS.footstepWater, delay: 0.05 });
     return;
   }
-  playNoiseBurst({ duration: 0.11, frequency: 520 + Math.random() * 180, gain: 0.26 * loudness * SOUND_LEVELS.footstep, useBrownNoise: true, playbackRate: 1.6, reverbAmount: 0.35 });
-  playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 2100, gain: 0.05 * loudness * SOUND_LEVELS.footstep });
-  if (isOnGrate) playTone({ waveform: 'triangle', frequency: 610 + Math.random() * 90, frequencyEnd: 560, duration: 0.25, gain: 0.07 * loudness * SOUND_LEVELS.footstep, reverbAmount: 0.6 });
+  playNoiseBurst({ duration: 0.11, frequency: 520 + Math.random() * 180, gain: 2.26 * loudness * SOUND_LEVELS.footstep, useBrownNoise: true, playbackRate: 1.6, reverbAmount: 0.35 });
+  playNoiseBurst({ duration: 0.04, filterType: 'bandpass', frequency: 2100, gain: 2.05 * loudness * SOUND_LEVELS.footstep });
+  if (isOnGrate) playTone({ waveform: 'triangle', frequency: 610 + Math.random() * 90, frequencyEnd: 560, duration: 0.25, gain: 2.07 * loudness * SOUND_LEVELS.footstep, reverbAmount: 0.6 });
 }
 
 function setScannerSound(paintLevel) {
@@ -761,39 +932,39 @@ function setScannerSound(paintLevel) {
 
 function playSweepSound(duration) {
   // A motor winding down: a falling whistle of air, a soft falling tone under it, and hiss.
-  playResonantNoise({ frequency: 2300, frequencyEnd: 320, resonance: 22, duration: duration, gain: 0.11 * SOUND_LEVELS.sweep, attack: 0.06, reverbAmount: 0.6 });
+  playResonantNoise({ frequency: 1300, frequencyEnd: 320, resonance: 22, duration: duration, gain: 0.21 * SOUND_LEVELS.sweep, attack: 0.06, reverbAmount: 0.8 });
   playTone({ waveform: 'sine', frequency: 1150, frequencyEnd: 160, duration: duration, gain: 0.05 * SOUND_LEVELS.sweep, attack: 0.08, reverbAmount: 0.5 });
   playNoiseBurst({ duration: duration, filterType: 'bandpass', frequency: 5200, frequencyEnd: 900, gain: 0.1 * SOUND_LEVELS.sweep, attack: 0.08, resonance: 3 });
 }
 
 function playOverheatSound() {
-  playNoiseBurst({ duration: 0.8, filterType: 'highpass', frequency: 3000, gain: 0.16 * SOUND_LEVELS.overheat, attack: 0.02 });
+  playNoiseBurst({ duration: 0.8, filterType: 'bandpass', frequency: 3000, gain: 0.36 * SOUND_LEVELS.overheat, attack: 0.02 });
   playTone({ waveform: 'sine', frequency: 210, frequencyEnd: 95, duration: 0.35, gain: 0.12 * SOUND_LEVELS.overheat });
 }
 
 function playInterfaceBlip(pitch) {
   // A soft tick with a hint of pitch, like a membrane button.
-  playTone({ waveform: 'sine', frequency: pitch || 880, frequencyEnd: (pitch || 880) * 0.85, duration: 0.09, gain: 0.09 * SOUND_LEVELS.interfaceBlip, attack: 0.003 });
+  playTone({ waveform: 'sine', frequency: pitch || 880, frequencyEnd: (pitch || 880) * 0.85, duration: 0.09, gain: 0.29 * SOUND_LEVELS.interfaceBlip, attack: 0.003 });
   playNoiseBurst({ duration: 0.02, filterType: 'bandpass', frequency: 2600, gain: 0.05 * SOUND_LEVELS.interfaceBlip, resonance: 1.5 });
 }
 
 function playRadioBlip() {
   // A radio opening: squelch, then two short tones heard through a small speaker.
-  playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 1900, gain: 0.16 * SOUND_LEVELS.radioBlip, resonance: 2.5 });
-  playResonantNoise({ frequency: 1320, resonance: 30, duration: 0.09, gain: 0.12 * SOUND_LEVELS.radioBlip, attack: 0.005, delay: 0.12 });
-  playResonantNoise({ frequency: 990, resonance: 30, duration: 0.12, gain: 0.12 * SOUND_LEVELS.radioBlip, attack: 0.005, delay: 0.2 });
+  playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 1900, gain: 1.86 * SOUND_LEVELS.radioBlip, resonance: 2.5 });
+  playResonantNoise({ frequency: 1320, resonance: 30, duration: 0.09, gain: 2.52 * SOUND_LEVELS.radioBlip, attack: 0.005, delay: 0.12 });
+  playResonantNoise({ frequency: 990, resonance: 30, duration: 0.12, gain: 2.52 * SOUND_LEVELS.radioBlip, attack: 0.005, delay: 0.2 });
 }
 
 function playPickupSound() {
-  playTone({ waveform: 'triangle', frequency: 660, duration: 0.12, gain: 0.12 * SOUND_LEVELS.pickup });
-  playTone({ waveform: 'triangle', frequency: 990, duration: 0.22, gain: 0.12 * SOUND_LEVELS.pickup, delay: 0.09, reverbAmount: 0.4 });
+  playTone({ waveform: 'triangle', frequency: 660, duration: 0.12, gain: 0.22 * SOUND_LEVELS.pickup });
+  playTone({ waveform: 'triangle', frequency: 990, duration: 0.22, gain: 0.22 * SOUND_LEVELS.pickup, delay: 0.09, reverbAmount: 0.4 });
   playNoiseBurst({ duration: 0.15, frequency: 900, gain: 0.12 * SOUND_LEVELS.pickup, useBrownNoise: true, playbackRate: 2 });
 }
 
 function playDeniedSound() {
   // Two dull thuds of a lock that will not turn.
-  playTone({ waveform: 'sine', frequency: 150, frequencyEnd: 110, duration: 0.14, gain: 0.2 * SOUND_LEVELS.denied, attack: 0.004 });
-  playTone({ waveform: 'sine', frequency: 125, frequencyEnd: 90, duration: 0.2, gain: 0.2 * SOUND_LEVELS.denied, attack: 0.004, delay: 0.17 });
+  playTone({ waveform: 'triangle', frequency: 150, frequencyEnd: 110, duration: 0.14, gain: 2.5 * SOUND_LEVELS.denied, attack: 0.004 });
+  playTone({ waveform: 'triangle', frequency: 125, frequencyEnd: 90, duration: 0.2, gain: 2.5 * SOUND_LEVELS.denied, attack: 0.004, delay: 0.17 });
   playNoiseBurst({ duration: 0.05, frequency: 700, gain: 0.12 * SOUND_LEVELS.denied, useBrownNoise: true, playbackRate: 2 });
   playNoiseBurst({ duration: 0.05, frequency: 700, gain: 0.12 * SOUND_LEVELS.denied, useBrownNoise: true, playbackRate: 2, delay: 0.17 });
 }
@@ -801,9 +972,9 @@ function playDeniedSound() {
 function playDoorSound(x, z, isOpening) {
   const panner = createTemporaryPanner(x, 1.2, z);
   if (!panner) return;
-  playNoiseBurst({ duration: 0.75, filterType: 'bandpass', frequency: isOpening ? 700 : 1500, frequencyEnd: isOpening ? 2400 : 500, gain: 0.5 * SOUND_LEVELS.door, attack: 0.05, resonance: 1.6, destination: panner });
-  playNoiseBurst({ duration: 0.16, frequency: 240, gain: 0.9 * SOUND_LEVELS.door, useBrownNoise: true, playbackRate: 1.3, delay: 0.62, destination: panner });
-  playTone({ waveform: 'triangle', frequency: 92, frequencyEnd: 60, duration: 0.3, gain: 0.5 * SOUND_LEVELS.door, delay: 0.62, destination: panner });
+  playNoiseBurst({ duration: 0.75, filterType: 'bandpass', frequency: isOpening ? 700 : 1500, frequencyEnd: isOpening ? 2400 : 500, gain: 2.7 * SOUND_LEVELS.door, attack: 0.05, resonance: 1.6, destination: panner });
+  playNoiseBurst({ duration: 0.16, frequency: 240, gain: 2.9 * SOUND_LEVELS.door, useBrownNoise: true, playbackRate: 1.3, delay: 0.62, destination: panner });
+  playTone({ waveform: 'triangle', frequency: 92, frequencyEnd: 60, duration: 0.3, gain: 2.7 * SOUND_LEVELS.door, delay: 0.62, destination: panner });
 }
 
 // Your own knees and elbows on sheet metal: a dull boom that rings on.
@@ -817,16 +988,16 @@ function playVentCrawlSound() {
 function playHollowVentStep(x, z, weight) {
   const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 0.6, z);
   if (!panner) return;
-  playNoiseBurst({ duration: 0.3, frequency: 240, gain: 1.5 * weight * SOUND_LEVELS.hollowVentStep, useBrownNoise: true, playbackRate: 0.8, destination: panner });
-  playResonantNoise({ frequency: 150 + Math.random() * 50, resonance: 18, duration: 0.7, gain: 0.5 * weight * SOUND_LEVELS.hollowVentStep, attack: 0.004, destination: panner });
-  playNoiseBurst({ duration: 0.07, filterType: 'bandpass', frequency: 2200, gain: 0.25 * weight * SOUND_LEVELS.hollowVentStep, delay: 0.04, destination: panner });
+  playNoiseBurst({ duration: 0.3, frequency: 240, gain: 2.5 * weight * SOUND_LEVELS.hollowVentStep, useBrownNoise: true, playbackRate: 0.8, destination: panner });
+  playResonantNoise({ frequency: 150 + Math.random() * 50, resonance: 18, duration: 0.7, gain: 1.5 * weight * SOUND_LEVELS.hollowVentStep, attack: 0.004, destination: panner });
+  playNoiseBurst({ duration: 0.07, filterType: 'bandpass', frequency: 2200, gain: 1.25 * weight * SOUND_LEVELS.hollowVentStep, delay: 0.04, destination: panner });
 }
 
 function playHollowFootstep(x, z, weight) {
   const panner = createTemporaryPanner(x, 0.1, z);
   if (!panner) return;
-  playNoiseBurst({ duration: 0.2, frequency: 300, gain: 1.0 * weight * SOUND_LEVELS.hollowFootstep, useBrownNoise: true, playbackRate: 0.9, destination: panner });
-  playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 1400, gain: 0.22 * weight * SOUND_LEVELS.hollowFootstep, delay: 0.03, destination: panner });
+  playNoiseBurst({ duration: 0.2, frequency: 300, gain: 3.0 * weight * SOUND_LEVELS.hollowFootstep, useBrownNoise: true, playbackRate: 0.9, destination: panner });
+  playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 1400, gain: 2.22 * weight * SOUND_LEVELS.hollowFootstep, delay: 0.03, destination: panner });
 }
 
 // An apparition standing close behind you: one slow breath out, from where it stands. Nothing real in the
@@ -843,7 +1014,7 @@ function playPhantomBreath(x, z) {
 function playStillShuffleSound(x, z) {
   const panner = createTemporaryPanner(x, 0.1, z);
   if (!panner) return;
-  playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 900, resonance: 3, gain: 0.5 * SOUND_LEVELS.stillShuffle, useBrownNoise: true, playbackRate: 2.4, destination: panner });
+  playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 900, resonance: 3, gain: 2.5 * SOUND_LEVELS.stillShuffle, useBrownNoise: true, playbackRate: 2.4, destination: panner });
 }
 
 function playHollowClickTrain(clickCount, startInterval, endInterval, loudness) {
@@ -851,9 +1022,9 @@ function playHollowClickTrain(clickCount, startInterval, endInterval, loudness) 
   // Hard, hollow knocks, like knuckles of bone. Each one is a tiny burst of noise ringing in a narrow filter.
   let delay = 0;
   for (let clickIndex = 0; clickIndex < clickCount; clickIndex++) {
-    const interval = interpolateLinear(startInterval, endInterval, clickIndex / Math.max(1, clickCount - 1));
-    playNoiseBurst({ duration: 0.035, filterType: 'bandpass', frequency: 850 + Math.random() * 900, resonance: 14, gain: loudness * 1.6, attack: 0.001, delay: delay, destination: audio.hollowPanner });
-    delay += interval * (0.8 + Math.random() * 0.4);
+    const interval = interpolateLinear(startInterval, endInterval, clickIndex / Math.max(1, clickCount - randomBetween(1, 3)));
+    playNoiseBurst({ duration: 0.035, filterType: 'bandpass', frequency: 850 + Math.random() * 900, resonance: 14, gain: loudness * 12, attack: 0.001, delay: delay, destination: audio.hollowPanner });
+    delay += interval * (0.8 + Math.random() * 0.3);
   }
 }
 
@@ -863,6 +1034,7 @@ function updateHollowVoice(x, z, isActive, aggression, shriekLevel, dt, gameTime
   if (!isActive) {
     audio.hollowGrowlGain.gain.setTargetAtTime(0, now, 0.2);
     audio.hollowScreechGain.gain.setTargetAtTime(0, now, 0.1);
+    audio.hollowVoicedShriekGain.gain.setTargetAtTime(0, now, 0.1);
     return;
   }
   setPannerPosition(audio.hollowPanner, x, getFloorHeightAt(x, z) + 1.7, z);
@@ -870,7 +1042,13 @@ function updateHollowVoice(x, z, isActive, aggression, shriekLevel, dt, gameTime
   audio.hollowGrowlGain.gain.setTargetAtTime((0.2 + aggression * 0.85) * SOUND_LEVELS.hollowGrowl, now, 0.3);
   // The rattle in its throat runs faster the more aggressive it is.
   audio.hollowThroatSource.playbackRate.setTargetAtTime(0.8 + aggression * 0.55, now, 0.4);
-  audio.hollowScreechGain.gain.setTargetAtTime(shriekLevel * shriekLevel * 2.4 * SOUND_LEVELS.hollowShriek, now, 0.08);
+  // Only one of the two shrieks is heard: the one made of noise, or the voiced one (audio.hollowShriekVoiced).
+  const shriekLoudness = shriekLevel * shriekLevel * SOUND_LEVELS.hollowShriek;
+  audio.hollowScreechGain.gain.setTargetAtTime(audio.hollowShriekVoiced ? 0 : shriekLoudness * 2.4, now, 0.08);
+  audio.hollowVoicedShriekGain.gain.setTargetAtTime(audio.hollowShriekVoiced ? shriekLoudness * 0.5 : 0, now, 0.08);
+  // TWEAK: 0.7 is how far the voiced shriek's pitch climbs at full strength: 1 would be a whole octave.
+  for (const throat of audio.hollowVoicedShriekThroats) throat.oscillator.frequency.setTargetAtTime(throat.pitch * 0.5 * (1 + shriekLevel * 0.7), now, 0.1);
+  for (const formant of audio.hollowVoicedShriekFormants) formant.filter.frequency.setTargetAtTime(formant.restFrequency + shriekLevel * formant.rise, now, 0.1);
   audio.hollowScreechFilter.frequency.setTargetAtTime(1200 + shriekLevel * 1500, now, 0.1);
   audio.hollowScreechFilterHigh.frequency.setTargetAtTime(2600 + shriekLevel * 2600, now, 0.1);
   if (gameTime >= audio.nextHollowClickTime) {
@@ -885,7 +1063,7 @@ function updateHollowVoice(x, z, isActive, aggression, shriekLevel, dt, gameTime
 function silenceGameplaySounds() {
   if (!isAudioReady()) return;
   const now = audio.context.currentTime;
-  for (const node of [audio.hollowGrowlGain, audio.hollowScreechGain, audio.staticGain, audio.scannerGain, audio.scannerWhineGain]) {
+  for (const node of [audio.hollowGrowlGain, audio.hollowScreechGain, audio.hollowVoicedShriekGain, audio.staticGain, audio.scannerGain, audio.scannerWhineGain]) {
     node.gain.cancelScheduledValues(now);
     node.gain.setTargetAtTime(0, now, 0.05);
   }
@@ -894,50 +1072,71 @@ function silenceGameplaySounds() {
 // ---- The Hollow's voice, by what it is doing. All of these come from where it stands. ----
 
 // The moment it knows where you are: a roar from the chest, tearing at the top.
+// There are two: one made of filtered noise, and one built on a real voice. audio.hollowRoarVoiced picks.
 function playHollowRoar() {
+  if (audio.hollowRoarVoiced) playHollowVoicedRoar();
+  else playHollowNoiseRoar();
+}
+
+function playHollowNoiseRoar() {
   if (!isAudioReady()) return;
   const out = audio.hollowPanner;
-  playResonantNoise({ frequency: 150, frequencyEnd: 92, resonance: 6, duration: 1.7, gain: 3.06 * SOUND_LEVELS.hollowRoar, attack: 0.05, destination: out });
-  playResonantNoise({ frequency: 430, frequencyEnd: 240, resonance: 5, duration: 1.5, gain: 2.16 * SOUND_LEVELS.hollowRoar, attack: 0.04, destination: out });
-  playNoiseBurst({ duration: 1.3, filterType: 'bandpass', frequency: 1600, frequencyEnd: 800, gain: 1.44 * SOUND_LEVELS.hollowRoar, resonance: 3, attack: 0.03, destination: out });
-  playTone({ waveform: 'sawtooth', frequency: 98, frequencyEnd: 56, duration: 1.6, gain: 0.81 * SOUND_LEVELS.hollowRoar, attack: 0.05, destination: out });
+  playResonantNoise({ waveform: 'sawtooth', frequency: 150, frequencyEnd: 92, resonance: 6, duration: 1.4, gain: 8.06 * SOUND_LEVELS.hollowRoar, attack: 0.05, destination: out });
+  playResonantNoise({ waveform: 'sawtooth', frequency: 330, frequencyEnd: 240, resonance: 5, duration: 1.2, gain: 7.16 * SOUND_LEVELS.hollowRoar, attack: 0.04, destination: out });
+  playNoiseBurst({ waveform: 'sawtooth', duration: 3, filterType: 'bandpass', frequency: 1800, frequencyEnd: 1600, gain: 4.44 * SOUND_LEVELS.hollowRoar, resonance: 3, attack: 0.03, destination: out });
+  playTone({ waveform: 'triangle', frequency: 100, frequencyEnd: 90, filterType: 'bandpass', duration: 3, gain: 2 * SOUND_LEVELS.hollowRoar, attack: 0.02, destination: out });
+}
+
+// EXPERIMENT: the same roar built on a real voice (playThroatVoice) instead of filtered noise.
+function playHollowVoicedRoar() {
+  if (!isAudioReady()) return;
+  const out = audio.hollowPanner;
+  // The roar itself: starts in the chest, the mouth opens, and it tears on the way down.
+  playThroatVoice({ pitch: 100 + Math.random() * 20, pitchEnd: 100 - Math.random() * 20, duration: 4, roughness: 0.8, unsteadiness: 100, breath: 0.2, drive: 3,
+    formants: [[260, 560, 4, 2.2], [720, 1250, 6, 1.3], [2100, 2700, 8, 0.6]], gain: 2.4 * SOUND_LEVELS.hollowRoar, attack: 0.11, destination: out });
+  // A second, slightly higher throat a moment later, so it is not one clean note.
+  playThroatVoice({ pitch: 280 + Math.random() * 40, pitchEnd: 140 + Math.random() * 40, duration: 4, roughness: 0.6, unsteadiness: 140, breath: 0.5, drive: 8,
+    formants: [[340, 690, 5, 1.4], [980, 1500, 7, 1.0]], gain: 1.9 * SOUND_LEVELS.hollowRoar, attack: 0.1, delay: 0.16, destination: out });
+  // Air over the top, and weight underneath.
+  playNoiseBurst({ duration: 3.0, filterType: 'bandpass', frequency: 1900, frequencyEnd: 800, gain: 1.5 * SOUND_LEVELS.hollowRoar, resonance: 4, attack: 0.05, destination: out });
+  playTone({ waveform: 'triangle', frequency: 68, duration: 1, gain: 2.5 * SOUND_LEVELS.hollowRoar, attack: 0.06, destination: out });
 }
 
 // While it is after you: a short snarl every few seconds, never twice at the same pitch.
 function playHollowSnarl() {
   if (!isAudioReady()) return;
-  const out = audio.hollowPanner, pitch = 0.85 + Math.random() * 0.4;
-  playResonantNoise({ frequency: 210 * pitch, frequencyEnd: 130 * pitch, resonance: 5, duration: 0.55, gain: 3.25 * SOUND_LEVELS.hollowSnarl, attack: 0.02, destination: out });
-  playNoiseBurst({ duration: 0.45, filterType: 'bandpass', frequency: 1300 * pitch, frequencyEnd: 700 * pitch, gain: 1.25 * SOUND_LEVELS.hollowSnarl, resonance: 3, attack: 0.02, destination: out });
+  const out = audio.hollowPanner, pitch = 0.85 + Math.random() * randomBetween(0.2, 1.3);
+  playResonantNoise({ waveform: 'sawtooth', frequency: 350 * pitch, frequencyEnd: 150 * pitch, resonance: 2, duration: 0.55, gain: 7.25 * SOUND_LEVELS.hollowSnarl, attack: 0.02, destination: out });
+  playNoiseBurst({ waveform: 'sawtooth', duration: 0.45, filterType: 'highpass', frequency: 1500 * pitch, frequencyEnd: 700 * pitch, gain: 5.25 * SOUND_LEVELS.hollowSnarl, resonance: 3, attack: 0.02, destination: out });
 }
 
 // It has lost you: one long breath out through its teeth.
 function playHollowLostHiss() {
   if (!isAudioReady()) return;
-  playNoiseBurst({ duration: 1.8, filterType: 'bandpass', frequency: 3200, frequencyEnd: 1100, gain: 1.00 * SOUND_LEVELS.hollowHiss, resonance: 2, attack: 0.25, destination: audio.hollowPanner });
-  playResonantNoise({ frequency: 260, frequencyEnd: 150, resonance: 8, duration: 1.4, gain: 1.00 * SOUND_LEVELS.hollowHiss, attack: 0.3, destination: audio.hollowPanner });
+  playNoiseBurst({ duration: 1, filterType: 'notch', frequency: 3200, frequencyEnd: 1100, gain: 1.01 * SOUND_LEVELS.hollowHiss, resonance: 2, attack: 0.25, destination: audio.hollowPanner });
+  playResonantNoise({ frequency: 260, frequencyEnd: 150, resonance: 8, duration: 1.4, gain: 1.01 * SOUND_LEVELS.hollowHiss, attack: 0.25, destination: audio.hollowPanner });
 }
 
 // Searching: it tests the air. Two or three short pulls of breath, then a low huff.
 function playHollowSniff() {
   if (!isAudioReady()) return;
-  const out = audio.hollowPanner, pulls = 2 + Math.floor(Math.random() * 2);
+  const out = audio.hollowPanner, pulls = 2 + Math.floor(Math.random() * 3);
   for (let pull = 0; pull < pulls; pull++) {
-    playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 900, frequencyEnd: 2400, gain: 3.63 * SOUND_LEVELS.hollowSniff, resonance: 2.5, attack: 0.03, delay: pull * 0.24, destination: out });
+    playNoiseBurst({ duration: 0.14, filterType: 'highpass', frequency: 900, frequencyEnd: 2400, gain: 3.63 * SOUND_LEVELS.hollowSniff, resonance: 2.5, attack: 0.03, delay: pull * 0.24, destination: out });
   }
-  playResonantNoise({ frequency: 170, frequencyEnd: 120, resonance: 7, duration: 0.5, gain: 3.96 * SOUND_LEVELS.hollowSniff, attack: 0.05, delay: pulls * 0.24 + 0.1, destination: out });
+  playResonantNoise({ frequency: 170, frequencyEnd: 120, resonance: 7, duration: 0.5, gain: 2.96 * SOUND_LEVELS.hollowSniff, attack: 0.05, delay: pulls * 0.24 + 0.1, destination: out });
 }
 
 // It has heard something and is coming to look: a quick run of clicks that speeds up, ending on a rising note.
 function playHollowCuriousTrill() {
   if (!isAudioReady()) return;
-  playHollowClickTrain(7, 0.11, 0.035, 1.6 * SOUND_LEVELS.hollowTrill);
-  playResonantNoise({ frequency: 520, frequencyEnd: 860, resonance: 20, duration: 0.35, gain: 2.2 * SOUND_LEVELS.hollowTrill, attack: 0.03, delay: 0.5, destination: audio.hollowPanner });
+  const ticks = randomBetween(4, 20);
+  playHollowClickTrain(ticks, 0.05 * ticks * 0.1, 0.035 * ticks * 0.07, 1.8 * SOUND_LEVELS.hollowTrill);
 }
 
 function playHeartbeat(strength) {
-  playTone({ frequency: 62, frequencyEnd: 38, duration: 0.16, gain: 0.5 * strength * SOUND_LEVELS.heartbeat, attack: 0.008 });
-  playTone({ frequency: 54, frequencyEnd: 34, duration: 0.2, gain: 0.38 * strength * SOUND_LEVELS.heartbeat, attack: 0.008, delay: 0.21 });
+  playTone({ frequency: 62, frequencyEnd: 38, duration: 0.16, gain: 0.8 * strength * SOUND_LEVELS.heartbeat, attack: 0.008 });
+  playTone({ frequency: 54, frequencyEnd: 34, duration: 0.2, gain: 0.58 * strength * SOUND_LEVELS.heartbeat, attack: 0.008, delay: 0.21 });
 }
 
 function updateHeartbeat(threat, gameTime) {
@@ -1062,8 +1261,8 @@ function updateAmbientEvents(gameTime, listenerX, listenerZ, dread) {
   const angle = Math.random() * TWO_PI, distance = randomBetween(6, 16);
   const eventX = listenerX + Math.cos(angle) * distance, eventZ = listenerZ + Math.sin(angle) * distance;
   if (choice < 0.34) { playAmbientDrips(eventX, eventZ); return null; }
-  if (choice < 0.58) { playAmbientPipeGroan(eventX, eventZ); return '[a pipe groans]'; }
-  if (choice < 0.8) { playAmbientMetalSettling(eventX, eventZ); return '[metal settles somewhere]'; }
+  if (choice < 0.58) { playAmbientPipeGroan(eventX, eventZ); return null; }
+  if (choice < 0.8) { playAmbientMetalSettling(eventX, eventZ); return null; }
   playAmbientShaftKnocks();
   return '[knocking, far below]';
 }
