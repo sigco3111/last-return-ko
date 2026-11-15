@@ -298,4 +298,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { startDevServer, patchObjectNumbers, formatRoomFile };
+module.exports = { startDevServer, patchObjectNumbers, formatRoomFile, DEFAULT_PORT };

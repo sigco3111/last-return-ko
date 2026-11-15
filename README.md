@@ -198,6 +198,15 @@ Open the address it prints (http://localhost:4471/) and press **Workshop** on th
 - "What the scanner shows" hides the body and leaves only the points a scan puts on it, which is all a player ever sees of it.
 - The sliders change the proportions the whole game uses, so you can leave the workshop and meet the result in play. They are remembered across reloads until you press **Write to file** (`Ctrl+S`), which changes only those numbers in `04-figures.js` and leaves the layout and comments of the file alone, or **Back to the file**. A number you change by hand in the file wins over a slider set earlier.
 
+**Sounds**
+
+- Every sound the game makes has a row: a button for a sound that plays once, a tick box for one that goes on (room tone, the growl, static, the generator), so you can hear one sound against another. **Play all in turn** goes through the whole list.
+- Sounds that come from somewhere (the Hollow, doors, machinery, drips) are put straight ahead of you, at the distance the slider says. The cross in the hall marks the spot.
+- After a sound has played, its row shows how loud the output was (peak and average, where 1.0 is the loudest a speaker can go), in red if it would distort or nothing came out. These are the numbers `npm run audio-check` prints.
+- How loud each sound is, is set in `src/js/07-audio.js`. Change a number there and the page reloads with the list where you left it, so the loop is: change, save, press the button again.
+- `npm run audio-check -- --listen` starts the dev server and opens this tool directly. So does an address ending in `#sounds`.
+- To add a sound to the list, add a line to `SOUND_BOARD_ENTRIES` in `src/dev/23-workshop-sounds.js`. It is then measured by `npm run audio-check` as well.
+
 Without the dev server (`node build.js --dev`, then open `build/workshop.html`) everything works except writing into `src/`: Save downloads the room file and "Write to file" copies the changed numbers instead.
 
 ## Tweaking the game
@@ -247,7 +256,7 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/12-debug.js` | The little the game itself knows about debug mode: switches that are all off, and hooks that stay empty |
 | `src/js/13-start.js` | One line that starts the game once everything above is loaded |
 | `src/rooms/*.json` | Rooms made in the workshop, one file each (the folder appears with the first one you save) |
-| `src/dev/` | Debug mode (`10-debug.js`: the panel, its switches and what they draw) and the workshop. Only in the `npm run dev` build, never in `index.html` |
+| `src/dev/` | Debug mode (`10-debug.js`: the panel, its switches and what they draw) and the workshop with its room, creature and sound tools. Only in the `npm run dev` build, never in `index.html` |
 | `tools/dev-server.js` | `npm run dev`: builds, serves, reloads the page when the source changes, and writes what the workshop saves |
 
 A few details worth knowing if you change things:
@@ -301,7 +310,13 @@ starts the dev build, with [debug mode](#debug-mode) and [the workshop](#the-wor
 npm run audio-check
 ```
 
-measures every sound, because a test cannot listen: how loud each one is and where its energy sits, and it fails if one is silent or loud enough to distort. It cannot tell you whether a sound is good. Only ears can.
+measures every sound, because a test cannot listen: how loud each one is and where its energy sits, and it fails if one is silent or loud enough to distort. It takes about three minutes; name one or more sounds to measure only those, for example `npm run audio-check -- hollow door`. It cannot tell you whether a sound is good. Only ears can:
+
+```bash
+npm run audio-check -- --listen
+```
+
+measures nothing and opens the workshop's [sound board](#the-workshop) in your browser instead, where every sound is on a button. `--port 5000` uses another port.
 
 ```bash
 npm run voice-script

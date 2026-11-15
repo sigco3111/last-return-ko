@@ -810,8 +810,7 @@ function updateStills(dt) {
     still.distanceMovedSinceSound += step;
     if (still.distanceMovedSinceSound > 0.7) {
       still.distanceMovedSinceSound = 0;
-      const panner = createTemporaryPanner(figure.x, 0.1, figure.z);
-      if (panner) playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 900, resonance: 3, gain: 0.5, useBrownNoise: true, playbackRate: 2.4, destination: panner });
+      playStillShuffleSound(figure.x, figure.z);
       if (stillShiftCaptionCooldown <= 0) { showCaption('[something shifts behind you]'); stillShiftCaptionCooldown = 9; }
     }
   }

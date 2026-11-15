@@ -12,7 +12,7 @@
   -webkit-user-select: none; user-select: none;
 }
 .workshop-header { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-edge); color: var(--instrument); letter-spacing: 0.16em; }
-.workshop-header .button-quiet { padding: 4px 9px; font-size: 11px; }
+.workshop-header .button-quiet { padding: 4px 6px; font-size: 11px; }
 .workshop-tabs { display: flex; gap: 4px; margin-left: auto; }
 .workshop-tabs .is-current { background: var(--instrument); border-color: var(--instrument); color: var(--void); }
 .workshop-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 28px; display: flex; flex-direction: column; gap: 6px; }
@@ -59,3 +59,13 @@
   padding: 8px 12px; background: var(--alarm); color: var(--void);
   font-family: var(--font-data); font-size: 12px; line-height: 1.4; white-space: pre-wrap; overflow-wrap: anywhere;
 }
+
+/* The sound board: one row per sound, with what came out of it on the right. */
+.sound-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.sound-row .button-quiet { padding: 4px 8px; font-size: 11px; letter-spacing: 0.02em; text-align: left; }
+.sound-row .debug-option { padding: 3px 0; }
+.sound-row.is-playing .button-quiet { color: var(--instrument); border-color: var(--instrument); }
+.sound-row.is-playing .debug-option { color: var(--instrument); }
+.sound-place { margin-left: 7px; font-size: 10px; color: var(--text-dim); white-space: nowrap; }
+.sound-level { min-width: 118px; text-align: right; font-size: 10.5px; color: var(--text-dim); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.sound-level.is-loud { color: var(--alarm); }

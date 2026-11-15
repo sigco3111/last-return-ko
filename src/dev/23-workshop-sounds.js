@@ -1,0 +1,526 @@
+// ---------------------------------------------------------------------------
+// The workshop's sound board: every sound the game makes, on a button of its own.
+//
+// How loud each sound is, is set in src/js/07-audio.js. To get the levels right you have to hear them,
+// next to each other and without playing half a station to reach the one you want. This is where:
+// change a number in the source, the page reloads, press the button again.
+//
+// SOUND_BOARD_ENTRIES below is the list. `npm run audio-check` (tools/audio-check.js) plays this same
+// list to measure it, so a sound added here is checked there too.
+// ---------------------------------------------------------------------------
+
+const SOUND_BOARD_HALL_WIDTH = 9;           // the hall you stand in, in metres
+const SOUND_BOARD_HALL_LENGTH = 36;
+const SOUND_BOARD_MAXIMUM_DISTANCE = 30;    // how far down the hall a sound can be put
+const SOUND_BOARD_SILENT_PEAK = 0.004;      // a peak below this: nothing came out
+const SOUND_BOARD_DISTORTING_PEAK = 0.98;   // a peak above this: loud enough to distort
+const SOUND_BOARD_FADE_IN_SECONDS = 0.45;   // a sound that goes on gets this long to swell before it is measured
+
+const soundBoard = {
+  distance: 3,           // metres between you and sounds that come from somewhere
+  heldKeys: {},          // the sounds that go on until stopped, and are on now
+  hollowVoice: null,     // { aggression, shriekLevel } while one of the Hollow's growls is on
+  isScanning: false,     // the scanner is held on
+  measureTap: null,      // listens to everything on its way to the speakers
+  results: {},           // per key: what came out the last time it played
+  rows: {},              // per key: its elements in the panel
+  playAllRun: 0,         // goes up whenever "play all" is started or stopped
+  machineryPositions: null, // where the lift, the generator and the shaft were before this tool moved them
+  pendingScrollTop: 0
+};
+
+// Where you stand, and where a sound that comes from somewhere is put: straight ahead, down the hall.
+function getSoundBoardListenerX() { return WORKSHOP_ORIGIN_X + SOUND_BOARD_HALL_WIDTH / 2; }
+function getSoundBoardListenerZ() { return WORKSHOP_ORIGIN_Z + SOUND_BOARD_HALL_LENGTH - 2.5; }
+function getSoundBoardSourceZ() { return getSoundBoardListenerZ() - soundBoard.distance; }
+
+// ---------------------------------------------------------------------------
+// The list
+// ---------------------------------------------------------------------------
+
+// The Hollow's growl is one voice in several moods, so only one of these can be on at a time.
+function createSoundBoardGrowl(key, label, hint, aggression, shriekLevel) {
+  return {
+    group: 'The Hollow', key: key, label: label, hint: hint, seconds: 3, hasPlace: true, only: 'hollowVoice',
+    start: function () { soundBoard.hollowVoice = { aggression: aggression, shriekLevel: shriekLevel }; applySoundBoardHollowVoice(0); },
+    stop: function () { soundBoard.hollowVoice = null; applySoundBoardHollowVoice(0); }
+  };
+}
+
+function applySoundBoardHollowVoice(dt) {
+  const voice = soundBoard.hollowVoice;
+  updateHollowVoice(getSoundBoardListenerX(), getSoundBoardSourceZ(), voice !== null,
+    voice ? voice.aggression : 0, voice ? voice.shriekLevel : 0, dt, game.time);
+}
+
+// A recording. How long it lasts is only known once it has been unpacked, so `load` finds that out first.
+function createSoundBoardVoice(key, treatmentName, label, hint, startDelay) {
+  const entry = {
+    group: 'Voices', key: 'voice-' + key, label: label, hint: hint, seconds: 6,
+    load: function () {
+      return loadVoiceLine(key).then(function (buffer) { if (buffer) entry.seconds = startDelay + buffer.duration + 0.5; });
+    },
+    play: function () {
+      if (treatmentName === 'radio') playRadioBlip();
+      playVoiceLine(key, treatmentName, startDelay, null);
+    },
+    finish: stopVoiceLine
+  };
+  return entry;
+}
+
+// One line per sound.
+//   play           it plays once and is over (a button)
+//   start / stop   it goes on until it is stopped (a switch)
+//   seconds        how long it lasts, or for one that goes on: how long the check listens to it
+//   hasPlace       it comes from somewhere, so it is put `soundBoard.distance` metres ahead of you
+//   finish         called when its time is up, for a sound that would otherwise leave something running
+// To add a sound: add a line. The numbers in the calls are the ones the game uses (the file and line are
+// easy to find by searching for the function's name).
+const SOUND_BOARD_ENTRIES = [
+  // ---- you ----
+  { group: 'You', key: 'stepWalk', label: 'Footstep, walking', seconds: 0.5, play: function () { playFootstepSound(false, false, 0.55); } },
+  { group: 'You', key: 'stepCrouch', label: 'Footstep, crouching', seconds: 0.5, play: function () { playFootstepSound(false, false, 0.25); } },
+  { group: 'You', key: 'stepSprint', label: 'Footstep, sprinting', seconds: 0.5, play: function () { playFootstepSound(false, false, 1.0); } },
+  { group: 'You', key: 'stepGrate', label: 'Footstep on a grate, walking', seconds: 0.6, play: function () { playFootstepSound(false, true, 0.55); } },
+  { group: 'You', key: 'stepWater', label: 'Footstep in water, walking', seconds: 0.6, play: function () { playFootstepSound(true, false, 0.55); } },
+  { group: 'You', key: 'stepWaterSprint', label: 'Footstep in water, sprinting', seconds: 0.6, play: function () { playFootstepSound(true, false, 1.0); } },
+  { group: 'You', key: 'ventCrawl', label: 'Crawling in a vent', hint: 'A crouched footstep and the sheet metal under you, as in play.', seconds: 0.8,
+    play: function () { playFootstepSound(false, false, 0.25); playVentCrawlSound(); } },
+  { group: 'You', key: 'heartbeatFaint', label: 'Heartbeat, something is near', hint: 'The faintest it gets: the threat has only just begun.', seconds: 0.6, play: function () { playHeartbeat(0.36); } },
+  { group: 'You', key: 'heartbeatFull', label: 'Heartbeat, it is on you', seconds: 0.6, play: function () { playHeartbeat(1); } },
+
+  // ---- the scanner and the interface ----
+  { group: 'Scanner and interface', key: 'scannerPaint', label: 'Scanner, held on', hint: 'The real scanner, fired down the hall: ticking and whine.', seconds: 1.5,
+    start: function () { soundBoard.isScanning = true; },
+    stop: function () { soundBoard.isScanning = false; input.isScanHeld = false; } },
+  { group: 'Scanner and interface', key: 'sweep', label: 'Full sweep', seconds: TUNING.sweepDurationSeconds, play: function () { playSweepSound(TUNING.sweepDurationSeconds); } },
+  { group: 'Scanner and interface', key: 'overheat', label: 'Scanner overheats', seconds: 0.9, play: playOverheatSound },
+  { group: 'Scanner and interface', key: 'static', label: 'Interference static, at its worst', hint: 'What the scanner picks up with a creature right beside you.', seconds: 1.5,
+    start: function () { setInterferenceSound(1); },
+    stop: function () { setInterferenceSound(0); } },
+  { group: 'Scanner and interface', key: 'blipMap', label: 'Interface blip (the map opens)', seconds: 0.4, play: function () { playInterfaceBlip(740); } },
+  { group: 'Scanner and interface', key: 'blipClose', label: 'Interface blip (a note is put away)', seconds: 0.4, play: function () { playInterfaceBlip(520); } },
+  { group: 'Scanner and interface', key: 'pickup', label: 'Something picked up', seconds: 0.5, play: playPickupSound },
+  { group: 'Scanner and interface', key: 'denied', label: 'Denied: a door or a machine says no', seconds: 0.6, play: playDeniedSound },
+  { group: 'Scanner and interface', key: 'radioBlip', label: 'Radio opening', seconds: 0.6, play: playRadioBlip },
+
+  // ---- doors and machinery ----
+  { group: 'Doors and machinery', key: 'doorOpen', label: 'Door opens', seconds: 1.1, hasPlace: true, play: function () { playDoorSound(getSoundBoardListenerX(), getSoundBoardSourceZ(), true); } },
+  { group: 'Doors and machinery', key: 'doorClose', label: 'Door closes', seconds: 1.1, hasPlace: true, play: function () { playDoorSound(getSoundBoardListenerX(), getSoundBoardSourceZ(), false); } },
+  { group: 'Doors and machinery', key: 'generatorStart', label: 'Generator is started', hint: 'Five turns of the starter, then it catches.', seconds: 6, hasPlace: true,
+    play: startGeneratorSound,
+    finish: function () {
+      audio.generatorGain.gain.cancelScheduledValues(audio.context.currentTime);
+      setGeneratorSoundRunning(Boolean(soundBoard.heldKeys.generatorRunning));
+    } },
+  { group: 'Doors and machinery', key: 'generatorRunning', label: 'Generator, running', seconds: 2, hasPlace: true,
+    start: function () { setGeneratorSoundRunning(true); },
+    stop: function () { setGeneratorSoundRunning(false); } },
+  { group: 'Doors and machinery', key: 'liftMachinery', label: 'Lift machinery, the car on its way down', seconds: 2, hasPlace: true,
+    start: function () { setLiftMachinerySound(0.85); },
+    stop: function () { setLiftMachinerySound(0); } },
+  { group: 'Doors and machinery', key: 'liftDepart', label: 'Lift leaves without you', hint: 'What you hear after stepping out at the start.', seconds: 7.2, hasPlace: true,
+    play: playLiftDepartSound,
+    finish: function () { setLiftMachinerySound(soundBoard.heldKeys.liftMachinery ? 0.85 : 0); } },
+  { group: 'Doors and machinery', key: 'liftBell', label: 'Lift bell', seconds: 1.0, hasPlace: true, play: playLiftBell },
+
+  // ---- the Hollow ----
+  createSoundBoardGrowl('growlCalm', 'Growl, roaming', 'With the knocking it makes now and then.', 0.1, 0),
+  createSoundBoardGrowl('growlHunt', 'Growl, hunting', 'With its faster knocking.', 0.8, 0),
+  createSoundBoardGrowl('growlEnraged', 'Growl, enraged', 'As loud as the growl gets.', 1, 0),
+  createSoundBoardGrowl('shriek', 'Shriek, held in the beam', 'Over its hunting growl, as in play.', 0.8, 1),
+  { group: 'The Hollow', key: 'roar', label: 'Roar: it has found you', seconds: 1.8, hasPlace: true, play: playHollowRoar },
+  { group: 'The Hollow', key: 'snarl', label: 'Snarl, while hunting', seconds: 0.7, hasPlace: true, play: playHollowSnarl },
+  { group: 'The Hollow', key: 'hiss', label: 'Hiss: it has lost you', seconds: 1.9, hasPlace: true, play: playHollowLostHiss },
+  { group: 'The Hollow', key: 'sniff', label: 'Sniffing, while searching', seconds: 1.4, hasPlace: true, play: playHollowSniff },
+  { group: 'The Hollow', key: 'trill', label: 'Trill: it heard something', seconds: 1.0, hasPlace: true, play: playHollowCuriousTrill },
+  { group: 'The Hollow', key: 'enraged', label: 'Enraged: the beam stops slowing it', seconds: 1.4, hasPlace: true, play: function () { playStinger('enraged'); } },
+  { group: 'The Hollow', key: 'hollowStepRoam', label: 'Its footstep, roaming', seconds: 0.5, hasPlace: true, play: function () { playHollowFootstep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.7); } },
+  { group: 'The Hollow', key: 'hollowStepHunt', label: 'Its footstep, hunting', seconds: 0.5, hasPlace: true, play: function () { playHollowFootstep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
+  { group: 'The Hollow', key: 'hollowVentRoam', label: 'It crawls in a vent, roaming', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.8); } },
+  { group: 'The Hollow', key: 'hollowVentHunt', label: 'It crawls in a vent, hunting', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
+
+  // ---- the Stills ----
+  { group: 'The Stills', key: 'stillShuffle', label: 'A Still moves', seconds: 0.4, hasPlace: true, play: function () { playStillShuffleSound(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
+
+  // ---- stingers: the music of a moment, heard in your head and not from anywhere ----
+  { group: 'Stingers', key: 'stingerSpotted', label: 'It has found you', hint: 'Plays together with the roar.', seconds: 2.0, play: function () { playStinger('spotted'); } },
+  { group: 'Stingers', key: 'stingerStill', label: 'The Stills wake', seconds: 1.8, play: function () { playStinger('still'); } },
+  { group: 'Stingers', key: 'stingerPhantom', label: 'An apparition', seconds: 3.0, play: function () { playStinger('phantom'); } },
+  { group: 'Stingers', key: 'stingerDeath', label: 'Caught', seconds: 1.8, play: function () { playStinger('death'); } },
+
+  // ---- the station ----
+  { group: 'The station', key: 'roomTone', label: 'Room tone', hint: 'Always there in play. Switch it on to hear the other sounds against it.', seconds: 2,
+    start: function () { setSoundBoardRoomTone(true); },
+    stop: function () { setSoundBoardRoomTone(false); } },
+  { group: 'The station', key: 'drips', label: 'Water drips', hint: 'In play: 6 to 16 m away.', seconds: 1.2, hasPlace: true, play: function () { playAmbientDrips(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
+  { group: 'The station', key: 'pipeGroan', label: 'A pipe groans', hint: 'In play: 6 to 16 m away.', seconds: 2.7, hasPlace: true, play: function () { playAmbientPipeGroan(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
+  { group: 'The station', key: 'metalSettles', label: 'Metal settles', hint: 'In play: 6 to 16 m away.', seconds: 1.4, hasPlace: true, play: function () { playAmbientMetalSettling(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
+  { group: 'The station', key: 'shaftKnocks', label: 'Knocking from Shaft 9', hint: 'In play: from wherever the shaft is, usually far off.', seconds: 2.3, hasPlace: true, play: playAmbientShaftKnocks }
+];
+
+// The recordings in assets/voice, as the game plays them. Lines that are text only have nothing to hear.
+const soundBoardUnrecordedLines = [];
+for (const key in RADIO_MESSAGES) {
+  if (hasVoiceLine(key)) SOUND_BOARD_ENTRIES.push(createSoundBoardVoice(key, 'radio', 'Dispatch: ' + key, RADIO_MESSAGES[key], 0.35));
+  else soundBoardUnrecordedLines.push(key);
+}
+for (const key in LOG_ENTRIES) {
+  if (hasVoiceLine(key)) SOUND_BOARD_ENTRIES.push(createSoundBoardVoice(key, 'recorder', 'Recorder: ' + key, LOG_ENTRIES[key].heading, 0.4));
+}
+
+function findSoundBoardEntry(key) {
+  for (const entry of SOUND_BOARD_ENTRIES) {
+    if (entry.key === key) return entry;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// The audio engine, as this tool needs it
+// ---------------------------------------------------------------------------
+
+function setSoundBoardRoomTone(isOn) {
+  const now = audio.context.currentTime;
+  audio.ambienceGain.gain.cancelScheduledValues(now);
+  audio.ambienceGain.gain.setTargetAtTime(isOn ? ROOM_TONE_LEVEL : 0, now, 0.1);
+}
+
+// The lift, the generator, the shaft and the Hollow all have a place in the station. Here they are all put
+// at the same spot: down the hall, at the distance that was chosen.
+function placeSoundBoardSources() {
+  const x = getSoundBoardListenerX(), z = getSoundBoardSourceZ();
+  for (const position of [LIFT_POSITION, GENERATOR_POSITION, SHAFT_POSITION]) { position.x = x; position.z = z; }
+  if (!audio.context) return;
+  moveMachinerySoundsToLevel();
+  setPannerPosition(audio.hollowPanner, x, getFloorHeightAt(x, z) + 1.7, z);
+}
+
+// Starts the audio engine if it is not running yet. A browser only allows that after a click, which is
+// why this is called from the buttons and not when the page loads. Resolves once sound can be made.
+function startSoundBoardAudio() {
+  initializeAudioEngine();
+  const context = audio.context;
+  if (!context) return Promise.reject(new Error('This browser has no audio engine.'));
+  if (!soundBoard.measureTap) {
+    setMasterVolume(settings.volume);
+    soundBoard.measureTap = context.createAnalyser();
+    soundBoard.measureTap.fftSize = 2048;
+    audio.masterGain.connect(soundBoard.measureTap);
+    setSoundBoardRoomTone(false); // the engine starts the room tone by itself; here it is a switch like the others
+    placeSoundBoardSources();
+    // Your ears and the sources are moved into place smoothly, from the corner of the map. Give them a
+    // moment to arrive, or the first sound after a reload is heard from far away.
+    return Promise.resolve(context.state === 'running' ? null : context.resume()).then(function () {
+      updateAudioListener(getSoundBoardListenerX(), TUNING.eyeHeightStanding, getSoundBoardListenerZ(), 0);
+      return waitSoundBoardSeconds(0.3);
+    });
+  }
+  return context.state === 'running' ? Promise.resolve() : context.resume();
+}
+
+// Listens to everything on its way to the speakers for the given time. Resolves with how loud it was
+// (peak and average, where 1.0 is the loudest a speaker can go) and where its energy sits ("centre" in Hz:
+// low is dull or deep, high is bright or harsh).
+function measureSoundBoardOutput(seconds) {
+  return new Promise(function (resolve) {
+    const tap = soundBoard.measureTap, sampleRate = audio.context.sampleRate;
+    const samples = new Float32Array(tap.fftSize);
+    const spectrum = new Float32Array(tap.frequencyBinCount);
+    let peak = 0, squareSum = 0, sampleCount = 0, weighted = 0, weightTotal = 0, isInvalid = false;
+    const started = window.performance.now();
+    const timer = window.setInterval(function () {
+      tap.getFloatTimeDomainData(samples);
+      for (const value of samples) {
+        if (!Number.isFinite(value)) isInvalid = true;
+        peak = Math.max(peak, Math.abs(value));
+        squareSum += value * value;
+        sampleCount++;
+      }
+      tap.getFloatFrequencyData(spectrum);
+      for (let bin = 1; bin < spectrum.length; bin++) {
+        const power = Math.pow(10, spectrum[bin] / 10);
+        weighted += power * bin * sampleRate / tap.fftSize;
+        weightTotal += power;
+      }
+      if (window.performance.now() - started > seconds * 1000) {
+        window.clearInterval(timer);
+        resolve({ peak: peak, average: Math.sqrt(squareSum / Math.max(1, sampleCount)), centre: weightTotal > 0 ? weighted / weightTotal : 0, isInvalid: isInvalid });
+      }
+    }, 20);
+  });
+}
+
+function waitSoundBoardSeconds(seconds) {
+  return new Promise(function (resolve) { window.setTimeout(resolve, seconds * 1000); });
+}
+
+// ---------------------------------------------------------------------------
+// Playing
+// ---------------------------------------------------------------------------
+
+function showSoundBoardResult(key) {
+  const row = soundBoard.rows[key], result = soundBoard.results[key];
+  if (!row) return;
+  const isDistorting = Boolean(result) && result.peak > SOUND_BOARD_DISTORTING_PEAK;
+  const isSilent = Boolean(result) && result.peak < SOUND_BOARD_SILENT_PEAK;
+  row.level.textContent = result ? (isSilent ? 'silent' : 'peak ' + result.peak.toFixed(2) + ' avg ' + result.average.toFixed(3)) : '';
+  row.level.title = !result ? '' : isDistorting ? 'Loud enough to distort (a peak above ' + SOUND_BOARD_DISTORTING_PEAK + ').'
+    : isSilent ? 'Nothing came out.' : 'Its energy sits around ' + Math.round(result.centre) + ' Hz.';
+  row.level.classList.toggle('is-loud', isDistorting || isSilent);
+}
+
+function markSoundBoardRow(key, isPlaying) {
+  const row = soundBoard.rows[key];
+  if (row) row.element.classList.toggle('is-playing', isPlaying);
+}
+
+function reportSoundBoardProblem(error) {
+  setWorkshopStatus('No sound: ' + error.message, 'warning');
+  return null;
+}
+
+// Plays a sound once. Resolves with what came out when it is over.
+function playSoundBoardEntry(entry) {
+  return startSoundBoardAudio().then(function () {
+    return entry.load ? entry.load() : null;
+  }).then(function () {
+    markSoundBoardRow(entry.key, true);
+    entry.play();
+    return measureSoundBoardOutput(entry.seconds);
+  }).then(function (result) {
+    if (entry.finish) entry.finish();
+    markSoundBoardRow(entry.key, false);
+    soundBoard.results[entry.key] = result;
+    showSoundBoardResult(entry.key);
+    return result;
+  });
+}
+
+// Switches a sound that goes on, on or off. Switching it on resolves with what came out once it has been
+// going for a moment; switching it off resolves with nothing.
+function holdSoundBoardEntry(entry, isOn) {
+  const refreshSwitch = function (key) {
+    const row = soundBoard.rows[key];
+    if (row) row.control.checked = Boolean(soundBoard.heldKeys[key]);
+    markSoundBoardRow(key, Boolean(soundBoard.heldKeys[key]));
+  };
+  return startSoundBoardAudio().then(function () {
+    if (!isOn) {
+      if (soundBoard.heldKeys[entry.key]) entry.stop();
+      delete soundBoard.heldKeys[entry.key];
+      refreshSwitch(entry.key);
+      return null;
+    }
+    // Only one mood of the same voice at a time.
+    for (const other of SOUND_BOARD_ENTRIES) {
+      if (other === entry || !entry.only || other.only !== entry.only || !soundBoard.heldKeys[other.key]) continue;
+      other.stop();
+      delete soundBoard.heldKeys[other.key];
+      refreshSwitch(other.key);
+    }
+    entry.start();
+    soundBoard.heldKeys[entry.key] = true;
+    refreshSwitch(entry.key);
+    return waitSoundBoardSeconds(SOUND_BOARD_FADE_IN_SECONDS).then(function () {
+      return measureSoundBoardOutput(entry.seconds);
+    }).then(function (result) {
+      if (!soundBoard.heldKeys[entry.key]) return null; // switched off while it was being measured
+      soundBoard.results[entry.key] = result;
+      showSoundBoardResult(entry.key);
+      return result;
+    });
+  });
+}
+
+// Lets one sound be heard from start to finish, whichever kind it is. Resolves with what came out.
+function listenToSoundBoardEntry(entry) {
+  if (entry.play) return playSoundBoardEntry(entry);
+  return holdSoundBoardEntry(entry, true).then(function (result) {
+    return holdSoundBoardEntry(entry, false).then(function () { return result; });
+  });
+}
+
+function stopSoundBoard() {
+  soundBoard.playAllRun++;
+  if (!soundBoard.measureTap) return; // nothing has been played yet
+  for (const entry of SOUND_BOARD_ENTRIES) {
+    if (entry.play) { if (entry.finish) entry.finish(); markSoundBoardRow(entry.key, false); }
+    else if (soundBoard.heldKeys[entry.key]) holdSoundBoardEntry(entry, false);
+  }
+}
+
+// Every sound in turn, top to bottom, with a breath between them.
+function playAllSoundBoardEntries() {
+  stopSoundBoard();
+  const run = soundBoard.playAllRun;
+  let turn = Promise.resolve();
+  for (const entry of SOUND_BOARD_ENTRIES) {
+    turn = turn.then(function () {
+      if (run !== soundBoard.playAllRun) return null;
+      const row = soundBoard.rows[entry.key];
+      if (row) row.element.scrollIntoView({ block: 'nearest' });
+      return listenToSoundBoardEntry(entry).then(function () { return waitSoundBoardSeconds(0.5); });
+    });
+  }
+  turn.then(function () {
+    if (run === soundBoard.playAllRun) setWorkshopStatus('That was every sound.', 'good');
+  }, reportSoundBoardProblem);
+}
+
+function setSoundBoardDistance(distance) {
+  soundBoard.distance = clampNumber(distance, 1, SOUND_BOARD_MAXIMUM_DISTANCE);
+  placeSoundBoardSources();
+  for (const key in soundBoard.rows) {
+    if (soundBoard.rows[key].place) soundBoard.rows[key].place.textContent = formatWorkshopNumber(soundBoard.distance) + ' m';
+  }
+  markWorkshopStateChanged();
+}
+
+// ---------------------------------------------------------------------------
+// The hall, every frame, and the panel
+// ---------------------------------------------------------------------------
+
+function openSoundBoard(stored) {
+  if (Number.isFinite(stored.distance)) soundBoard.distance = clampNumber(stored.distance, 1, SOUND_BOARD_MAXIMUM_DISTANCE);
+  soundBoard.pendingScrollTop = Number.isFinite(stored.scrollTop) ? stored.scrollTop : 0;
+  prepareWorkshopWorld('Workshop · sounds');
+  ZONE_NAMES.push('UNSURVEYED', 'SOUND HALL');
+  clearPlacement();
+  placement.zone = 1;
+  carveRoom(WORKSHOP_ORIGIN_X, WORKSHOP_ORIGIN_Z, WORKSHOP_ORIGIN_X + SOUND_BOARD_HALL_WIDTH, WORKSHOP_ORIGIN_Z + SOUND_BOARD_HALL_LENGTH, 3.2, ZONE_GENERATED_ROOM);
+  finishWorkshopWorld();
+  soundBoard.machineryPositions = [LIFT_POSITION, GENERATOR_POSITION, SHAFT_POSITION].map(function (position) { return { position: position, x: position.x, z: position.z }; });
+  placeSoundBoardSources();
+  placeSoundBoardCamera();
+}
+
+function closeSoundBoard() {
+  stopSoundBoard();
+  for (const saved of soundBoard.machineryPositions || []) { saved.position.x = saved.x; saved.position.z = saved.z; }
+  soundBoard.machineryPositions = null;
+  if (audio.context) moveMachinerySoundsToLevel();
+  soundBoard.rows = {};
+}
+
+function placeSoundBoardCamera() {
+  placeWorkshopCamera(getSoundBoardListenerX(), TUNING.eyeHeightStanding, getSoundBoardListenerZ(), 0, 0);
+}
+
+function updateSoundBoard(dt) {
+  // You stand still and look down the hall: what matters here is what you hear.
+  placeSoundBoardCamera();
+  input.lookDeltaX = 0; input.lookDeltaY = 0;
+  updateAudioListener(player.x, getPlayerEyeY(), player.z, player.yaw);
+  if (soundBoard.isScanning) input.isScanHeld = true;
+  // The growl is kept up every frame, as in play: that is what makes it knock now and then.
+  if (soundBoard.hollowVoice) applySoundBoardHollowVoice(dt);
+}
+
+// A cross on the floor where the sounds that come from somewhere are.
+function addSoundBoardOverlays() {
+  pushDebugCross(getSoundBoardListenerX(), 0.03, getSoundBoardSourceZ(), 0.35, 1.0, 0.66, 0.23);
+}
+
+function addSoundBoardRow(body, entry) {
+  const element = createDebugElement('div', 'sound-row');
+  let control, labelHolder;
+  if (entry.play) {
+    control = createDebugElement('button', 'button-quiet', entry.label);
+    control.type = 'button';
+    control.addEventListener('click', function () {
+      control.blur(); // or Space (the scanner) would press it again
+      playSoundBoardEntry(entry).catch(reportSoundBoardProblem);
+    });
+    labelHolder = control;
+    element.appendChild(control);
+  } else {
+    const label = createDebugElement('label', 'debug-option');
+    control = document.createElement('input');
+    control.type = 'checkbox';
+    control.checked = Boolean(soundBoard.heldKeys[entry.key]);
+    control.addEventListener('change', function () {
+      control.blur();
+      holdSoundBoardEntry(entry, control.checked).catch(reportSoundBoardProblem);
+    });
+    label.appendChild(control);
+    labelHolder = label.appendChild(createDebugElement('span', '', entry.label));
+    element.appendChild(label);
+  }
+  control.id = 'sound-' + entry.key;
+  if (entry.hint) labelHolder.title = entry.hint;
+  const place = entry.hasPlace ? labelHolder.appendChild(createDebugElement('span', 'sound-place', formatWorkshopNumber(soundBoard.distance) + ' m')) : null;
+  const level = element.appendChild(createDebugElement('span', 'sound-level', ''));
+  level.id = 'sound-level-' + entry.key;
+  body.appendChild(element);
+  soundBoard.rows[entry.key] = { element: element, control: control, level: level, place: place };
+  element.classList.toggle('is-playing', Boolean(soundBoard.heldKeys[entry.key]));
+  showSoundBoardResult(entry.key);
+}
+
+function renderSoundBoardPanel(body) {
+  soundBoard.rows = {};
+  addWorkshopNote(body, 'Every sound the game makes. A button plays its sound once; a tick box keeps it going, so you can hear other sounds against it. ' +
+    'How loud each one is, is set in src/js/07-audio.js: change a number there and this page reloads with it.');
+  const row = addWorkshopRow(body);
+  addWorkshopButton(row, 'Play all in turn', playAllSoundBoardEntries, 'Every sound, top to bottom').id = 'sound-play-all';
+  addWorkshopButton(row, 'Stop', stopSoundBoard, 'Stops "play all" and everything that is switched on').id = 'sound-stop';
+  addWorkshopNumber(body, 'Distance to sounds that come from somewhere (m). They are at the cross, and show their distance.',
+    soundBoard.distance, 1, SOUND_BOARD_MAXIMUM_DISTANCE, 0.5, setSoundBoardDistance);
+  addWorkshopNote(body, 'After a sound has played, its row shows how loud the output was: the peak and the average, where 1.0 is the loudest a speaker can go. ' +
+    'Whatever else was playing is counted too. Measured at the volume from the settings (' + Math.round(settings.volume * 100) + ' %).');
+
+  let group = null;
+  for (const entry of SOUND_BOARD_ENTRIES) {
+    if (entry.group !== group) { group = entry.group; addWorkshopHeading(body, group); }
+    addSoundBoardRow(body, entry);
+  }
+  if (soundBoardUnrecordedLines.length > 0) addWorkshopNote(body, 'Text only, no recording yet: ' + soundBoardUnrecordedLines.join(', ') + '.');
+
+  // After a reload the list comes back where it was, so the sound being worked on is still under the mouse.
+  if (soundBoard.pendingScrollTop > 0) {
+    const scrollTop = soundBoard.pendingScrollTop;
+    soundBoard.pendingScrollTop = 0;
+    window.setTimeout(function () { body.scrollTop = scrollTop; }, 0);
+  }
+}
+
+workshop.tools.sounds = {
+  label: 'Sounds',
+  initialize: function () {},
+  open: openSoundBoard,
+  close: closeSoundBoard,
+  storeState: function (stored) {
+    stored.distance = soundBoard.distance;
+    stored.scrollTop = workshop.bodyElement.scrollTop;
+  },
+  save: function () { setWorkshopStatus('Nothing to save here: how loud a sound is, is set in src/js/07-audio.js.', 'info'); },
+  moveCameraInside: placeSoundBoardCamera,
+  update: updateSoundBoard,
+  addOverlays: addSoundBoardOverlays,
+  renderPanel: renderSoundBoardPanel,
+  onPointerDown: function () {},
+  onPointerMove: function () {},
+  onPointerUp: function () {},
+  onWheel: function () {},
+  onKey: function () { return false; }
+};
+
+// For tools/audio-check.js, which plays this list to measure it, and for the browser console.
+const soundBoardForTools = {
+  state: soundBoard,
+  silentPeak: SOUND_BOARD_SILENT_PEAK,
+  distortingPeak: SOUND_BOARD_DISTORTING_PEAK,
+  list: function () {
+    return SOUND_BOARD_ENTRIES.map(function (entry) {
+      return { key: entry.key, group: entry.group, label: entry.label, goesOn: !entry.play, hasPlace: Boolean(entry.hasPlace) };
+    });
+  },
+  // Resolves with the state of the audio engine: 'running' when sounds can be made.
+  start: function () {
+    return startSoundBoardAudio().then(function () { return audio.context.state; }, function (error) { return error.message; });
+  },
+  listen: function (key) { return listenToSoundBoardEntry(findSoundBoardEntry(key)); },
+  setDistance: setSoundBoardDistance
+};

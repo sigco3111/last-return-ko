@@ -33,6 +33,8 @@ const audio = {
   volume: 0.8
 };
 
+const ROOM_TONE_LEVEL = 0.9; // TWEAK: loudness of the constant room tone
+
 function isAudioReady() {
   return audio.context !== null && audio.context.state === 'running';
 }
@@ -354,7 +356,7 @@ function initializeAudioEngine() {
   liftRattle.connect(liftRattleFilter); liftRattleFilter.connect(audio.liftGain);
   liftRattle.start();
 
-  audio.ambienceGain.gain.setTargetAtTime(0.9, context.currentTime, 2.5); // TWEAK: 0.9 = loudness of the constant room tone
+  audio.ambienceGain.gain.setTargetAtTime(ROOM_TONE_LEVEL, context.currentTime, 2.5);
 }
 
 // Called when a different station is loaded: the generator and the lift are somewhere else now.
@@ -382,7 +384,14 @@ function createPannerNode(x, y, z, referenceDistance, rolloff) {
   panner.distanceModel = 'inverse';
   panner.refDistance = referenceDistance;
   panner.rolloffFactor = rolloff;
-  setPannerPosition(panner, x, y, z);
+  // A new panner is put in its place at once. setPannerPosition glides, which is right for a source that
+  // moves, but a new one would glide in from the corner of the map (0, 0, 0) and a short sound would be
+  // over before it arrived.
+  if (panner.positionX) {
+    panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z;
+  } else {
+    panner.setPosition(x, y, z);
+  }
   panner.connect(audio.masterGain);
   const reverbSend = context.createGain();
   reverbSend.gain.value = 0.45;
@@ -744,6 +753,13 @@ function playHollowFootstep(x, z, weight) {
   playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 1400, gain: 0.22 * weight, delay: 0.03, destination: panner });
 }
 
+// A Still moving while nothing is scanning it: one dry scrape of a foot.
+function playStillShuffleSound(x, z) {
+  const panner = createTemporaryPanner(x, 0.1, z);
+  if (!panner) return;
+  playNoiseBurst({ duration: 0.16, filterType: 'bandpass', frequency: 900, resonance: 3, gain: 0.5, useBrownNoise: true, playbackRate: 2.4, destination: panner });
+}
+
 function playHollowClickTrain(clickCount, startInterval, endInterval, loudness) {
   if (!isAudioReady()) return;
   // Hard, hollow knocks, like knuckles of bone. Each one is a tiny burst of noise ringing in a narrow filter.
@@ -919,42 +935,49 @@ function updateLiftBell(isLiftMoving, gameTime) {
   audio.nextLiftBellTime = gameTime + 1.6;
 }
 
-// Occasional sounds from elsewhere in the station.
+// Occasional sounds from elsewhere in the station. Each has a function of its own, so it can be played by itself.
+function playAmbientDrips(x, z) {
+  const panner = createTemporaryPanner(x, 2.5, z);
+  if (!panner) return;
+  const dripCount = 1 + Math.floor(Math.random() * 3);
+  for (let dripIndex = 0; dripIndex < dripCount; dripIndex++) {
+    playTone({ frequency: 1500 + Math.random() * 900, frequencyEnd: 700, duration: 0.09, gain: 0.5, delay: dripIndex * randomBetween(0.25, 0.5), destination: panner });
+  }
+}
+
+function playAmbientPipeGroan(x, z) {
+  const panner = createTemporaryPanner(x, 3, z);
+  if (!panner) return;
+  playResonantNoise({ frequency: 74 + Math.random() * 30, frequencyEnd: 52, resonance: 9, duration: 2.6, gain: 0.3, attack: 0.6, destination: panner });
+  playNoiseBurst({ duration: 2.4, filterType: 'bandpass', frequency: 300, frequencyEnd: 190, gain: 0.3, attack: 0.5, resonance: 8, destination: panner });
+}
+
+function playAmbientMetalSettling(x, z) {
+  const panner = createTemporaryPanner(x, 1, z);
+  if (!panner) return;
+  playTone({ waveform: 'triangle', frequency: 410 + Math.random() * 200, frequencyEnd: 380, duration: 1.3, gain: 0.5, attack: 0.002, destination: panner });
+  playNoiseBurst({ duration: 0.2, frequency: 1800, gain: 0.5, destination: panner });
+}
+
+// Three slow knocks from the direction of Shaft 9.
+function playAmbientShaftKnocks() {
+  const panner = createTemporaryPanner(SHAFT_POSITION.x, 0, SHAFT_POSITION.z);
+  if (!panner) return;
+  for (let knockIndex = 0; knockIndex < 3; knockIndex++) {
+    playNoiseBurst({ duration: 0.25, frequency: 220, gain: 3.5, useBrownNoise: true, delay: knockIndex * 0.85, destination: panner });
+    playTone({ frequency: 82, frequencyEnd: 55, duration: 0.3, gain: 3.0, delay: knockIndex * 0.85, destination: panner });
+  }
+}
+
 function updateAmbientEvents(gameTime, listenerX, listenerZ, dread) {
   if (!isAudioReady() || gameTime < audio.nextAmbientEventTime) return null;
   audio.nextAmbientEventTime = gameTime + randomBetween(7, 19) * (1.2 - dread * 0.5);
   const choice = Math.random();
   const angle = Math.random() * TWO_PI, distance = randomBetween(6, 16);
   const eventX = listenerX + Math.cos(angle) * distance, eventZ = listenerZ + Math.sin(angle) * distance;
-  if (choice < 0.34) {
-    const panner = createTemporaryPanner(eventX, 2.5, eventZ);
-    if (!panner) return null;
-    const dripCount = 1 + Math.floor(Math.random() * 3);
-    for (let dripIndex = 0; dripIndex < dripCount; dripIndex++) {
-      playTone({ frequency: 1500 + Math.random() * 900, frequencyEnd: 700, duration: 0.09, gain: 0.5, delay: dripIndex * randomBetween(0.25, 0.5), destination: panner });
-    }
-    return null;
-  }
-  if (choice < 0.58) {
-    const panner = createTemporaryPanner(eventX, 3, eventZ);
-    if (!panner) return null;
-    playResonantNoise({ frequency: 74 + Math.random() * 30, frequencyEnd: 52, resonance: 9, duration: 2.6, gain: 0.3, attack: 0.6, destination: panner });
-    playNoiseBurst({ duration: 2.4, filterType: 'bandpass', frequency: 300, frequencyEnd: 190, gain: 0.3, attack: 0.5, resonance: 8, destination: panner });
-    return '[a pipe groans]';
-  }
-  if (choice < 0.8) {
-    const panner = createTemporaryPanner(eventX, 1, eventZ);
-    if (!panner) return null;
-    playTone({ waveform: 'triangle', frequency: 410 + Math.random() * 200, frequencyEnd: 380, duration: 1.3, gain: 0.5, attack: 0.002, destination: panner });
-    playNoiseBurst({ duration: 0.2, frequency: 1800, gain: 0.5, destination: panner });
-    return '[metal settles somewhere]';
-  }
-  // Three slow knocks from the direction of Shaft 9.
-  const panner = createTemporaryPanner(SHAFT_POSITION.x, 0, SHAFT_POSITION.z);
-  if (!panner) return null;
-  for (let knockIndex = 0; knockIndex < 3; knockIndex++) {
-    playNoiseBurst({ duration: 0.25, frequency: 220, gain: 3.5, useBrownNoise: true, delay: knockIndex * 0.85, destination: panner });
-    playTone({ frequency: 82, frequencyEnd: 55, duration: 0.3, gain: 3.0, delay: knockIndex * 0.85, destination: panner });
-  }
+  if (choice < 0.34) { playAmbientDrips(eventX, eventZ); return null; }
+  if (choice < 0.58) { playAmbientPipeGroan(eventX, eventZ); return '[a pipe groans]'; }
+  if (choice < 0.8) { playAmbientMetalSettling(eventX, eventZ); return '[metal settles somewhere]'; }
+  playAmbientShaftKnocks();
   return '[knocking, far below]';
 }
