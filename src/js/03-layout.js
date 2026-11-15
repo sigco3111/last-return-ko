@@ -10,11 +10,14 @@ const OBJECT_GENERATOR = 2;
 const OBJECT_SPOOL_1 = 3;
 const OBJECT_SPOOL_2 = 4;
 const OBJECT_SPOOL_3 = 5;
-const OBJECT_KEYCARD = 6;
+const OBJECT_KEYCARD = 6;      // keycard 1
 const OBJECT_NOTE_SECURITY = 7;
 const OBJECT_NOTE_LOCKER = 8;
 const OBJECT_NOTE_LAB = 9;
 const OBJECT_NOTE_ARCHIVE = 10;
+const OBJECT_KEYCARD_2 = 11;
+const OBJECT_KEYCARD_3 = 12;
+const KEYCARD_OBJECT_IDS = [0, OBJECT_KEYCARD, OBJECT_KEYCARD_2, OBJECT_KEYCARD_3]; // by card number
 
 // Where things are in the station that is loaded. The rooms below fill these in as they are built,
 // so they are right for the classic station and for generated ones.
@@ -43,10 +46,13 @@ function addSurveySpool(objectId, x, y, z, label) {
 }
 
 
-function addKeycard(x, y, z) {
+// `cardLevel` is 1, 2 or 3. Left out, it is card 1.
+function addKeycard(x, y, z, cardLevel) {
+  cardLevel = cardLevel || 1;
   const keycard = addBoxProp(x, y, z, 0.07, 0.01, 0.045, { yaw: 0.5, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const keycardLanyard = addBoxProp(x + 0.15, y - 0.003, z + 0.1, 0.1, 0.006, 0.012, { yaw: 1.1, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(OBJECT_KEYCARD, x, y + 0.025, z, 'Take keycard', [keycard, keycardLanyard], { removeWhenUsed: true, mapLabel: 'KEYCARD' });
+  const cardName = level.keycardCount > 1 ? 'keycard ' + cardLevel : 'keycard';
+  registerInteractable(KEYCARD_OBJECT_IDS[cardLevel], x, y + 0.025, z, 'Take ' + cardName, [keycard, keycardLanyard], { removeWhenUsed: true, mapLabel: cardName.toUpperCase() });
 }
 
 // A generated station may move the first spool or the keycard out of its usual room (see 03-levelgen.js).
@@ -467,6 +473,7 @@ function buildFacilityLayout() {
   level.kind = 'classic';
   level.description = 'Kessel-9 (classic)';
   level.keycardRoomText = 'the laboratory';
+  level.keycardCount = 1;
   level.stillZones.length = 0;
   level.stillZones.push(ZONE_CALIBRATION_STORE, ZONE_ARCHIVE);
   level.unlabelledZones.length = 0;

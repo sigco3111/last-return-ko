@@ -100,7 +100,7 @@ function emitNoise(x, z, radius) {
 function canPlayerOpenDoor(door) {
   if (door.kind === DOOR_KIND_AUTOMATIC) return true;
   if (door.kind === DOOR_KIND_POWERED) return game.flags.powerOn;
-  if (door.kind === DOOR_KIND_KEYCARD) return game.flags.powerOn && game.flags.hasKeycard;
+  if (door.kind === DOOR_KIND_KEYCARD) return game.flags.powerOn && game.flags.keycardLevel >= (door.cardLevel || 1);
   return false;
 }
 
@@ -120,7 +120,9 @@ function updateDoors(dt) {
         } else if (door.deniedMessageCooldown <= 0) {
           door.deniedMessageCooldown = 5;
           playDeniedSound();
-          if (door.kind === DOOR_KIND_KEYCARD && game.flags.powerOn) showMessage('Door locked. Keycard required.', 3.5, 'warning');
+          if (door.kind === DOOR_KIND_KEYCARD && game.flags.powerOn) {
+            showMessage(level.keycardCount > 1 ? 'Door locked. Keycard ' + door.cardLevel + ' required.' : 'Door locked. Keycard required.', 3.5, 'warning');
+          }
           else showMessage('Door has no power.', 3.5, 'warning');
         }
       }

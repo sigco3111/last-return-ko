@@ -24,6 +24,7 @@ A night-shift controller at the surface, talking to you over a poor radio link. 
 | `generatorStarted.mp3` | We see the load up here. Powered doors should answer now. | Matter-of-fact, eyes on a gauge. |
 | `generatorFollowUp.mp3` | Odd. The motion sensor in the shaft chamber just tripped. Probably the mains coming back. | Mild curiosity on "Odd." Then talks himself out of it. Not worried. |
 | `keycardTaken.mp3` | That card opens the keycard doors. Shaft 9 is behind one of them. | Helpful, brief. |
+| `lowerKeycardTaken.mp3` | That card opens some of the doors. Not the way to Shaft 9. There is another card further in. | Helpful, brief, a little apologetic. Only heard in large stations, which have more than one card. |
 | `secondSpool.mp3` | That is two. Do not stay in that room. | First sentence normal. Second sentence a little too quick. |
 | `allSpools.mp3` | That is all three. Go back to the lift lobby and upload them. | Relief he is trying not to show. |
 | `uploadStarted.mp3` | Upload received. The car is on its way down. Forty seconds. It is not a quiet machine. | Businesslike. The last sentence is a dry understatement. |

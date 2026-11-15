@@ -254,6 +254,8 @@ const RADIO_MESSAGES = {
   generatorStarted: 'We see the load up here. Powered doors should answer now.',
   generatorFollowUp: 'Odd. The motion sensor in the shaft chamber just tripped. Probably the mains coming back.',
   keycardTaken: 'That card opens the keycard doors. Shaft 9 is behind one of them.',
+  // Only in stations with more than one keycard: said for every card except the last.
+  lowerKeycardTaken: 'That card opens some of the doors. Not the way to Shaft 9. There is another card further in.',
   secondSpool: 'That is two. Do not stay in that room.',
   allSpools: 'That is all three. Go back to the lift lobby and upload them.',
   uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',

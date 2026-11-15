@@ -169,7 +169,8 @@ function plotPointOnMap(x, z, surfaceClass) {
     if (data[offset + 2] < 120) { data[offset] += 1; data[offset + 1] += 6; data[offset + 2] += 22; }
   } else if (surfaceClass === SURFACE_INTERACTIVE) {
     data[offset] = 242; data[offset + 1] = 169; data[offset + 2] = 59;
-  } else if (surfaceClass === SURFACE_DOOR_AUTOMATIC || surfaceClass === SURFACE_DOOR_POWERED || surfaceClass === SURFACE_DOOR_KEYCARD) {
+  } else if (surfaceClass === SURFACE_DOOR_AUTOMATIC || surfaceClass === SURFACE_DOOR_POWERED || surfaceClass === SURFACE_DOOR_KEYCARD ||
+      surfaceClass === SURFACE_DOOR_KEYCARD_2 || surfaceClass === SURFACE_DOOR_KEYCARD_3) {
     data[offset] = 95; data[offset + 1] = 224; data[offset + 2] = 160;
   } else {
     data[offset] = Math.min(215, data[offset] + 44);
@@ -378,6 +379,12 @@ function clearMessages() {
 // HUD
 // ---------------------------------------------------------------------------
 
+// "NO KEYCARD" or "KEYCARD" in a station with one card; "KEYCARDS 1/2" where there are more.
+function getKeycardStatusText() {
+  if (level.keycardCount > 1) return 'KEYCARDS ' + game.flags.keycardLevel + '/' + level.keycardCount;
+  return game.flags.hasKeycard ? 'KEYCARD' : 'NO KEYCARD';
+}
+
 function updateHud(realDt) {
   const elements = interfaceState.elements;
   const now = game.realTime;
@@ -403,7 +410,7 @@ function updateHud(realDt) {
   // ---- the quiet screen: every instrument is hidden until it has something to say ----
   // TWEAK: the numbers are when each one appears. Choose "Full instruments" in the settings to see them all, always.
   const isQuiet = settings.hud === 'quiet';
-  const statusSignature = game.objectiveText + '|' + game.flags.spoolsCollected + '|' + game.flags.powerOn + '|' + game.flags.hasKeycard;
+  const statusSignature = game.objectiveText + '|' + game.flags.spoolsCollected + '|' + game.flags.powerOn + '|' + game.flags.keycardLevel;
   if (statusSignature !== interfaceState.lastStatusSignature) {
     interfaceState.lastStatusSignature = statusSignature;
     interfaceState.objectiveShownUntil = now + 8; // the objective and the three chips show for 8 s when any of them changes
@@ -453,7 +460,7 @@ function updateHud(realDt) {
     elements['chip-spools'].classList.toggle('is-on', spools >= 3);
     elements['chip-power'].textContent = game.flags.powerOn ? 'MAINS ON' : 'MAINS OFF';
     elements['chip-power'].classList.toggle('is-on', game.flags.powerOn);
-    elements['chip-keycard'].textContent = game.flags.hasKeycard ? 'KEYCARD' : 'NO KEYCARD';
+    elements['chip-keycard'].textContent = getKeycardStatusText();
     elements['chip-keycard'].classList.toggle('is-on', game.flags.hasKeycard);
 
     const zone = getZoneAtPosition(player.x, player.z);
@@ -463,7 +470,7 @@ function updateHud(realDt) {
     if (interfaceState.isMapOverlayOpen) {
       elements['map-objective'].textContent = game.objectiveText;
       elements['map-status'].textContent = 'SPOOLS ' + spools + '/3 · ' + (game.flags.powerOn ? 'MAINS ON' : 'MAINS OFF') + ' · ' +
-        (game.flags.hasKeycard ? 'KEYCARD' : 'NO KEYCARD') + ' · ' + (ZONE_NAMES[zone] || ZONE_NAMES[0]);
+        getKeycardStatusText() + ' · ' + (ZONE_NAMES[zone] || ZONE_NAMES[0]);
     }
 
     const rangeElement = elements['readout-range'];

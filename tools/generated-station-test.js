@@ -292,6 +292,58 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   for (let pump = 0; pump < 6; pump++) await drawFrames(page, 1);
   check('the title screen scans the generated lift lobby by itself', (await inGame(() => window.noReturnDebug.pointCloud.totalReturns)) > 0);
 
+  // --- more than one keycard: a large station has two, and each opens only its own ring of doors ---
+  await page.selectOption('#title-station-size', 'large');
+  await page.fill('#title-seed', '3');
+  await startGame(page, false);
+  const cards = await inGame(() => {
+    const debug = window.noReturnDebug, result = { count: debug.level.keycardCount, problems: debug.auditProgression() };
+    debug.grantPower();
+    const doorOfCard = (cardLevel) => debug.doors.find((door) => door.kind === 2 && door.cardLevel === cardLevel);
+    const tryDoor = (door) => {
+      for (const step of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const spot = debug.findWalkableSpotNear(door.tileX + 0.5 + step[0], door.tileZ + 0.5 + step[1]);
+        if (spot && Math.abs(spot.x - door.tileX - 0.5 - step[0]) < 0.01 && Math.abs(spot.z - door.tileZ - 0.5 - step[1]) < 0.01) {
+          debug.teleport(spot.x, spot.z, 0); debug.simulate(1.5); return door.openFraction;
+        }
+      }
+      return -1;
+    };
+    const take = (objectId) => { const thing = debug.findInteractable(objectId); const spot = debug.findWalkableSpotNear(thing.x, thing.z); debug.teleport(spot.x, spot.z, 0); debug.use(objectId); debug.simulate(0.2); };
+    result.hasBothKindsOfDoor = Boolean(doorOfCard(1) && doorOfCard(2));
+    result.card1DoorNoCard = tryDoor(doorOfCard(1));
+    take(debug.keycardObjectIds[1]);
+    result.levelAfterCard1 = debug.game.flags.keycardLevel;
+    result.card1DoorWithCard1 = tryDoor(doorOfCard(1));
+    result.card2DoorWithCard1 = tryDoor(doorOfCard(2));
+    take(debug.keycardObjectIds[2]);
+    result.levelAfterCard2 = debug.game.flags.keycardLevel;
+    result.card2DoorWithCard2 = tryDoor(doorOfCard(2));
+    result.chip = document.getElementById('chip-keycard').textContent;
+    debug.hollow.isActive = false;
+    return result;
+  });
+  await drawFrames(page, 2);
+  cards.chip = await page.evaluate(() => document.getElementById('chip-keycard').textContent);
+  check('a large station has two keycards and passes the lock-order check', cards.count === 2 && cards.problems.length === 0 && cards.hasBothKindsOfDoor, cards);
+  check('keycard 1 opens its own doors and not keycard 2 doors; keycard 2 opens those',
+    cards.card1DoorNoCard === 0 && cards.levelAfterCard1 === 1 && cards.card1DoorWithCard1 === 1 && cards.card2DoorWithCard1 === 0 &&
+    cards.levelAfterCard2 === 2 && cards.card2DoorWithCard2 === 1 && cards.chip === 'KEYCARDS 2/2', cards);
+
+  // --- the largest size: three keycards ---
+  const massive = await inGame(() => {
+    const debug = window.noReturnDebug, bad = [];
+    let cardTotal = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const wasBuilt = debug.loadStation('generated', seed, 'massive', ['tight', 'mixed', 'sprawling'][seed % 3], seed % 2 === 0 ? 'two' : 'one');
+      const found = wasBuilt ? debug.auditLayout().concat(debug.auditProgression()) : ['no plan could be made'];
+      if (found.length > 0) bad.push({ seed: seed, problems: found.slice(0, 4) });
+      cardTotal += debug.level.keycardCount;
+    }
+    return { bad: bad, cardTotal: cardTotal };
+  });
+  check('8 massive stations: all can be built and finished in order, each with three keycards', massive.bad.length === 0 && massive.cardTotal === 24, massive);
+
   check('no script errors were reported', problems.length === 0, problems);
   await browser.close();
 

@@ -125,7 +125,10 @@ void main() {
   else if (surfaceClass == 13) color = mix(color, vec3(0.55, 0.9, 0.82), 0.45);
   else if (surfaceClass == 4) color = openColor;
   else if (surfaceClass == 5) color = mix(lockedColor, openColor, uPowerOn);
-  else if (surfaceClass == 6) color = mix(lockedColor, openColor, uPowerOn * uHasKeycard);
+  // uHasKeycard carries the number of the best keycard held (0 for none): a door shows green once it would open.
+  else if (surfaceClass == 6) color = mix(lockedColor, openColor, uPowerOn * step(1.0, uHasKeycard));
+  else if (surfaceClass == 14) color = mix(lockedColor, openColor, uPowerOn * step(2.0, uHasKeycard));
+  else if (surfaceClass == 15) color = mix(lockedColor, openColor, uPowerOn * step(3.0, uHasKeycard));
   else if (surfaceClass == 7) color = vec3(1.0, 0.68, 0.12) * (0.8 + 0.35 * sin(uTime * 5.0 + position.y * 9.0));
   else if (surfaceClass == 8) color = vec3(1.15, 1.1, 0.9);
   else if (surfaceClass == 9) color = vec3(0.08, 0.3, 0.95);
@@ -783,7 +786,9 @@ function renderFrame(camera, frameState) {
       gl.uniformMatrix4fv(renderer.debugWorldUniforms.uModel, false, renderer.modelMatrix);
       let canOpen = true;
       if (prop.surfaceClass === SURFACE_DOOR_POWERED) canOpen = frameState.powerOn;
-      if (prop.surfaceClass === SURFACE_DOOR_KEYCARD) canOpen = frameState.powerOn && frameState.hasKeycard;
+      if (prop.surfaceClass === SURFACE_DOOR_KEYCARD) canOpen = frameState.powerOn && frameState.keycardLevel >= 1;
+      if (prop.surfaceClass === SURFACE_DOOR_KEYCARD_2) canOpen = frameState.powerOn && frameState.keycardLevel >= 2;
+      if (prop.surfaceClass === SURFACE_DOOR_KEYCARD_3) canOpen = frameState.powerOn && frameState.keycardLevel >= 3;
       if (prop.surfaceClass === SURFACE_INTERACTIVE) gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.9, 0.6, 0.12);
       else if (canOpen) gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.12, 0.5, 0.28);
       else gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.55, 0.14, 0.08);
@@ -812,7 +817,7 @@ function renderFrame(camera, frameState) {
     gl.uniform2f(uniforms.uPointSizeLimits, 1.7 * renderer.pixelRatio, 3.8 * renderer.pixelRatio);
     gl.uniform1f(uniforms.uInterference, frameState.interference);
     gl.uniform1f(uniforms.uPowerOn, frameState.powerOn ? 1 : 0);
-    gl.uniform1f(uniforms.uHasKeycard, frameState.hasKeycard ? 1 : 0);
+    gl.uniform1f(uniforms.uHasKeycard, frameState.keycardLevel);
     gl.uniform1i(uniforms.uPalette, frameState.palette);
     gl.bindVertexArray(renderer.pointVertexArray);
     gl.drawArrays(gl.POINTS, 0, pointCloud.storedCount);

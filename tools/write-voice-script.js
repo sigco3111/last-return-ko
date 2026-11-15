@@ -13,6 +13,7 @@ const dispatchDirections = {
   generatorStarted: 'Matter-of-fact, eyes on a gauge.',
   generatorFollowUp: 'Mild curiosity on "Odd." Then talks himself out of it. Not worried.',
   keycardTaken: 'Helpful, brief.',
+  lowerKeycardTaken: 'Helpful, brief, a little apologetic. Only heard in large stations, which have more than one card.',
   secondSpool: 'First sentence normal. Second sentence a little too quick.',
   allSpools: 'Relief he is trying not to show.',
   uploadStarted: 'Businesslike. The last sentence is a dry understatement.',

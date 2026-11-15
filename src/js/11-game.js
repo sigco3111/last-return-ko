@@ -11,7 +11,8 @@ const game = {
   flags: {
     hasLeftLift: false,
     powerOn: false,
-    hasKeycard: false,
+    hasKeycard: false,   // holds at least keycard 1
+    keycardLevel: 0,     // the number of the best keycard held: 0 none, then 1, 2, 3
     spoolsCollected: 0,
     uploadStarted: false,
     liftArrived: false
@@ -39,7 +40,7 @@ const workshopHooks = { update: null, buildFrameData: null };
 const ATTRACT_CAMERA = level.attractCamera; // set by whichever lift lobby is loaded
 const renderCamera = { x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, fieldOfViewDegrees: 72 };
 const frameState = {
-  time: 0, realTime: 0, interference: 0, danger: 0, fade: 1, powerOn: false, hasKeycard: false, palette: 0,
+  time: 0, realTime: 0, interference: 0, danger: 0, fade: 1, powerOn: false, hasKeycard: false, keycardLevel: 0, palette: 0,
   showViewmodel: false, viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0, scannerActivity: 0, scannerHeat: 0,
   debug: null
 };
@@ -57,6 +58,11 @@ function scheduleEvent(delaySeconds, action) {
 
 function saveCheckpoint() {
   game.checkpoint.x = player.x; game.checkpoint.z = player.z; game.checkpoint.yaw = player.yaw;
+}
+
+function setKeycardLevel(cardLevel) {
+  game.flags.keycardLevel = cardLevel;
+  game.flags.hasKeycard = cardLevel >= 1;
 }
 
 function setObjective(text) {
@@ -79,7 +85,7 @@ function refreshObjective() {
 
 function resetWorldState() {
   const flags = game.flags;
-  flags.hasLeftLift = false; flags.powerOn = false; flags.hasKeycard = false;
+  flags.hasLeftLift = false; flags.powerOn = false; setKeycardLevel(0);
   flags.spoolsCollected = 0; flags.uploadStarted = false; flags.liftArrived = false;
   game.liftCountdown = -1;
   game.scheduledEvents.length = 0;
@@ -352,13 +358,19 @@ function useInteractable(interactable) {
       collectSpool(interactable, LOG_ENTRIES.spool3);
       break;
     case OBJECT_KEYCARD:
+    case OBJECT_KEYCARD_2:
+    case OBJECT_KEYCARD_3: {
+      const cardLevel = KEYCARD_OBJECT_IDS.indexOf(interactable.objectId);
       removeInteractableFromWorld(interactable);
-      flags.hasKeycard = true;
+      setKeycardLevel(Math.max(flags.keycardLevel, cardLevel));
       playPickupSound();
       saveCheckpoint();
-      showMessage('Keycard taken.', 3, 'info');
-      scheduleEvent(1.5, function () { playRadioLine('keycardTaken'); });
+      showMessage(level.keycardCount > 1 ? 'Keycard ' + cardLevel + ' taken.' : 'Keycard taken.', 3, 'info');
+      // The last card is the one that opens the way to the shaft; an earlier one only gets you further in.
+      const isLastCard = cardLevel >= level.keycardCount;
+      scheduleEvent(1.5, function () { playRadioLine(isLastCard ? 'keycardTaken' : 'lowerKeycardTaken'); });
       break;
+    }
     case OBJECT_NOTE_SECURITY: playInterfaceBlip(620); openReader(LOG_ENTRIES.noteSecurity); break;
     case OBJECT_NOTE_LOCKER: playInterfaceBlip(620); openReader(LOG_ENTRIES.noteLocker); break;
     case OBJECT_NOTE_LAB: playInterfaceBlip(620); openReader(LOG_ENTRIES.noteLab); break;
@@ -708,6 +720,7 @@ function runFrame(timestamp) {
   frameState.fade = game.mode === 'intro' || game.mode === 'dead' || game.mode === 'ending' ? 0 : game.fade;
   frameState.powerOn = game.flags.powerOn;
   frameState.hasKeycard = game.flags.hasKeycard;
+  frameState.keycardLevel = game.flags.keycardLevel;
   frameState.palette = settings.palette;
   frameState.scannerActivity = player.scannerActivity;
   frameState.scannerHeat = player.heat;
@@ -791,7 +804,8 @@ function startApplication() {
     },
     teleport: function (x, z, yaw) { player.x = x; player.z = z; if (yaw !== undefined) player.yaw = yaw; },
     grantPower: function () { game.flags.powerOn = true; refreshObjective(); },
-    grantKeycard: function () { game.flags.hasKeycard = true; },
+    grantKeycard: function () { setKeycardLevel(3); },
+    keycardObjectIds: KEYCARD_OBJECT_IDS,
     grantSpools: function () { game.flags.spoolsCollected = 3; refreshObjective(); },
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
     use: function (objectId) { useInteractable(findInteractableByObjectId(objectId)); },
