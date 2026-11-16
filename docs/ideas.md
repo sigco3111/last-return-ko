@@ -23,8 +23,11 @@
 
 - more monsters to vary threat or increase it
   - lidar monster produces dots around it on everything, but can see the player
-  - small monster that moves objects (including what you need, chaseable and interruptable to get item back)
+  - small monster 
+    - moves objects (including what you need, chaseable and interruptable to get item back)
+    - makes noise to summon other monsters (hits objects, walks in vents, etc.)
   - other types of blind monsters with different systems for it
+  - kidnapping monster that moves a player somewhere else
 
 - more cave like rooms for deeper levels (or different locations)
   - caves
