@@ -19,6 +19,12 @@
   - fuel not always required (already a thing it seems)
   - multiple generators, could be only objective (3 or more if only objective, random fuel required per generator)
   - fuel spawn closer to generators, not across the map and back
+    - fuel as object to carry with physics engine
+
+- more monsters to vary threat or increase it
+  - lidar monster produces dots around it on everything, but can see the player
+  - small monster that moves objects (including what you need, chaseable and interruptable to get item back)
+  - other types of blind monsters with different systems for it
 
 - more cave like rooms for deeper levels (or different locations)
   - caves
