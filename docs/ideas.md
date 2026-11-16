@@ -1,6 +1,7 @@
 ## Ideas to (possibly) implement
 
 - Logo and favicon
+- More screenshots in readme
 - Even better models
 - random object that make sound when walked on and warn the monster
 - Hollow can go through locked doors, though small chance, shouldn't be a thing, give alternative ways to get around (ceiling vents only for the monster? teleport with delay), also opens up player locking doors to get away
@@ -10,6 +11,7 @@
 - random 'locations' to go along with work orders (not just Kessel-9 pumping annex)
   - random objectives and rooms tied to location types? pumping annex has shaft 9, others might not. 
 - captions as setting, not for normal play (and then for more things, for accessibility)
+- scan colors customizable
 
 - more random objectives
   - item collection, multi-stage generators, activate and escape

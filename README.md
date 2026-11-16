@@ -2,7 +2,7 @@
 
 A first-person horror game where a handheld LiDAR scanner is the only way to see.
 
-![Pump Hall B, as the scanner sees it](docs/screenshots/pump-hall.jpg)
+<img alt="Pump Hall B, as the scanner sees it" height="250" src="docs/screenshots/pump-hall.jpg" width="500"/>
 
 Kessel-9 is a pumping annex 212 metres below grade, sealed in 1987. There is no lighting. You are sent down to recover three survey spools left by the crew before you, and the only thing you ever see is the cloud of points your scanner has painted onto the dark.
 
