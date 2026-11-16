@@ -93,7 +93,7 @@ function loadSettings() {
       if (typeof stored.sensitivity === 'number') settings.sensitivity = clampNumber(stored.sensitivity, 0.2, 3);
       if (typeof stored.volume === 'number') settings.volume = clampNumber(stored.volume, 0, 1);
       if (QUALITY_PRESETS[stored.quality]) settings.quality = stored.quality;
-      if (stored.palette === 0 || stored.palette === 1 || stored.palette === 2) settings.palette = stored.palette;
+      if (stored.palette === 0 || stored.palette === 1 || stored.palette === 2 || stored.palette === 3) settings.palette = stored.palette;
       if (DIFFICULTY_PRESETS[stored.difficulty] || stored.difficulty === 'custom') settings.difficulty = stored.difficulty;
       settings.customDifficulty = sanitizeCustomDifficultyValues(stored.customDifficulty);
       if (stored.station === 'classic' || stored.station === 'generated') settings.station = stored.station;
@@ -244,9 +244,9 @@ function setScannerSpread(degrees) {
 }
 
 function cyclePalette() {
-  settings.palette = (settings.palette + 1) % 3;
+  settings.palette = (settings.palette + 1) % 4;
   saveSettings();
-  showMessage('Colour mode: ' + ['range (ice)', 'amber', 'height'][settings.palette], 2, 'info');
+  showMessage('Colour mode: ' + ['range ice', 'range amber', 'range vivid', 'height'][settings.palette], 2, 'info');
 }
 
 function initializeTouchControls() {

@@ -117,6 +117,11 @@ void main() {
   if (uPalette == 1) {
     rangeColor = mix(vec3(1.0, 0.8, 0.45), vec3(0.75, 0.3, 0.05), range);
   } else if (uPalette == 2) {
+  // Scanner Sombre style: red right next to you, fading through yellow/green to blue at 26 m and beyond.
+    rangeColor = mix(vec3(1.0, 0.15, 0.1), vec3(1.0, 0.85, 0.1), smoothstep(0.0, 0.33, range));
+    rangeColor = mix(rangeColor, vec3(0.15, 0.85, 0.3), smoothstep(0.33, 0.66, range));
+    rangeColor = mix(rangeColor, vec3(0.15, 0.35, 1.0), smoothstep(0.66, 1.0, range));
+  } else if (uPalette == 3) {
     float heightBand = clamp(position.y / 4.0, 0.0, 1.0);
     rangeColor = mix(vec3(0.2, 0.35, 1.0), vec3(0.2, 1.0, 0.55), smoothstep(0.0, 0.45, heightBand));
     rangeColor = mix(rangeColor, vec3(1.0, 0.9, 0.3), smoothstep(0.45, 1.0, heightBand));
