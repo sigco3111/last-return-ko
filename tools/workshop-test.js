@@ -72,6 +72,25 @@ function checkSourcePatching() {
     await action();
     await page.waitForFunction(() => !window.pageMarker && Boolean(window.lastReturnDebug && window.lastReturnDebug.roomWorkshop), null, { timeout: 15000 });
   };
+  // The workshop writes its unsaved work to the browser's storage from its own frame loop, once every 0.7
+  // seconds of game time, and a drawn frame counts for 0.05 seconds at most: so at most fourteen frames after a
+  // change. This draws one frame at a time and stops at the first one after which the stored work holds what
+  // was just changed, which is often none at all.
+  const STORED_WORK_FRAME_LIMIT = 40;
+  const readStoredWork = () => inPage(() => {
+    try { return JSON.parse(window.localStorage.getItem('last-return-workshop') || 'null'); } catch (error) { return null; }
+  });
+  const waitForStoredWork = async (description, holdsTheChange) => {
+    let storedWork = await readStoredWork();
+    let framesDrawn = 0;
+    while (!(storedWork && holdsTheChange(storedWork)) && framesDrawn < STORED_WORK_FRAME_LIMIT) {
+      await frames(1);
+      framesDrawn++;
+      storedWork = await readStoredWork();
+    }
+    const isStored = Boolean(storedWork && holdsTheChange(storedWork));
+    check(description, isStored, isStored ? { framesDrawn: framesDrawn } : { framesDrawn: framesDrawn, storedWork: storedWork });
+  };
   const setNumber = async (fieldId, value) => {
     await page.fill('#' + fieldId + ' input[type="number"]', String(value));
     await frames(2);
@@ -197,7 +216,11 @@ function checkSourcePatching() {
     // --- an unsaved change survives a reload caused by a change to the source ---
     if ((await inPage(() => window.lastReturnDebug.roomWorkshop.selectedIndex)) < 0) await page.click('.workshop-list-entry:has-text("Table")');
     await setNumber('workshop-item-x', 2);
-    await frames(30); // long enough for the work in progress to be written to the browser's storage
+    await waitForStoredWork('the moved table is written to the browser\'s storage as unsaved work', (storedWork) => {
+      const draft = storedWork.rooms && storedWork.rooms.draft;
+      const storedTable = draft && Array.isArray(draft.items) ? draft.items.find((item) => item.type === 'table') : null;
+      return Boolean(storedTable) && storedTable.x === 2;
+    });
     await waitForReload(() => fs.appendFileSync(path.join(root, 'src', 'js', '01-math.js'), '\n// touched by the workshop test\n'));
     await frames();
     const afterSourceChange = await inPage(() => {
@@ -264,7 +287,11 @@ function checkSourcePatching() {
     const scanned = await inPage(() => ({ hits: window.lastReturnDebug.creatureWorkshop.figure.totalHits, isLit: window.lastReturnDebug.workshop.isLit }));
     check('the scanner view turns the lights off and leaves points on the body', scanned.hits > 200 && !scanned.isLit, scanned);
 
-    await frames(30);
+    await waitForStoredWork('the tool, the pose and the changed proportion are written to the browser\'s storage', (storedWork) => {
+      const storedCreatures = storedWork.creatures || {};
+      const storedThigh = storedCreatures.overrides && storedCreatures.overrides.hollow && storedCreatures.overrides.hollow.thigh;
+      return storedWork.tool === 'creatures' && storedCreatures.behaviour === 'hunt' && Boolean(storedThigh) && storedThigh.value === longThigh;
+    });
     await waitForReload(() => page.reload());
     await frames(4);
     const reloaded = await inPage(() => {
