@@ -482,6 +482,96 @@ const labSource = String(function () {
     hatches.generated.keycards === 2 && hatches.generated.parts >= 3 && hatches.generated.hatches >= hatches.generated.parts && hatches.generated.problems.length === 0, hatches.generated);
   check('the same station always gets the same hatches', hatches.classicSame && hatches.generatedSame, [hatches.classicSame, hatches.generatedSame]);
 
+  // --- doorways: it has no collision of its own, so the straight lines it walks must never cut the corner of a wall ---
+  // (They once could. It then stood inside the wall beside the doorway for good, and you could walk past it.)
+  const doorways = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.lab, kinds = d.doorKinds;
+    const result = { chases: 0, endedInAWall: [], stoppedShort: [], letOutOfAWall: 0, leftInAWall: [] };
+    lab.fresh();
+    d.game.flags.powerOn = true;
+    // The same chases every run.
+    let seed = 20261116;
+    const random = function () { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const isOnWalkableFloor = function (x, z) {
+      const spot = d.findWalkableSpotNear(x, z);
+      return Boolean(spot) && Math.floor(spot.x) === Math.floor(x) && Math.floor(spot.z) === Math.floor(z);
+    };
+    // Solid wall, as far as the map goes: not floor with a crate on it, which it may stand in to get at you.
+    const isInsideAWall = function (x, z) { return d.getHeadroomAt(x, z) > 50; };
+    const round = function (x, z) { return [Math.round(x * 1000) / 1000, Math.round(z * 1000) / 1000]; };
+    // Somewhere to stand on one side of a door: up to four metres back from it and up to three to either side.
+    const pickSpot = function (door, side) {
+      const awayX = Math.sign(side.x - door.centerX), awayZ = Math.sign(side.z - door.centerZ);
+      for (let attempt = 0; attempt < 40; attempt++) {
+        const back = 0.6 + random() * 3.5, across = (random() - 0.5) * 6;
+        const x = door.centerX + awayX * back + (awayX === 0 ? across : 0), z = door.centerZ + awayZ * back + (awayZ === 0 ? across : 0);
+        if (isOnWalkableFloor(x, z) && d.getZoneAt(x, z) !== d.level.storeZone) return { x: x, z: z };
+      }
+      return null;
+    };
+    const isHollowBusy = function () { return Boolean(d.hollow.crawlspace || d.hollow.doorBang); };
+    const openDoors = d.doors.filter(function (door) { return (door.kind === kinds.automatic || door.kind === kinds.powered) && d.getDoorSides(door); });
+
+    // Chases through every door that opens for it, from all angles, the player walking as it comes.
+    for (const door of openDoors) {
+      const sides = d.getDoorSides(door);
+      for (let trial = 0; trial < 40; trial++) {
+        const hollowSpot = pickSpot(door, sides[0]), playerFrom = pickSpot(door, sides[1]), playerTo = pickSpot(door, sides[1]);
+        if (!hollowSpot || !playerFrom || !playerTo) continue;
+        result.chases++;
+        d.teleport(playerFrom.x, playerFrom.z, 0); d.player.velocityX = 0; d.player.velocityZ = 0;
+        d.spawnHollow(hollowSpot.x, hollowSpot.z);
+        d.hollow.graceTimer = 0; d.hollow.knowsPlayerPositionAlways = true;
+        const figure = d.hollow.figure;
+        let lastX = figure.x, lastZ = figure.z, framesStandingStill = 0, wasInAWall = false, hasStopped = false, isPlayerWalking = true;
+        for (let frame = 0; frame < 240 && !wasInAWall && !hasStopped; frame++) {
+          // The player walks toward the second spot for three seconds, or until there is something in the way.
+          const amount = Math.min(1, frame / 90);
+          const walkX = playerFrom.x + (playerTo.x - playerFrom.x) * amount, walkZ = playerFrom.z + (playerTo.z - playerFrom.z) * amount;
+          if (!isOnWalkableFloor(walkX, walkZ)) isPlayerWalking = false;
+          if (isPlayerWalking) d.teleport(walkX, walkZ);
+          d.simulate(0.01); // one frame
+          if (!isHollowBusy() && isInsideAWall(figure.x, figure.z)) wasInAWall = true;
+          const hasMoved = Math.hypot(figure.x - lastX, figure.z - lastZ) > 0.001;
+          lastX = figure.x; lastZ = figure.z;
+          const isAtPlayer = Math.hypot(figure.x - d.player.x, figure.z - d.player.z) < 0.8;
+          framesStandingStill = hasMoved || isAtPlayer || isHollowBusy() ? 0 : framesStandingStill + 1;
+          if (framesStandingStill > 45) hasStopped = true;
+        }
+        const report = { door: [door.tileX, door.tileZ], hollowFrom: round(hollowSpot.x, hollowSpot.z), hollowAt: round(figure.x, figure.z), playerFrom: round(playerFrom.x, playerFrom.z), playerAt: round(d.player.x, d.player.z) };
+        if (wasInAWall) result.endedInAWall.push(report);
+        else if (hasStopped) result.stoppedShort.push(report);
+        d.hollow.isActive = false; d.hollow.knowsPlayerPositionAlways = false;
+      }
+    }
+
+    // And should it ever stand in a wall all the same: put there, just inside the corner beside a doorway, it
+    // walks out again and comes for the player on the far side of the door.
+    for (const door of openDoors) {
+      const sides = d.getDoorSides(door);
+      const awayX = Math.sign(sides[0].x - door.centerX), awayZ = Math.sign(sides[0].z - door.centerZ);
+      const inWallX = door.centerX + awayZ * 0.51 + awayX * 0.49, inWallZ = door.centerZ + awayX * 0.51 + awayZ * 0.49;
+      const playerSpot = d.findWalkableSpotNear(door.centerX - awayX * 3, door.centerZ - awayZ * 3);
+      if (!isInsideAWall(inWallX, inWallZ) || !playerSpot) continue; // no wall beside this one
+      d.teleport(playerSpot.x, playerSpot.z, 0); d.player.velocityX = 0; d.player.velocityZ = 0;
+      d.spawnHollow(inWallX, inWallZ);
+      d.hollow.graceTimer = 0; d.hollow.knowsPlayerPositionAlways = true;
+      let hasReached = false;
+      for (let time = 0; time < 6 && !hasReached; time += 0.1) { d.simulate(0.1); hasReached = lab.hasReachedPlayer(); }
+      if (hasReached) result.letOutOfAWall++;
+      else result.leftInAWall.push({ door: [door.tileX, door.tileZ], hollowAt: round(d.hollow.figure.x, d.hollow.figure.z) });
+      d.hollow.isActive = false; d.hollow.knowsPlayerPositionAlways = false;
+    }
+    result.endedInAWallCount = result.endedInAWall.length; result.endedInAWall = result.endedInAWall.slice(0, 3);
+    result.stoppedShortCount = result.stoppedShort.length; result.stoppedShort = result.stoppedShort.slice(0, 3);
+    return result;
+  });
+  check('chasing you through a doorway from any angle, it never steps into the wall beside it',
+    doorways.chases >= 300 && doorways.endedInAWallCount === 0, { chases: doorways.chases, endedInAWall: doorways.endedInAWallCount, examples: doorways.endedInAWall });
+  check('and it never comes to a stop short of you', doorways.stoppedShortCount === 0, { stoppedShort: doorways.stoppedShortCount, examples: doorways.stoppedShort });
+  check('put inside the corner of a wall beside a doorway, it walks out and comes for you',
+    doorways.letOutOfAWall >= 5 && doorways.leftInAWall.length === 0, { letOut: doorways.letOutOfAWall, leftInAWall: doorways.leftInAWall });
+
   // --- everything above made its noises with captions on "every sound": each of those sounds has been put into words ---
   const captioned = await inGame(() => {
     const counts = window.lastReturnDebug.captionCounts, shown = {};

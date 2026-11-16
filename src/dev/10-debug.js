@@ -422,6 +422,26 @@ function drawDebugMapMarkers(context, toCanvasX, toCanvasY, markerSize) {
 
 const HOLLOW_STATE_NAMES = ['roaming', 'investigating', 'hunting', 'searching', 'standing still, listening'];
 
+// Puts a loose object of the chosen kind in the air a step in front of you, to be picked up, carried and thrown.
+function debugPutLooseObjectAhead(kindKey) {
+  markDebugUsed();
+  const forwardX = Math.sin(player.yaw), forwardZ = -Math.cos(player.yaw);
+  const eyeY = getPlayerEyeY();
+  // A step ahead, or half way to the wall if the wall is nearer than that.
+  let distance = 1.1;
+  if (castRayAgainstWorld(player.x, eyeY - 0.3, player.z, forwardX, 0, forwardZ, 1.6)) distance = Math.min(distance, rayHit.distance * 0.5);
+  const object = createLooseObject(kindKey, player.x + forwardX * distance, eyeY - 0.3, player.z + forwardZ * distance, player.yaw);
+  if (object) showMessage('Debug: a ' + object.kind.label + ' in front of you.', 3, 'info');
+  return object;
+}
+
+function debugRemoveLooseObjects() {
+  markDebugUsed();
+  while (looseObjects.length > 0) removeLooseObject(looseObjects[looseObjects.length - 1]); // one by one, so that each takes its points with it
+  clearLooseObjects();
+  showMessage('Debug: every loose object removed.', 3, 'info');
+}
+
 function buildDebugReadout() {
   const lines = [];
   let heading = Math.round(player.yaw / DEGREES_TO_RADIANS) % 360;
@@ -431,6 +451,13 @@ function buildDebugReadout() {
   lines.push('heading     ' + heading + ' deg   zone ' + getZoneAtPosition(player.x, player.z));
   lines.push('points      ' + formatWithThousandsSeparators(pointCloud.storedCount) + ' of ' + formatWithThousandsSeparators(pointCloud.capacity));
   lines.push('heard from  ' + (player.audibleRadius * game.difficulty.hearingFactor).toFixed(1) + ' m');
+  if (looseObjects.length > 0) {
+    let awake = 0;
+    for (const object of looseObjects) if (!object.isAsleep) awake++;
+    const held = getHeldLooseObject();
+    lines.push('objects     ' + looseObjects.length + ' loose, ' + awake + ' moving' + (held ? '   carrying the ' + held.kind.label : ''));
+    lines.push('  knocks    ' + looseState.statistics.knocksHeard + ' heard by it, ' + looseState.statistics.knocksQuiet + ' only by you');
+  }
   if (hollow.isActive) {
     const distance = distanceBetweenPoints(hollow.figure.x, hollow.figure.z, player.x, player.z);
     lines.push('HOLLOW      ' + (hollow.enragedTimer > 0 ? 'ENRAGED' : HOLLOW_STATE_NAMES[hollow.state]));
@@ -558,6 +585,24 @@ function initializeDebugMode() {
     actionGrid.appendChild(button);
   }
   panel.appendChild(actionGrid);
+
+  // Loose objects: one of each kind to try carrying, and a button to clear them away.
+  panel.appendChild(createDebugElement('h3', 'debug-heading', 'Put an object in front of me'));
+  const looseGrid = createDebugElement('div', 'debug-actions');
+  for (const kindKey of Object.keys(LOOSE_OBJECT_KINDS)) {
+    const kind = LOOSE_OBJECT_KINDS[kindKey];
+    const button = createDebugElement('button', 'button-quiet', kind.label.charAt(0).toUpperCase() + kind.label.slice(1) + ' (' + kind.mass + ' kg)');
+    button.type = 'button';
+    button.id = 'debug-loose-' + kindKey;
+    button.addEventListener('click', function () { debugPutLooseObjectAhead(kindKey); button.blur(); });
+    looseGrid.appendChild(button);
+  }
+  const looseClearButton = createDebugElement('button', 'button-quiet', 'Remove them all');
+  looseClearButton.type = 'button';
+  looseClearButton.id = 'debug-loose-clear';
+  looseClearButton.addEventListener('click', function () { debugRemoveLooseObjects(); looseClearButton.blur(); });
+  looseGrid.appendChild(looseClearButton);
+  panel.appendChild(looseGrid);
 
   // Apparitions: call one up of a chosen kind, now, whatever the phantom director thinks of it.
   panel.appendChild(createDebugElement('h3', 'debug-heading', 'Apparition'));

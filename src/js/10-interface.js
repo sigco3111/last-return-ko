@@ -31,7 +31,7 @@ function getElement(elementId) {
 
 function initializeInterface() {
   const elementIds = [
-    'hud', 'hud-objective', 'chip-spools', 'chip-power', 'chip-keycard', 'chip-extra', 'minimap-canvas', 'hud-location',
+    'hud', 'hud-objective', 'chip-spools', 'chip-power', 'chip-keycard', 'chip-extra', 'chip-carrying', 'minimap-canvas', 'hud-location',
     'readout-range', 'readout-flight', 'readout-returns', 'readout-heading', 'bar-heat', 'bar-stamina',
     'bar-interference', 'meter-agitation', 'bar-agitation', 'hud-stance', 'hud-block-objective', 'hud-block-map', 'hud-block-instruments', 'hud-readouts',
     'meter-heat', 'meter-stamina', 'meter-interference', 'map-objective', 'map-status', 'reticle-ring', 'hud-prompt', 'hud-countdown', 'hud-messages', 'hud-caption',
@@ -709,6 +709,9 @@ function updateHud(realDt) {
     const extraText = getExtraJobStatusText();
     elements['chip-extra'].hidden = extraText === '';
     elements['chip-extra'].textContent = extraText;
+    const carried = getHeldLooseObject();
+    elements['chip-carrying'].hidden = carried === null;
+    if (carried !== null) elements['chip-carrying'].textContent = 'CARRYING: ' + getLooseObjectLabel(carried).toUpperCase();
     // On a phone held sideways the captions hang under the work order (see style.css), and the work order
     // is as tall as its sentence is long: the stylesheet is told where it ends.
     const workOrderBlock = elements['hud-block-objective'];
@@ -751,9 +754,22 @@ function updateHud(realDt) {
 
     const prompt = elements['hud-prompt'];
     const focused = player.focusedInteractable;
-    if (game.mode === 'playing' && focused) {
+    const focusedLooseObject = player.focusedLooseObject, heldLooseObject = getHeldLooseObject();
+    if (game.mode === 'playing' && heldLooseObject && getThrowWindUp() > 0) {
+      // Winding up a throw: a bar that fills.
+      const filled = Math.round(getThrowWindUp() * 8);
+      prompt.hidden = false;
+      prompt.textContent = 'THROW  ' + '\u25AE'.repeat(filled) + '\u25AF'.repeat(8 - filled);
+    } else if (game.mode === 'playing' && focusedLooseObject && !heldLooseObject) {
+      prompt.hidden = false;
+      prompt.textContent = (input.isTouchDevice ? 'USE · ' : '[E] or hold [Right mouse]  ') + 'Pick up the ' + getLooseObjectLabel(focusedLooseObject);
+    } else if (game.mode === 'playing' && focused) {
       prompt.hidden = false;
       prompt.textContent = (input.isTouchDevice ? 'USE · ' : '[E]  ') + focused.prompt;
+    } else if (game.mode === 'playing' && heldLooseObject && heldLooseObject.kind.use && !heldLooseObject.isSpent && heldLooseObject.armedTime < 0 && !input.isTouchDevice) {
+      // In the beam, and it does something: say which key.
+      prompt.hidden = false;
+      prompt.textContent = '[Q]  ' + heldLooseObject.kind.use.prompt;
     } else if (game.mode === 'playing' && !input.isPointerLocked && !input.useDragLook && !input.isTouchDevice) {
       prompt.hidden = false;
       prompt.textContent = 'Click to take control of the scanner';

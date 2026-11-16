@@ -9,6 +9,7 @@ const rayHit = {
   intensity: 0.5,
   objectId: 0,
   figure: null,
+  looseObject: null, // the loose object the pulse stopped on, if it did (see 08-loose-objects.js)
   x: 0, y: 0, z: 0
 };
 
@@ -155,6 +156,7 @@ function fillRayHit(distance, surfaceClass, intensity, objectId, originX, origin
   rayHit.intensity = intensity;
   rayHit.objectId = objectId;
   rayHit.figure = null;
+  rayHit.looseObject = null;
   rayHit.x = originX + directionX * distance;
   rayHit.y = originY + directionY * distance;
   rayHit.z = originZ + directionZ * distance;
@@ -257,10 +259,10 @@ function castRayAgainstWorld(originX, originY, originZ, directionX, directionY, 
   return false;
 }
 
-// The full scanner pulse: rooms, props and anything standing in them.
-function castScannerRay(originX, originY, originZ, directionX, directionY, directionZ, maximumDistance) {
-  const hitWorld = castRayAgainstWorld(originX, originY, originZ, directionX, directionY, directionZ, maximumDistance);
-  let bestDistance = hitWorld ? rayHit.distance : maximumDistance;
+// What a ray meets that is not the station itself: a creature, or a loose object. Returns true and fills
+// `rayHit` if there is one nearer than `nearerThan`; otherwise returns false and leaves `rayHit` as it was.
+function castRayAgainstThings(originX, originY, originZ, directionX, directionY, directionZ, nearerThan) {
+  let bestDistance = nearerThan;
   let bestFigure = null;
   for (let figureIndex = 0; figureIndex < raycastableFigures.length; figureIndex++) {
     const figure = raycastableFigures[figureIndex];
@@ -275,11 +277,27 @@ function castScannerRay(originX, originY, originZ, directionX, directionY, direc
       if (distance > 0.05 && distance < bestDistance) { bestDistance = distance; bestFigure = figure; }
     }
   }
+  // Anything loose in the way: what lies on a shelf or on the floor, and what the scanner's beam is carrying.
+  const looseObject = looseObjects.length > 0
+    ? findLooseObjectOnRay(originX, originY, originZ, directionX, directionY, directionZ, bestDistance) : null;
+  if (looseObject !== null) {
+    fillRayHit(looseRayDistance, SURFACE_INTERACTIVE, 0.6 + Math.random() * 0.3, 0,
+      originX, originY, originZ, directionX, directionY, directionZ);
+    rayHit.looseObject = looseObject;
+    return true;
+  }
   if (bestFigure !== null) {
     fillRayHit(bestDistance, bestFigure.surfaceClass, 0.6 + Math.random() * 0.4, 0,
       originX, originY, originZ, directionX, directionY, directionZ);
     rayHit.figure = bestFigure;
     return true;
   }
+  return false;
+}
+
+// The full scanner pulse from one point: rooms, props and anything standing in them.
+function castScannerRay(originX, originY, originZ, directionX, directionY, directionZ, maximumDistance) {
+  const hitWorld = castRayAgainstWorld(originX, originY, originZ, directionX, directionY, directionZ, maximumDistance);
+  if (castRayAgainstThings(originX, originY, originZ, directionX, directionY, directionZ, hitWorld ? rayHit.distance : maximumDistance)) return true;
   return hitWorld;
 }

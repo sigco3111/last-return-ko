@@ -58,6 +58,17 @@ const labSource = String(function () {
     d.player.pitch = Math.atan2(d.getFloorHeightAt(x, z) + height - eyeY, lab.distanceTo(x, z));
   };
   lab.scanFor = function (seconds) { d.setScanHeld(true); d.simulate(seconds); d.setScanHeld(false); };
+  // Scans an apparition for a second and a half, and for longer (up to four seconds) if by then too few pulses
+  // have landed on it for the game to count it as seen. A dummy twelve metres off is a small thing in the
+  // beam: about one time in four hundred, a second and a half left it with 32 to 40 points where the game
+  // wants more than 40, and it then stood there for good. Measured on 420 dummies; the game is right, the
+  // test was impatient.
+  lab.scanUntilSeen = function (phantom) {
+    d.setScanHeld(true);
+    d.simulate(1.5);
+    for (let extra = 0; extra < 5 && phantom.figure.totalHits <= 60; extra++) d.simulate(0.5);
+    d.setScanHeld(false);
+  };
   lab.isOut = function (phantom) { return d.phantomDirector.current === phantom && d.phantoms.indexOf(phantom) >= 0 && phantom.state !== 2; };
   // Runs the game until the apparition has gone, or the time is up. Returns how long it took (seconds), or -1.
   lab.waitUntilGone = function (phantom, mostSeconds) {
@@ -237,7 +248,7 @@ const labSource = String(function () {
       if (!phantom) { trials.push({ none: true }); continue; }
       const record = { firstDistance: lab.distanceTo(phantom.figure.x, phantom.figure.z), usedBefore: director.used };
       lab.aimAt(phantom.figure.x, phantom.figure.z, 1.2);
-      lab.scanFor(1.5);
+      lab.scanUntilSeen(phantom);
       record.pointsOnIt = phantom.figure.totalHits;
       record.stillThereWhileWatched = lab.isOut(phantom) && phantom.stage === 0;
       d.simulate(d.tuning.phantomDummyLookAwaySeconds + 0.3);
@@ -247,7 +258,7 @@ const labSource = String(function () {
         record.secondDistance = lab.distanceTo(phantom.figure.x, phantom.figure.z);
         record.canBeSeenThere = d.canPlayerSeePoint(phantom.figure.x, d.getFloorHeightAt(phantom.figure.x, phantom.figure.z) + 1.3, phantom.figure.z);
         lab.aimAt(phantom.figure.x, phantom.figure.z, 1.2);
-        lab.scanFor(1.5);
+        lab.scanUntilSeen(phantom);
         record.thereWhileWatchedAgain = lab.isOut(phantom);
         d.simulate(d.tuning.phantomDummyLookAwaySeconds + 0.3);
       }

@@ -100,13 +100,17 @@ function check(description, condition, detail) {
 
   // --- the quests that were jobs before this system existed are where they were then ---
   // These places were read off the game as it was before the quest system, for three stations. They must
-  // never change: a seed someone was given has to keep building the station they were given.
+  // never change by accident: a seed someone was given has to keep building the station they were given.
+  // (Changing a size on purpose, as was done to the massive one, changes every station of that size. Then the
+  // record for that size is read off again, and that is the only time it is.)
   const asBefore = await inGame(() => {
     const d = window.lastReturnDebug, lab = window.lab, result = {};
     const before = {
       'medium 9 mixed one': '13:80.5:49.5 30:63.5:44.5 31:61.5:64.5 40:74.5:49.5 41:78.5:41.5',
       'large 7 sparse one': '13:126.5:47.5 30:42.5:40.5 31:100.5:42.5 41:118.5:46.5',
-      'massive 12 tight two': '14:66.5:83.5 20:77.5:61.5 21:39.5:59.5 22:72.5:34.5 30:102.5:83.5 40:91.5:94.5'
+      // Read off again after the massive size itself was made bigger (more side rooms, loops and vents, a longer
+      // spine: commit 890b194). That changed which station every massive seed builds, this one included.
+      'massive 12 tight two': '13:85.5:53.5 14:62.5:115.5 30:140.5:21.5 40:128.5:19.5'
     };
     const oldNumbers = [13, 14, 20, 21, 22, 23, 24, 25, 30, 31, 32, 40, 41, 42];
     for (const name in before) {

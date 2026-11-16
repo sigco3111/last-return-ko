@@ -28,6 +28,11 @@ const SOUND_LEVELS = {
   floorGlass: 1,          // broken glass underfoot (yours, and the Hollow's from where it is)
   floorPlate: 1,          // a loose floor plate underfoot
   floorCans: 1,           // empty cans kicked over
+  looseKnockMetal: 1,     // a loose object of metal hitting something (a canister, a pipe, a pump motor)
+  looseKnockGlass: 1,     // ... of glass (a sample jar)
+  looseKnockCase: 1,      // ... a dull box (a tool case, a crate)
+  looseHandling: 1,       // taking an object in your hands, and the grunt of air as you throw it
+  scanGrenade: 1,         // a scan grenade: the click of arming it, and the whine and crack as it goes off
   heartbeat: 4,
 
   // ---- the scanner and the interface ----
@@ -1227,6 +1232,72 @@ function playNoisyFloorSound(kind, weight, source) {
     if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: 620 + Math.random() * 700, duration: 0.16 + Math.random() * 0.1, hardness: 0.85, damping: 0.75, gain: 0.8 * size * level, delay: delay, destination: destination });
     else playResonantNoise({ frequency: 700 + Math.random() * 700, resonance: 14, duration: 0.14, gain: 1.6 * size * level, attack: 0.001, delay: delay, destination: destination });
     playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 3200, gain: 0.7 * size * level, delay: delay, destination: destination });
+  }
+}
+
+// A loose object hits something at (x, y, z). `material` is 'metal', 'glass' or 'case'; `loudness` runs from
+// about 0.1 (a tap only you hear) to 1 (thrown at a wall); `weight` is lower-pitched and longer for heavy things.
+// TWEAK: each material has its layers here; how loud each is, is SOUND_LEVELS.looseKnockMetal, -Glass and -Case.
+function playLooseObjectKnock(material, loudness, weight, x, y, z) {
+  if (!isAudioReady()) return;
+  const destination = createTemporaryPanner(x, y, z);
+  if (!destination) return;
+  const size = 1 / weight; // light things ring higher
+  // A hard hit is more than in proportion louder than a soft one: a tap is nearly nothing, a crash fills the room.
+  const force = loudness * (0.7 + loudness * 1.5);
+  if (material === 'glass') {
+    const level = force * SOUND_LEVELS.looseKnockGlass;
+    if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: (1900 + Math.random() * 700) * size, duration: 0.14 + loudness * 0.12, hardness: 1, damping: 0.6, gain: 1.6 * level, destination: destination });
+    else playResonantNoise({ frequency: 2600 * size, resonance: 22, duration: 0.14, gain: 1.0 * level, attack: 0.001, destination: destination });
+    playNoiseBurst({ duration: 0.025, filterType: 'bandpass', frequency: 4200, resonance: 1.5, gain: 1.3 * level, attack: 0.001, destination: destination });
+    return;
+  }
+  if (material === 'case') {
+    // A box with things in it: a thud with some knock to it, and what is inside settling a moment later.
+    const level = force * SOUND_LEVELS.looseKnockCase;
+    playNoiseBurst({ duration: 0.1 + loudness * 0.06, filterType: 'bandpass', frequency: 330 * Math.sqrt(size), resonance: 0.8, gain: 5.5 * level, attack: 0.002, destination: destination });
+    playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 950 * Math.sqrt(size), resonance: 1.4, gain: 2.6 * level, attack: 0.001, destination: destination });
+    if (loudness > 0.45) playNoiseBurst({ duration: 0.07, filterType: 'bandpass', frequency: 1900, resonance: 2, gain: 1.1 * level, attack: 0.002, delay: 0.06 + Math.random() * 0.04, destination: destination });
+    return;
+  }
+  // Metal: the ring of the thing itself, and the click of the hit.
+  const level = force * SOUND_LEVELS.looseKnockMetal;
+  const frequency = (520 + Math.random() * 260) * size;
+  if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: frequency, duration: 0.22 + loudness * 0.5, hardness: 0.55 + loudness * 0.45, damping: 0.6, gain: 1.3 * level, destination: destination });
+  else playResonantNoise({ frequency: frequency * 1.4, resonance: 16, duration: 0.25 + loudness * 0.3, gain: 2.4 * level, attack: 0.001, destination: destination });
+  playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 2800, resonance: 1.2, gain: 1.4 * level, attack: 0.001, destination: destination });
+  playNoiseBurst({ duration: 0.06, filterType: 'bandpass', frequency: 420 * Math.sqrt(size), resonance: 0.9, gain: 2.0 * level, attack: 0.002, destination: destination }); // the weight of it
+  if (loudness > 0.6 && audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: frequency * 1.07, duration: 0.3, hardness: 0.6, damping: 0.7, gain: 0.6 * level, delay: 0.08 + Math.random() * 0.05, destination: destination });
+}
+
+// A scan grenade at (x, y, z). `what` is 'arm' (the pin: a click and a rising tick) or 'burst' (it goes off: a
+// whine that climbs for as long as its light lasts, a crack at the start, and hiss).
+function playScanGrenadeSound(what, x, y, z) {
+  if (!isAudioReady()) return;
+  const destination = createTemporaryPanner(x, y, z);
+  if (!destination) return;
+  const level = SOUND_LEVELS.scanGrenade;
+  if (what === 'arm') {
+    playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 3400, resonance: 2, gain: 0.9 * level, attack: 0.001, destination: destination });
+    playTone({ waveform: 'triangle', frequency: 880, frequencyEnd: 1320, duration: 0.18, gain: 0.18 * level, delay: 0.05, destination: destination });
+    return;
+  }
+  const seconds = TUNING.scanGrenadeBurstSeconds;
+  playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 2600, resonance: 0.9, gain: 3.2 * level, attack: 0.001, destination: destination });
+  playResonantNoise({ frequency: 500, frequencyEnd: 2600, resonance: 24, duration: seconds, gain: 0.5 * level, attack: 0.03, reverbAmount: 0.8, destination: destination });
+  playTone({ waveform: 'sine', frequency: 300, frequencyEnd: 1900, duration: seconds, gain: 0.12 * level, attack: 0.04, reverbAmount: 0.5, destination: destination });
+  playNoiseBurst({ duration: seconds, filterType: 'bandpass', frequency: 4800, frequencyEnd: 7500, gain: 0.22 * level, attack: 0.05, resonance: 3, destination: destination });
+}
+
+// Taking a loose object in your hands (`isPickingUp`), or the rush of your sleeve as you throw it.
+function playLooseObjectHandlingSound(material, isPickingUp) {
+  if (!isAudioReady()) return;
+  const level = SOUND_LEVELS.looseHandling;
+  if (isPickingUp) {
+    playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 700, resonance: 0.9, gain: 0.5 * level, attack: 0.02, useBrownNoise: true, playbackRate: 2 });
+    if (material === 'metal') playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 2400, resonance: 2, gain: 0.25 * level, attack: 0.002, delay: 0.05 });
+  } else {
+    playNoiseBurst({ duration: 0.22, filterType: 'bandpass', frequency: 500, frequencyEnd: 1500, resonance: 0.8, gain: 0.7 * level, attack: 0.05 });
   }
 }
 

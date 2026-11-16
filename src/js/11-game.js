@@ -139,6 +139,7 @@ function resetWorldState() {
   game.hasShownVentHint = false;
   game.hasShownNoisyFloorHint = false;
   noisyFloorCounts.byPlayer = 0; noisyFloorCounts.byPlayerCrouched = 0; noisyFloorCounts.byHollow = 0;
+  resetLooseObjectsForNewRun();
   game.deathSequence = null;
   for (const interactable of interactables) {
     interactable.isAvailable = true;
@@ -539,6 +540,7 @@ function retryFromCheckpoint() {
   player.heat = 0; player.isOverheated = false; player.stamina = 1; player.isStaminaLocked = false;
   player.sweepTimeRemaining = 0;
   input.keysDown.clear();
+  releaseHeldLooseObject(0); // whatever you were carrying lies where you fell
   game.interference = 0; game.danger = 0; game.fade = 0;
   game.deathSequence = null;
   if (hollow.isActive) {
@@ -651,6 +653,7 @@ function updatePlaying(dt) {
   updatePlayerMovement(dt);
   const bobHeight = Math.sin(player.bobPhase) * 0.028;
   const eyeY = getPlayerEyeY() + bobHeight;
+  updateLooseObjects(dt, player.x, getPlayerEyeY(), player.z); // before the scanner: what you carry is in its way
   updateScanner(dt, player.x, eyeY, player.z);
   updateInteractionFocus(player.x, eyeY, player.z);
   updateDoors(dt);
@@ -714,6 +717,7 @@ function updateAttractMode(dt) {
   const paintYaw = viewYaw + Math.sin(attract.timer * 0.83) * 0.6;
   const paintPitch = viewPitch + Math.sin(attract.timer * 1.31) * 0.32;
   computeScannerBasis(paintYaw, paintPitch);
+  updateScanEmitterAtEye(ATTRACT_CAMERA.x, ATTRACT_CAMERA.y, ATTRACT_CAMERA.z);
   resetBeamLines(ATTRACT_CAMERA.x + 0.2, ATTRACT_CAMERA.y - 0.2, ATTRACT_CAMERA.z);
   attract.rayBudget += quality.raysPerSecond * 0.45 * dt;
   const rayCount = Math.min(400, Math.floor(attract.rayBudget));
@@ -721,7 +725,7 @@ function updateAttractMode(dt) {
   const spreadTangent = Math.tan(13 * DEGREES_TO_RADIANS);
   for (let rayIndex = 0; rayIndex < rayCount; rayIndex++) {
     const radius = Math.sqrt(Math.random()) * spreadTangent, angle = Math.random() * TWO_PI;
-    fireScannerPulse(ATTRACT_CAMERA.x, ATTRACT_CAMERA.y, ATTRACT_CAMERA.z, Math.cos(angle) * radius, Math.sin(angle) * radius, rayIndex % 16 === 0);
+    fireScannerPulse(Math.cos(angle) * radius, Math.sin(angle) * radius, rayIndex % 16 === 0);
   }
   attract.sweepTimer -= dt;
   if (attract.sweepTimer <= 0 && attract.sweepProgress < 0) { attract.sweepProgress = 0; attract.sweepTimer = 11; }
@@ -733,7 +737,7 @@ function updateAttractMode(dt) {
     const halfWidthTangent = Math.tan(50 * DEGREES_TO_RADIANS), halfHeightTangent = Math.tan(34 * DEGREES_TO_RADIANS);
     for (let rayIndex = 0; rayIndex < sweepRays; rayIndex++) {
       const lineProgress = previousProgress + (attract.sweepProgress - previousProgress) * Math.random();
-      fireScannerPulse(ATTRACT_CAMERA.x, ATTRACT_CAMERA.y, ATTRACT_CAMERA.z, (Math.random() * 2 - 1) * halfWidthTangent,
+      fireScannerPulse((Math.random() * 2 - 1) * halfWidthTangent,
         interpolateLinear(halfHeightTangent, -halfHeightTangent, lineProgress), false);
     }
     if (attract.sweepProgress >= 1) attract.sweepProgress = -1;
@@ -912,7 +916,7 @@ function startApplication() {
     getHollowPartCount: function () { return hollowPartCount; },
     getHollowStepsTo: function (x, z) {
       // How far the Hollow has to go from where it is to (x, z), in steps, crawlspace included.
-      const field = new Int16Array(TILE_COUNT);
+      const field = borrowTileField('hollowStepsTo');
       computeHollowDistanceField(field, findNearestWalkableTileIndex(x, z), true);
       return field[findNearestWalkableTileIndex(hollow.figure.x, hollow.figure.z)];
     },
@@ -939,6 +943,18 @@ function startApplication() {
     },
     awakenStills: awakenStills,
     emitNoise: emitNoise,
+    looseObjects: looseObjects, looseObjectKinds: LOOSE_OBJECT_KINDS, looseState: looseState,
+    input: input, debugHooks: debugHooks, findLooseObjectInFocus: findLooseObjectInFocus, getThrowWindUp: getThrowWindUp,
+    noteLooseObjectScanned: noteLooseObjectScanned, stunHollow: stunHollow, getLooseObjectLabel: getLooseObjectLabel, getLooseShoveResistance: getLooseShoveResistance,
+    setLooseObjectOrientation: setLooseObjectOrientation, getLooseObjectPointLifeCode: getLooseObjectPointLifeCode,
+    isSpaceOpenAt: function (x, y, z) { return isLooseSpaceOpenAt(Math.floor(x), Math.floor(z), y); },
+    worldProps: worldProps, getTileFlagsAt: getTileFlagsAtPosition, tileFlagPit: TILE_FLAG_PIT, getPlayerEyeY: getPlayerEyeY,
+    createLooseObject: createLooseObject, removeLooseObject: removeLooseObject, clearLooseObjects: clearLooseObjects,
+    pickUpLooseObject: pickUpLooseObject, releaseHeldLooseObject: releaseHeldLooseObject, getHeldLooseObject: getHeldLooseObject,
+    wakeLooseObject: wakeLooseObject, setLooseObjectYaw: setLooseObjectYaw, getCarrySpeedFactor: getCarrySpeedFactor,
+    fireScanPulse: fireScanPulse, fireScanPulseBeyond: fireScanPulseBeyond, scanEmitter: scanEmitter, updateScanEmitterAtLens: updateScanEmitterAtLens, updateScanEmitterAtEye: updateScanEmitterAtEye, castScannerPulse: castScannerPulse, castRayAgainstThings: castRayAgainstThings,
+    getPlayFieldOfViewDegrees: getPlayFieldOfViewDegrees, beginLettingGo: beginLettingGo,
+    castScannerRay: castScannerRay, rayHit: rayHit, scannerBasis: scannerBasis, computeScannerBasis: computeScannerBasis,
     setScanHeld: function (isHeld) { input.isScanHeld = isHeld; },
     addScanPoint: addScanPoint,
     setScannerSpread: setScannerSpread,

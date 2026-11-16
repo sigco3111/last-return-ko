@@ -14,10 +14,10 @@ const FIGURE_PROPORTIONS_HOLLOW = {
   kind: 'hollow',
   thigh: 0.75, shin: 0.79, footLength: 0.295, hipWidth: 0.285,
   lowerSpine: 0.4, upperSpine: 0.465, shoulderWidth: 0.265,
-  neckLength: 0.345, headLength: 0.11, headRadius: 0.11, jawLength: 0.075,
-  upperArm: 0.705, foreArm: 0.75, handLength: 0.125,
-  fingerLengths: [0.26, 0.32, 0.27],   // outer, middle, inner finger
-  torsoRadius: 0.095, limbRadius: 0.05, legRadius: 0.08, fingerRadius: 0.015
+  neckLength: 0.345, headLength: 0.11, headRadius: 0.11, jawLength: 0.125,
+  upperArm: 0.62, foreArm: 0.54, handLength: 0.095,
+  fingerLengths: [0.175, 0.23, 0.23],   // outer, middle, inner finger
+  torsoRadius: 0.095, limbRadius: 0.055, legRadius: 0.08, fingerRadius: 0.015
 };
 
 // The calibration dummy: an ordinary jointed shop mannequin, about 1.75 m tall.

@@ -25,6 +25,7 @@ const hollow = {
   // Below TUNING.hollowAngerNoticeLevel the beam only makes it stop and turn; above, it knows where you are.
   anger: 0,
   wasInBeam: false,
+  stunSeconds: 0,       // it stands stunned for this much longer (see stunHollow)
   turnCaptionCooldown: 0,
   enragedTimer: 0,
   listenTimer: 0,
@@ -96,6 +97,23 @@ function emitNoise(x, z, radius) {
   }
 }
 
+// Stuns the Hollow where it stands, for `seconds`. An enraged Hollow is past that. Returns whether it worked.
+function stunHollow(seconds) {
+  if (!hollow.isActive || hollow.enragedTimer > 0 || hollow.graceTimer > 0 || isHollowInCrawlspace()) return false;
+  hollow.stunSeconds = Math.max(hollow.stunSeconds, seconds);
+  showCaption('hollowStunned', hollow.figure);
+  return true;
+}
+
+// Draws the Hollow towards a place, the way a noise does, unless it is hunting. Used for a thing it has kicked.
+function drawHollowTowards(x, z) {
+  if (!hollow.isActive || hollow.graceTimer > 0 || hollow.state === HOLLOW_STATE_HUNT || debugState.options.creaturesIgnorePlayer) return false;
+  hollow.state = HOLLOW_STATE_INVESTIGATE;
+  hollow.targetX = x; hollow.targetZ = z;
+  hollow.doubleBackTimer = 0;
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Doors
 // ---------------------------------------------------------------------------
@@ -151,9 +169,14 @@ function updateDoors(dt) {
         }
       }
     }
+    // Something loose lying in the doorway: the door will not come down on it. It waits, open, for as long as
+    // the thing is there. (Which wedges it open for the Hollow as much as for you.) The lift's own door, and
+    // any door that is being told what to do, does as it is told.
+    if (!wantsOpen && door.forcedState === null && door.openFraction > 0 && isLooseObjectInDoorway(door)) wantsOpen = true;
     if (wantsOpen) {
       door.closeDelay = 1.3;
       if (door.openFraction === 0) {
+        wakeLooseObjectsNear(door.centerX, door.centerZ, 1.3); // what leans on the door is about to lose its support
         const slab = door.slab;
         fadePointsInsideBox(door.centerX - slab.halfX - 0.1, door.baseY, door.centerZ - slab.halfZ - 0.1,
           door.centerX + slab.halfX + 0.1, door.baseY + 2.5, door.centerZ + slab.halfZ + 0.1,
@@ -189,7 +212,7 @@ function activateHollow(x, z, graceSeconds) {
   hollow.targetX = x; hollow.targetZ = z;
   hollow.timeSinceSensed = 99;
   hollow.timeSinceLastHunt = 0;
-  hollow.anger = 0; hollow.wasInBeam = false; hollow.enragedTimer = 0; hollow.heldAmount = 0;
+  hollow.anger = 0; hollow.wasInBeam = false; hollow.enragedTimer = 0; hollow.heldAmount = 0; hollow.stunSeconds = 0;
   hollow.listenTimer = 0; hollow.nextListenIn = 12; hollow.doubleBackTimer = 0; hollow.hasHeardNoise = false;
   hollow.graceTimer = graceSeconds;
   hollow.fieldTargetIndex = -1;
@@ -534,23 +557,27 @@ function updateHollow(dt) {
     hollow.anger = Math.max(0, hollow.anger - dt * TUNING.hollowAngerCoolingPerSecond);
   }
 
-  // ---- senses: it is blind. It hears, and once angry enough it can follow the beam back to you. ----
-  let isSensed = false;
+  // ---- senses: it is blind. It hears, and once angry enough it can follow the light back to where it comes from. ----
+  // That is you, when it is your scanner. Something else that scans (a scan grenade) draws it to itself.
+  const beamSourceX = figure.beamSourceX === undefined ? player.x : figure.beamSourceX;
+  const beamSourceZ = figure.beamSourceZ === undefined ? player.z : figure.beamSourceZ;
+  let isHeard = false, isLightFollowed = false;
   if (canSense) {
-    if (isInBeam && hollow.anger >= TUNING.hollowAngerNoticeLevel) isSensed = true;
+    if (isInBeam && hollow.anger >= TUNING.hollowAngerNoticeLevel) isLightFollowed = true;
     const proximityRadius = player.audibleRadius * game.difficulty.hearingFactor * getHollowHearingBoost();
     if (distanceToPlayer < proximityRadius &&
-        (distanceToPlayer < 1.6 || hasClearWalkingLine(figure.x, figure.z, player.x, player.z))) isSensed = true;
-    if (hollow.knowsPlayerPositionAlways) isSensed = true;
+        (distanceToPlayer < 1.6 || hasClearWalkingLine(figure.x, figure.z, player.x, player.z))) isHeard = true;
+    if (hollow.knowsPlayerPositionAlways) isHeard = true;
   }
-  if (isSensed) beginHollowHunt(player.x, player.z);
+  if (isHeard) beginHollowHunt(player.x, player.z);
+  else if (isLightFollowed) beginHollowHunt(beamSourceX, beamSourceZ);
   else hollow.timeSinceSensed += dt;
 
   // The beam has just left it and it was not sure where the light came from: it comes over to look.
   if (hollow.wasInBeam && !isInBeam && canSense && hollow.state !== HOLLOW_STATE_HUNT &&
       hollow.anger >= TUNING.hollowAngerNoticeLevel * 0.5) {
     hollow.state = HOLLOW_STATE_INVESTIGATE;
-    hollow.targetX = player.x; hollow.targetZ = player.z;
+    hollow.targetX = beamSourceX; hollow.targetZ = beamSourceZ;
     hollow.doubleBackTimer = 0;
   }
   hollow.wasInBeam = isInBeam;
@@ -649,6 +676,11 @@ function updateHollow(dt) {
   if (isHollowInVent) speed *= TUNING.hollowVentSpeedFactor;
   if (hollow.enragedTimer > 0) speed = TUNING.hollowEnragedSpeed * game.difficulty.hollowSpeedFactor;
   else speed *= interpolateLinear(1, TUNING.hollowHeldSpeedFactor, hollow.heldAmount);
+  // Stunned (by a scan grenade going off in its face): it does not move at all until that has worn off.
+  if (hollow.stunSeconds > 0) {
+    hollow.stunSeconds -= dt;
+    if (hollow.enragedTimer > 0) hollow.stunSeconds = 0; else speed = 0;
+  }
 
   const movedDistance = speed > 0 ? moveHollowToward(hollow.targetX, hollow.targetZ, speed, dt) : 0;
   hollow.currentSpeed = movedDistance / Math.max(dt, 0.0001);
@@ -660,7 +692,7 @@ function updateHollow(dt) {
   poseHollow(hollow, isHunting, isListening, dt);
   if (hollow.heldAmount > 0.3) {
     // Held in the beam it turns its whole body toward the emitter.
-    const towardPlayer = Math.atan2(player.x - figure.x, -(player.z - figure.z));
+    const towardPlayer = Math.atan2(beamSourceX - figure.x, -(beamSourceZ - figure.z));
     figure.yaw += clampNumber(wrapAngleToPi(towardPlayer - figure.yaw), -dt * 6, dt * 6);
   } else if (isListening && hollow.hasHeardNoise) {
     // While listening it slowly turns to face the last thing it heard, however faint.

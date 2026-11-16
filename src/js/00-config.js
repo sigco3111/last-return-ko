@@ -90,10 +90,10 @@ const QUALITY_PRESETS = {
   // raysPerSecond: pulses fired per second while painting. Higher fills surfaces in faster.
   // sweepRays:     pulses fired by one full sweep.
   // renderScale:   1.0 draws at full screen resolution, 0.75 draws smaller and stretches (faster, softer).
-  low: { key: 'low', maximumPoints: 250000, raysPerSecond: 6000, sweepRays: 20000, renderScale: 0.75 },
-  medium: { key: 'medium', maximumPoints: 500000, raysPerSecond: 6000, sweepRays: 20000, renderScale: 0.8 },
-  high: { key: 'high', maximumPoints: 1000000, raysPerSecond: 6000, sweepRays: 20000, renderScale: 1.0 },
-  ultra: { key: 'ultra', maximumPoints: 2000000, raysPerSecond: 6000, sweepRays: 20000, renderScale: 1.0 },
+  low: { key: 'low', maximumPoints: 500000, raysPerSecond: 6500, sweepRays: 20000, renderScale: 0.75 },
+  medium: { key: 'medium', maximumPoints: 1000000, raysPerSecond: 6500, sweepRays: 20000, renderScale: 0.8 },
+  high: { key: 'high', maximumPoints: 2000000, raysPerSecond: 6500, sweepRays: 20000, renderScale: 1.0 },
+  ultra: { key: 'ultra', maximumPoints: 3000000, raysPerSecond: 6500, sweepRays: 20000, renderScale: 1.0 },
 };
 
 const TUNING = {
@@ -115,6 +115,7 @@ const TUNING = {
   scannerSpreadMinimumDegrees: 3,   // narrowest beam (mouse wheel down). Half-angle of the cone.
   scannerSpreadMaximumDegrees: 26,  // widest beam (mouse wheel up)
   scannerSpreadDefaultDegrees: 11,
+  scannerClearanceMetres: 0.08,     // the scanner is held back this far from a wall your face is against, so that it is never inside it
   // Heat runs from 0 (cold) to 1 (overheated). The HUD bar shows it.
   heatPerSecondWhilePainting: 0.1,  // 0.1 = ten seconds of continuous painting from cold to overheated
   heatCoolingPerSecond: 0.2,        // 0.2 = five seconds from overheated back to cold when not scanning
@@ -147,6 +148,64 @@ const TUNING = {
   captionOwnDoorMetres: 3.5,        // a door opening or closing this near to you is your own doing and gets no caption
   captionHeartbeatPressure: 0.55,   // how hard you are pressed (0 to 1) before your heartbeat is put into words
   captionShriekLevel: 0.3,          // how loud its shriek in the beam (0 to 1) before that is put into words
+
+  // ---- Loose objects (see 08-loose-objects.js): things you carry, drop and throw ----
+  // How they fall and come to rest.
+  looseGravity: 9.81,               // metres per second, per second
+  looseStepSeconds: 1 / 120,        // the world of loose objects is worked out this often. Coarser is cheaper and lets fast things slip into walls.
+  looseBounceFromSpeed: 1.2,        // a hit slower than this (m/s) does not bounce at all, so things settle instead of chattering
+  looseAirDrag: 0.08,               // how much speed is lost to the air each second (0.08 = 8 percent)
+  looseRollingDrag: 2.2,            // how quickly something rolling or rocking on a surface loses its spin. Higher stops a rolling canister sooner.
+  looseWakeFromSpeed: 0.6,          // something at rest that is hit slower than this (m/s) by another object stays as it is, like part of the floor
+  looseRestSpeed: 0.05,             // slower than this (m/s) ...
+  looseRestSpin: 0.35,              // ... and turning slower than this (radians per second) ...
+  looseRestSeconds: 0.4,            // ... for this long, while touching something: it is at rest, and left alone until something touches it
+  looseImprintSeconds: 0.7,         // how long points scanned onto a moving or carried object stay. (On one at rest they stay for good.)
+  // Carrying.
+  looseBeamReach: 2.6,              // how far away the scanner's beam can take hold of one
+  looseHoldDistance: 0.7,           // how far out from the scanner's lens it hangs, on top of its own size (a crate is 0.4 from middle to corner). The lens is 0.55 in front of your eyes.
+  looseHoldFollowRate: 8,           // how eagerly it closes the gap to where the beam wants it. Lower is a looser, swingier carry.
+  looseHoldResponseRate: 14,        // how quickly it gets up to speed. Lower is heavier-feeling.
+  looseHoldLagPerKilogram: 0.06,    // how much each kilogram takes off both of those. 0 = a crate follows like a jar.
+  looseHoldTurnRate: 5,             // how eagerly the beam turns a thing back to how it was taken hold of. Low: its hold on that is weak.
+  looseHoldSlipDegrees: 22,         // knocked this far round against something, the beam gives and holds it as the knock left it
+  looseHoldFastestSpeed: 7,         // it never chases your hands faster than this (m/s), however far behind it is
+  looseHoldSagPerKilogram: 0.002,   // metres it hangs below the line the scanner points along, per kilogram
+  looseHoldStopDistance: 0.35,      // when it is against something and this far behind where the beam wants it, it starts to hold you back ...
+  looseHoldStopSpeed: 3,            // ... by up to this many metres a second: enough to stop a walk (2.5), not a run (4.6)
+  looseHoldBreakDistance: 0.9,      // caught on something and further than this from where the beam wants it ...
+  looseHoldBreakSeconds: 0.25,      // ... for this long, and the beam loses it. (Not caught on anything, it has to be two and a half times as far.)
+  carrySlowdownPerKilogram: 0.03,   // how much each kilogram slows your walk: 12 kg makes you 0.73 times as fast
+  // The scan grenade (a loose object that does something: see `use` in LOOSE_OBJECT_KINDS).
+  scanGrenadeFuseSeconds: 6,        // armed and not yet landed anywhere, it goes off after this long, wherever it is
+  scanGrenadeLandingSeconds: 0.35,  // armed and thrown, it goes off this long after it first hits something
+  scanGrenadeBurstSeconds: 1.2,     // how long its scan lasts
+  scanGrenadeSweeps: 1.6,           // how many pulses it fires in all, in full sweeps of the scanner (a sweep is 20,000). This was 2.5 while a third of them went into the floor under it; 1.6 puts as many on the room as 2.5 did then.
+  scanGrenadePatchMetres: 0.25,     // it wastes no light on anything it is up against: a pulse that would land on floor, wall or ceiling nearer than this is aimed somewhere else instead. (Lying on the floor, 35 of every 100 pulses of an all-round burst landed within a hand of it.)
+  scanGrenadeStunHits: 25,          // pulses that must land on the Hollow for it to be stunned
+  scanGrenadeStunSeconds: 3.5,      // how long the Hollow stands stunned. An enraged Hollow is not stunned.
+  noiseRadiusScanGrenade: 20,       // going off is loud. The Hollow comes to where it went off, not to you.
+  // The Hollow and things it kicks.
+  hollowChasesKickedMass: 4,        // something this light or lighter (kg) that it kicks, it goes after ...
+  hollowChasesKickedSeconds: 5,     // ... for this long at most, unless it is hunting you
+  hollowChasesAgainAfterSeconds: 15, // and it does not go after the same thing again for this long
+  // Walking into one that lies on the floor.
+  looseShoveFreeMass: 2,            // lighter than this (kg) you kick along without it slowing you
+  looseShoveBlockMass: 16,          // this heavy or heavier it does not move for your legs and stops you: pick it up. In between it slows you by its share of the way from one to the other.
+  // Throwing.
+  looseThrowTapSeconds: 0.22,       // letting E go sooner than this only lets go of the object
+  looseThrowChargeSeconds: 0.9,     // holding it this long gives the hardest throw
+  looseThrowSpeed: 11,              // metres per second for a full throw of something that weighs nothing ...
+  looseThrowLossPerKilogram: 0.11,  // ... and what each kilogram takes off it: a 3 kg canister leaves at 8.3 m/s, an 18 kg motor at 3.7
+  looseThrowLift: 1.6,              // metres per second upwards added to a full throw
+  looseThrowSpin: 5,                // how fast it tumbles as it leaves your hands (radians per second)
+  // Knocks. How hard an object hits something decides what is heard.
+  looseKnockFaintestSpeed: 0.35,    // slower than this (m/s) makes no sound at all
+  looseKnockQuietSpeed: 1.5,        // slower than this is a tap that you hear and the Hollow does not. Crouch-walking (1.3 m/s) into a wall is under it; walking (2.5, less with something heavy) is over.
+  looseKnockLoudSpeed: 5.5,         // at this speed and above it is as loud as it gets. A drop from your hands lands at about 4.5.
+  looseKnockGapSeconds: 0.12,       // one object is not heard twice within this time, so a rattle is a few knocks and not fifty
+  noiseRadiusKnockSoft: 6,          // how far the softest knock the Hollow can hear carries, for an object of middling weight ...
+  noiseRadiusKnockHard: 22,         // ... and the hardest. Light things carry 0.6 times as far, the heaviest 1.5 times.
 
   // ---- Noisy things on the floor (see 03-noisy-floor.js): broken glass, a loose plate, empty cans ----
   noiseRadiusNoisyFloorWalk: 10,    // walking over one. A plain walking step carries 4.
@@ -188,7 +247,7 @@ const TUNING = {
   hollowCrawlClimbSeconds: 1.4,       // how long it stands under a hatch reaching up before it is gone
   hollowCrawlDropWarningSeconds: 2.5, // how long the hatch it is coming out of rattles before it drops. This is your warning.
   hollowCrawlLandingGraceSeconds: 1.0,// after it lands it cannot catch you for this long
-  hollowCrawlFixedSteps: 14,          // how unwilling it is to use the crawlspace at all: going up and coming down count
+  hollowCrawlFixedSteps: 12,          // how unwilling it is to use the crawlspace at all: going up and coming down count
                                       // as this many steps of walking when it works out the shortest way ...
   hollowCrawlStepsPerMetre: 1.5,      // ... and every metre crawled counts as this many. Raise both and it only goes up
                                       // when a lock leaves it no choice; lower them and it takes short cuts over your head.
@@ -209,7 +268,7 @@ const TUNING = {
   hollowDoorBangWithinMetres: 7,      // it only goes at a door it is this close to, with a clear walk to it
   hollowDoorBangWorthSteps: 15,       // and only if through the door is at least this many steps shorter than the way round
   // How the Hollow holds itself. Its size is in FIGURE_PROPORTIONS_HOLLOW (04-figures.js); these two decide how bent it is.
-  hollowBaseStoop: 0.3,             // how bent it always is, from 0 (as upright as its hunch allows) to 1 (folded right over).
+  hollowBaseStoop: 0.4,             // how bent it always is, from 0 (as upright as its hunch allows) to 1 (folded right over).
                                     // It still draws itself up when it stops to listen.
   hollowCeilingGap: 0.25,           // metres it keeps between its head and the ceiling. It reads the ceiling over it and
                                     // just ahead, and bends further to keep this gap. Raise it and it crouches along low
@@ -220,7 +279,7 @@ const TUNING = {
   //   above hollowAngerNoticeLevel  the beam tells it exactly where you are, and it hunts
   //   at 1                          it is enraged: the beam stops slowing it for hollowEnragedDurationSeconds
   // Anger also carries over between encounters, so the more you light it up, the shorter your next grace period.
-  hollowAngerPerBeamSecond: 0.3,   // anger gained per second in the beam. 0.24 = about 4.2 s from calm to enraged.
+  hollowAngerPerBeamSecond: 0.2,   // anger gained per second in the beam. 0.24 = about 4.2 s from calm to enraged.
                                     // A quick tap of the beam (0.2 s) costs about 0.05.
   hollowAngerNoticeLevel: 0.27,      // 0.3 = about 1.25 s of beam from calm before it knows where you are.
                                     // Raise it to make brief scans safer, lower it toward 0 to make any touch dangerous.
@@ -234,7 +293,7 @@ const TUNING = {
   hollowSearchSeconds: 8.0,         // then it pokes around that area this long before giving up
   hollowSearchLeadSeconds: 2.5,     // it starts searching this many seconds of travel ahead of where it lost you,
                                     // in the direction you were moving. 0 = it searches exactly where it lost you.
-  hollowDoubleBackChance: 0.4,      // chance that, after giving up a search, it walks off and then returns to the
+  hollowDoubleBackChance: 0.3,      // chance that, after giving up a search, it walks off and then returns to the
                                     // same spot 6 to 11 seconds later. 0 = never, 1 = always.
   // Listening: while wandering near you it sometimes stops dead for a few seconds. It makes no footsteps
   // while it does, and it hears better.
@@ -278,14 +337,14 @@ const TUNING = {
 
   // ---- The Stills (calibration dummies) ------------------------------------
   stillSpeed: 1.8,                  // walking speed while nothing is scanning them. Your walk is 2.5.
-  stillObservedHoldSeconds: 1.3,    // a dummy stays frozen this long after the last pulse that touched it.
+  stillObservedHoldSeconds: 2.3,    // a dummy stays frozen this long after the last pulse that touched it.
                                     // Higher lets you look away for longer.
   stillKillDistance: 0.6,
   stillImprintSeconds: 22,          // how long the points a scan leaves on a dummy stay visible (maximum 63).
                                     // Long imprints mean old outlines linger and the room looks more crowded than it is.
 
   // ---- Apparitions ---------------------------------------------------------
-  phantomImprintSeconds: 4,       // how long the points of a figure that "was never there" stay visible
+  phantomImprintSeconds: 3.5,       // how long the points of a figure that "was never there" stay visible
   // Besides the few that stand at fixed places, apparitions turn up by chance, at a place chosen at that moment
   // from where you are and which way you are looking (see 08-phantoms.js). These numbers say how often.
   phantomFirstAfterSeconds: 45,     // none in the first seconds after you leave the lift
@@ -492,6 +551,12 @@ const CAPTIONS = {
   ownGlass: { text: '[glass crunches under your boots]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
   ownPlate: { text: '[a floor plate clanks under you]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
   ownCans: { text: '[cans scatter from your feet]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
+  scanGrenade: { text: '[a rising whine, and a crack of light]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
+  hollowStunned: { text: '[it stands frozen in the light]', level: 'tell', withinMetres: 0, seconds: 3.2 },
+  ownObjectKnock: { text: '[it knocks against something]', level: 'sound', withinMetres: 0, seconds: 2, slot: 'ownHands', rank: 0 },
+  ownObjectCrash: { text: '[it hits hard. That carried]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownHands', rank: 1 },
+  objectKnock: { text: '[something is knocked over]', level: 'sound', withinMetres: 20, seconds: 2.5, slot: 'objects', rank: 0 },
+  objectCrash: { text: '[something is sent clattering]', level: 'sound', withinMetres: 28, seconds: 3, slot: 'objects', rank: 1 },
   heartbeat: { text: '[your heart is pounding]', level: 'sound', withinMetres: 0, seconds: 1.5 }
 };
 

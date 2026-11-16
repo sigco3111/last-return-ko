@@ -57,7 +57,7 @@ const pointCloud = {
 };
 
 const beamLines = {
-  vertices: new Float32Array(MAXIMUM_BEAM_LINES * 2 * 4),
+  vertices: new Float32Array((MAXIMUM_BEAM_LINES + 1) * 2 * 4), // the last line is the beam that holds what you carry
   count: 0,
   originX: 0, originY: 0, originZ: 0
 };
@@ -117,10 +117,16 @@ void main() {
   if (uPalette == 1) {
     rangeColor = mix(vec3(1.0, 0.8, 0.45), vec3(0.75, 0.3, 0.05), range);
   } else if (uPalette == 2) {
-  // Scanner Sombre style: red right next to you, fading through yellow/green to blue at 26 m and beyond.
-    rangeColor = mix(vec3(1.0, 0.15, 0.1), vec3(1.0, 0.85, 0.1), smoothstep(0.0, 0.33, range));
-    rangeColor = mix(rangeColor, vec3(0.15, 0.85, 0.3), smoothstep(0.33, 0.66, range));
-    rangeColor = mix(rangeColor, vec3(0.15, 0.35, 1.0), smoothstep(0.66, 1.0, range));
+    // Scanner Sombre style, a full saturated spectrum: pure red out to about 1.5 m, then orange (5 m),
+    // yellow (9 m), green (14 m), cyan (19 m), and blue at 26 m and beyond.
+    rangeColor = mix(vec3(1.0, 0.02, 0.05), vec3(1.0, 0.42, 0.0), smoothstep(0.06, 0.2, range));
+    rangeColor = mix(rangeColor, vec3(1.0, 0.92, 0.0), smoothstep(0.2, 0.36, range));
+    rangeColor = mix(rangeColor, vec3(0.05, 1.0, 0.2), smoothstep(0.36, 0.54, range));
+    rangeColor = mix(rangeColor, vec3(0.0, 0.85, 1.0), smoothstep(0.54, 0.74, range));
+    rangeColor = mix(rangeColor, vec3(0.16, 0.22, 1.0), smoothstep(0.74, 1.0, range));
+    // TWEAK: how much brighter than the other palettes. Red is a dark colour to the eye and sits where points are
+    // dimmed most, so it gets the first number; from yellow outward it is the second.
+    rangeColor *= mix(1.7, 1.25, smoothstep(0.0, 0.36, range));
   } else if (uPalette == 3) {
     float heightBand = clamp(position.y / 4.0, 0.0, 1.0);
     rangeColor = mix(vec3(0.2, 0.35, 1.0), vec3(0.2, 1.0, 0.55), smoothstep(0.0, 0.45, heightBand));
@@ -134,10 +140,12 @@ void main() {
   vec3 color = rangeColor;
   vec3 lockedColor = vec3(1.0, 0.22, 0.1);
   vec3 openColor = vec3(0.25, 1.0, 0.55);
+  // The vivid palette keeps its hues: there, surfaces are told apart by brightness more than by a tint.
+  float tint = uPalette == 2 ? 0.45 : 1.0;
   if (surfaceClass == 0) color *= 0.72;
-  else if (surfaceClass == 2) color *= vec3(0.55, 0.5, 0.78);
-  else if (surfaceClass == 3 || surfaceClass == 11) color = mix(color, vec3(0.96, 0.88, 0.72), 0.5);
-  else if (surfaceClass == 13) color = mix(color, vec3(0.55, 0.9, 0.82), 0.45);
+  else if (surfaceClass == 2) color *= mix(vec3(0.62), vec3(0.55, 0.5, 0.78), tint);
+  else if (surfaceClass == 3 || surfaceClass == 11) color = mix(color, vec3(0.96, 0.88, 0.72), 0.5 * tint);
+  else if (surfaceClass == 13) color = mix(color, vec3(0.55, 0.9, 0.82), 0.45 * tint);
   else if (surfaceClass == 4) color = openColor;
   else if (surfaceClass == 5) color = mix(lockedColor, openColor, uPowerOn);
   // uHasKeycard carries the number of the best keycard held (0 for none): a door shows green once it would open.
@@ -547,7 +555,8 @@ function uploadWorldOccluderMesh(vertices) {
 
 // Stores one scanner return. `lifeCode` 0 keeps the point forever; otherwise it fades
 // after lifeCode * 0.25 seconds.
-function addScanPoint(x, y, z, intensity, surfaceClass, lifeCode) {
+// `isOffTheMap`: the point is on something that moves about, and is left off the map.
+function addScanPoint(x, y, z, intensity, surfaceClass, lifeCode, isOffTheMap) {
   const index = pointCloud.writeIndex;
   const floatOffset = index * POINT_STRIDE_FLOATS;
   pointCloud.floatView[floatOffset] = x;
@@ -563,7 +572,7 @@ function addScanPoint(x, y, z, intensity, surfaceClass, lifeCode) {
   if (pointCloud.storedCount < pointCloud.capacity) pointCloud.storedCount++;
   pointCloud.pendingUploadCount++;
   pointCloud.totalReturns++;
-  plotPointOnMap(x, z, surfaceClass);
+  if (!isOffTheMap) plotPointOnMap(x, z, surfaceClass);
 }
 
 let currentPointTime = 0;
@@ -607,6 +616,35 @@ function fadePointsInsideBox(minimumX, minimumY, minimumZ, maximumX, maximumY, m
     fadedAny = true;
   }
   if (fadedAny) pointCloud.needsFullUpload = true;
+}
+
+// Like the two above, for points that lie on one particular thing: only points of `surfaceClass` inside the box
+// for which `isOnIt(x, y, z)` says yes are touched, so that the floor under a crate keeps its points when the
+// crate is taken away. `lifeCode` 0 removes them at once; anything else lets them fade over that time.
+function changePointsOnShape(minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ, surfaceClass, lifeCode, isOnIt) {
+  const floats = pointCloud.floatView, bytes = pointCloud.byteView;
+  let changedAny = false;
+  for (let index = 0; index < pointCloud.storedCount; index++) {
+    const offset = index * POINT_STRIDE_FLOATS;
+    const x = floats[offset];
+    if (x < minimumX || x > maximumX) continue;
+    const z = floats[offset + 2];
+    if (z < minimumZ || z > maximumZ) continue;
+    const y = floats[offset + 1];
+    if (y < minimumY || y > maximumY) continue;
+    if (floats[offset + 3] === DEAD_POINT_BIRTH_TIME) continue;
+    const byteOffset = index * POINT_STRIDE_BYTES + 16;
+    if (bytes[byteOffset + 1] !== surfaceClass || !isOnIt(x, y, z)) continue;
+    if (lifeCode === 0) {
+      floats[offset + 3] = DEAD_POINT_BIRTH_TIME;
+    } else {
+      if (bytes[byteOffset + 2] !== 0) continue; // already fading: it keeps its own time
+      floats[offset + 3] = currentPointTime;
+      bytes[byteOffset + 2] = lifeCode;
+    }
+    changedAny = true;
+  }
+  if (changedAny) pointCloud.needsFullUpload = true;
 }
 
 function flushPointUploads() {
@@ -681,6 +719,76 @@ function writeBoxPropMatrix(out, prop) {
   return out;
 }
 
+// A box that is part of a loose object: the object's rotation and position, then the part's own place and size.
+function writeLooseBoxMatrix(out, object, part) {
+  const matrix = object.matrix;
+  out[0] = matrix[0] * part.halfX; out[1] = matrix[3] * part.halfX; out[2] = matrix[6] * part.halfX; out[3] = 0;
+  out[4] = matrix[1] * part.halfY; out[5] = matrix[4] * part.halfY; out[6] = matrix[7] * part.halfY; out[7] = 0;
+  out[8] = matrix[2] * part.halfZ; out[9] = matrix[5] * part.halfZ; out[10] = matrix[8] * part.halfZ; out[11] = 0;
+  out[12] = object.x + matrix[0] * part.centerX + matrix[1] * part.centerY + matrix[2] * part.centerZ;
+  out[13] = object.y + matrix[3] * part.centerX + matrix[4] * part.centerY + matrix[5] * part.centerZ;
+  out[14] = object.z + matrix[6] * part.centerX + matrix[7] * part.centerY + matrix[8] * part.centerZ;
+  out[15] = 1;
+  return out;
+}
+
+// Sends the matrix in `renderer.modelMatrix` to whichever of the two occluder programs is in use, and draws.
+function drawLooseObjectShape(isStationLit, vertexArray, vertexCount) {
+  const gl = renderer.gl;
+  if (isStationLit) {
+    gl.uniformMatrix4fv(renderer.debugWorldUniforms.uModel, false, renderer.modelMatrix);
+  } else {
+    multiplyMatrices(renderer.scratchMatrix, renderer.viewProjectionMatrix, renderer.modelMatrix);
+    gl.uniformMatrix4fv(renderer.solidUniforms.uMatrix, false, renderer.scratchMatrix);
+  }
+  gl.bindVertexArray(vertexArray);
+  gl.drawArrays(gl.TRIANGLES, 0, vertexCount);
+}
+
+// Loose objects are not drawn, any more than the creatures are: what you see of one is the points your scanner
+// has left on it. Those points are solid dots, so an object that has been scanned all over hides what is behind
+// it by itself, and one with three points on it is three points. (A black shape for the whole object, the moment
+// one pulse had landed on it, gave away its outline.)
+// Only with "Light the station" on in debug mode are they drawn, in the colour of things you can pick up.
+function drawLooseObjectOccluders(camera, isStationLit) {
+  if (!isStationLit || looseObjects.length === 0) return;
+  const gl = renderer.gl;
+  if (isStationLit) gl.uniform3f(renderer.debugWorldUniforms.uColor, 0.9, 0.6, 0.12);
+  for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) {
+    const object = looseObjects[objectIndex];
+    const deltaX = object.x - camera.x, deltaZ = object.z - camera.z;
+    if (deltaX * deltaX + deltaZ * deltaZ > 60 * 60) continue; // TWEAK: further than 60 m away they are not worth drawing
+    const matrix = object.matrix, parts = object.prepared.parts;
+    for (let partIndex = 0; partIndex < parts.length; partIndex++) {
+      const part = parts[partIndex];
+      if (part.shape === 'box') {
+        writeLooseBoxMatrix(renderer.modelMatrix, object, part);
+        drawLooseObjectShape(isStationLit, renderer.unitCubeVertexArray, 36);
+      } else if (part.shape === 'ball') {
+        writeTranslationScaleMatrix(renderer.modelMatrix,
+          object.x + matrix[0] * part.centerX + matrix[1] * part.centerY + matrix[2] * part.centerZ,
+          object.y + matrix[3] * part.centerX + matrix[4] * part.centerY + matrix[5] * part.centerZ,
+          object.z + matrix[6] * part.centerX + matrix[7] * part.centerY + matrix[8] * part.centerZ,
+          part.radius, part.radius, part.radius);
+        drawLooseObjectShape(isStationLit, renderer.debugSphereVertexArray, renderer.debugSphereVertexCount);
+      } else {
+        const fromX = object.x + matrix[0] * part.fromX + matrix[1] * part.fromY + matrix[2] * part.fromZ;
+        const fromY = object.y + matrix[3] * part.fromX + matrix[4] * part.fromY + matrix[5] * part.fromZ;
+        const fromZ = object.z + matrix[6] * part.fromX + matrix[7] * part.fromY + matrix[8] * part.fromZ;
+        const toX = object.x + matrix[0] * part.toX + matrix[1] * part.toY + matrix[2] * part.toZ;
+        const toY = object.y + matrix[3] * part.toX + matrix[4] * part.toY + matrix[5] * part.toZ;
+        const toZ = object.z + matrix[6] * part.toX + matrix[7] * part.toY + matrix[8] * part.toZ;
+        writeSegmentMatrix(renderer.modelMatrix, fromX, fromY, fromZ, toX, toY, toZ, part.radius);
+        drawLooseObjectShape(isStationLit, renderer.debugCylinderVertexArray, renderer.debugCylinderVertexCount);
+        writeTranslationScaleMatrix(renderer.modelMatrix, fromX, fromY, fromZ, part.radius, part.radius, part.radius);
+        drawLooseObjectShape(isStationLit, renderer.debugSphereVertexArray, renderer.debugSphereVertexCount);
+        writeTranslationScaleMatrix(renderer.modelMatrix, toX, toY, toZ, part.radius, part.radius, part.radius);
+        drawLooseObjectShape(isStationLit, renderer.debugSphereVertexArray, renderer.debugSphereVertexCount);
+      }
+    }
+  }
+}
+
 function writeViewmodelMatrix(out, x, y, z, yaw, pitch) {
   const cosineYaw = Math.cos(yaw), sineYaw = Math.sin(yaw), cosinePitch = Math.cos(pitch), sinePitch = Math.sin(pitch);
   out[0] = cosineYaw; out[1] = 0; out[2] = -sineYaw; out[3] = 0;
@@ -701,18 +809,36 @@ function writeViewmodelPlacementMatrix(out, aspectRatio, frameState) {
 // Moves the near end of every laser line to the place in the station that is drawn exactly behind the lens of
 // the scanner in the player's hand. The scanner is drawn with its own field of view and sways with the player's
 // steps, so a fixed offset from the eye does not land on the lens: the lines then start in the air beside it.
-function moveBeamLineOriginsToViewmodelLens(camera, eyeX, eyeY, eyeZ) {
-  const placement = renderer.viewmodelMatrix;
+// Where the lens of the scanner is, as the eye sees it: metres to the right, up, and (negative) ahead.
+// `placement` is the scanner's place in front of the eye (writeViewmodelPlacementMatrix). The scanner is drawn
+// with its own field of view, so this is the place in the station that is drawn exactly behind the lens.
+const lensInView = { x: 0, y: 0, z: 0 };
+function computeLensInView(placement, fieldOfViewDegrees) {
   const lensX = VIEWMODEL_LENS_CENTER_X * VIEWMODEL_MODEL_SCALE, lensY = VIEWMODEL_LENS_CENTER_Y * VIEWMODEL_MODEL_SCALE, lensZ = VIEWMODEL_LENS_CENTER_Z * VIEWMODEL_MODEL_SCALE;
   // The lens as the viewmodel camera sees it: x to the right, y up, z toward the eye.
   const lensViewX = placement[0] * lensX + placement[4] * lensY + placement[8] * lensZ + placement[12];
   const lensViewY = placement[1] * lensX + placement[5] * lensY + placement[9] * lensZ + placement[13];
   const lensViewZ = placement[2] * lensX + placement[6] * lensY + placement[10] * lensZ + placement[14];
   // The same place on the screen, seen with the field of view the station is drawn with.
-  const fieldOfViewRatio = Math.tan(camera.fieldOfViewDegrees * DEGREES_TO_RADIANS / 2) / Math.tan(VIEWMODEL_FIELD_OF_VIEW_DEGREES * DEGREES_TO_RADIANS / 2);
-  const originViewX = lensViewX / -lensViewZ * fieldOfViewRatio * BEAM_ORIGIN_DISTANCE;
-  const originViewY = lensViewY / -lensViewZ * fieldOfViewRatio * BEAM_ORIGIN_DISTANCE;
-  const originViewZ = -BEAM_ORIGIN_DISTANCE;
+  const fieldOfViewRatio = Math.tan(fieldOfViewDegrees * DEGREES_TO_RADIANS / 2) / Math.tan(VIEWMODEL_FIELD_OF_VIEW_DEGREES * DEGREES_TO_RADIANS / 2);
+  lensInView.x = lensViewX / -lensViewZ * fieldOfViewRatio * BEAM_ORIGIN_DISTANCE;
+  lensInView.y = lensViewY / -lensViewZ * fieldOfViewRatio * BEAM_ORIGIN_DISTANCE;
+  lensInView.z = -BEAM_ORIGIN_DISTANCE;
+  return lensInView;
+}
+
+// The same, for the game to ask: where the lens is when the scanner is held still (no sway from your steps).
+// The scanner's pulses are worked out from here when something you carry may be in their way.
+const STEADY_VIEWMODEL = { viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0 };
+const steadyViewmodelMatrix = new Float32Array(16);
+function getSteadyLensInView(fieldOfViewDegrees) {
+  const aspectRatio = renderer.height > 0 ? renderer.width / renderer.height : 16 / 9;
+  return computeLensInView(writeViewmodelPlacementMatrix(steadyViewmodelMatrix, aspectRatio, STEADY_VIEWMODEL), fieldOfViewDegrees);
+}
+
+function moveBeamLineOriginsToViewmodelLens(camera, eyeX, eyeY, eyeZ) {
+  const lens = computeLensInView(renderer.viewmodelMatrix, camera.fieldOfViewDegrees);
+  const originViewX = lens.x, originViewY = lens.y, originViewZ = lens.z;
   // From in front of the eye to a place in the station: the view matrix holds right, up and backward in its rows.
   const view = renderer.viewMatrix;
   const originX = eyeX + view[0] * originViewX + view[1] * originViewY + view[2] * originViewZ;
@@ -878,6 +1004,7 @@ function renderFrame(camera, frameState) {
     }
     gl.drawArrays(gl.TRIANGLES, 0, 36);
   }
+  drawLooseObjectOccluders(camera, isStationLit);
   gl.disable(gl.POLYGON_OFFSET_FILL);
   gl.colorMask(true, true, true, true);
 
@@ -915,6 +1042,22 @@ function renderFrame(camera, frameState) {
     gl.bindBuffer(gl.ARRAY_BUFFER, renderer.beamBuffer);
     gl.bufferSubData(gl.ARRAY_BUFFER, 0, beamLines.vertices, 0, beamLines.count * 8);
     gl.drawArrays(gl.LINES, 0, beamLines.count * 2);
+  }
+  // 3a. The beam that holds what you carry: one amber line from the lens to the object, so that you can tell
+  //     something is on the end of it even when you have not scanned it.
+  const carried = frameState.showViewmodel ? getHeldLooseObject() : null;
+  if (carried !== null) {
+    const vertices = beamLines.vertices, offset = MAXIMUM_BEAM_LINES * 8;
+    const flicker = 0.5 + 0.12 * Math.sin(frameState.time * 31) + 0.08 * Math.sin(frameState.time * 47);
+    vertices[offset] = beamLines.originX; vertices[offset + 1] = beamLines.originY; vertices[offset + 2] = beamLines.originZ; vertices[offset + 3] = flicker;
+    vertices[offset + 4] = carried.x; vertices[offset + 5] = carried.y; vertices[offset + 6] = carried.z; vertices[offset + 7] = flicker * 0.6;
+    gl.useProgram(renderer.beamProgram);
+    gl.uniformMatrix4fv(renderer.beamUniforms.uViewProjection, false, renderer.viewProjectionMatrix);
+    gl.uniform3f(renderer.beamUniforms.uColor, 1.0, 0.62, 0.18); // TWEAK: the colour of the holding beam
+    gl.bindVertexArray(renderer.beamVertexArray);
+    gl.bindBuffer(gl.ARRAY_BUFFER, renderer.beamBuffer);
+    gl.bufferSubData(gl.ARRAY_BUFFER, offset * 4, vertices, offset, 8);
+    gl.drawArrays(gl.LINES, MAXIMUM_BEAM_LINES * 2, 2);
   }
   gl.disable(gl.BLEND);
   gl.depthMask(true);

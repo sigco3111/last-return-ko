@@ -62,32 +62,29 @@ function refreshHollowDoorBlocks() {
   if (hasChanged) hollowNavigationVersion++;
 }
 
-// True when a straight walk between two points stays on walkable tiles and goes through no door that is shut to the Hollow.
-function hasClearHollowWalkingLine(fromX, fromZ, toX, toZ) {
-  const distance = distanceBetweenPoints(fromX, fromZ, toX, toZ);
-  const stepCount = Math.max(1, Math.ceil(distance / 0.3));
-  for (let step = 0; step <= stepCount; step++) {
-    const amount = step / stepCount;
-    const tileX = Math.floor(fromX + (toX - fromX) * amount), tileZ = Math.floor(fromZ + (toZ - fromZ) * amount);
-    if (!isWalkableAt(tileX, tileZ) || tileBlocksHollow[tileIndexAt(tileX, tileZ)] === 1) return false;
-  }
-  return true;
+// A tile the Hollow can walk on right now: walkable, and not the tile of a door that is shut to it.
+function isTileWalkableForHollow(tileX, tileZ) {
+  return isWalkableAt(tileX, tileZ) && tileBlocksHollow[tileIndexAt(tileX, tileZ)] !== 1;
 }
 
-// True when a straight line between two points crosses no wall and no door that is shut to the Hollow.
-// (Unlike the function above it does not mind furniture: it is for getting the Hollow back onto walkable
-// floor when it has ended up standing where it cannot path from.)
+// A tile that is neither wall nor a door shut to the Hollow. There may be furniture on it.
+function isTileOpenGroundForHollow(tileX, tileZ) {
+  if (!isInsideGrid(tileX, tileZ)) return false;
+  const index = tileIndexAt(tileX, tileZ);
+  return tileIsOpen[index] === 1 && tileBlocksHollow[index] !== 1;
+}
+
+// True when a straight walk between two points stays on walkable tiles and goes through no door that is shut to the Hollow.
+function hasClearHollowWalkingLine(fromX, fromZ, toX, toZ) {
+  return isLineClearOfTiles(fromX, fromZ, toX, toZ, isTileWalkableForHollow, false);
+}
+
+// True when a straight line from where the Hollow stands to a point crosses no wall and no door that is shut
+// to it. It is for getting the Hollow back onto walkable floor when it has ended up standing where it cannot
+// path from, so unlike the function above it does not mind furniture, and it does not mind what the Hollow is
+// standing in either: a doorway that has shut on it, or a wall, is exactly what it has to be let out of.
 function isOpenGroundBetween(fromX, fromZ, toX, toZ) {
-  const distance = distanceBetweenPoints(fromX, fromZ, toX, toZ);
-  const stepCount = Math.max(1, Math.ceil(distance / 0.3));
-  for (let step = 0; step <= stepCount; step++) {
-    const amount = step / stepCount;
-    const tileX = Math.floor(fromX + (toX - fromX) * amount), tileZ = Math.floor(fromZ + (toZ - fromZ) * amount);
-    if (!isInsideGrid(tileX, tileZ)) return false;
-    const index = tileIndexAt(tileX, tileZ);
-    if (tileIsOpen[index] === 0 || tileBlocksHollow[index] === 1) return false;
-  }
-  return true;
+  return isLineClearOfTiles(fromX, fromZ, toX, toZ, isTileOpenGroundForHollow, true);
 }
 
 // ---------------------------------------------------------------------------
@@ -636,7 +633,7 @@ function auditHollowRoutes() {
     if (hatchesInPart[partNumber] === 0) problems.push('part ' + partNumber + ' of the station has no hatch: the Hollow could never get in or out of it');
   }
   const startIndex = findNearestWalkableTileIndex(HOLLOW_SPAWN_POSITION.x, HOLLOW_SPAWN_POSITION.z);
-  const field = new Int16Array(TILE_COUNT);
+  const field = borrowTileField('auditHollowRoutes');
   computeHollowDistanceField(field, startIndex, true);
   let unreachable = 0, partsReachedOnFoot = 0;
   for (let index = 0; index < TILE_COUNT; index++) {

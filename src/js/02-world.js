@@ -5,8 +5,8 @@
 // ---------------------------------------------------------------------------
 
 // The whole map, in one-metre tiles. The classic station uses the top-left 76 x 64; generated stations may use it all.
-const GRID_WIDTH = 512;
-const GRID_DEPTH = 512;
+const GRID_WIDTH = 1024;
+const GRID_DEPTH = 1024;
 const TILE_COUNT = GRID_WIDTH * GRID_DEPTH;
 
 const tileIsOpen = new Uint8Array(TILE_COUNT);
@@ -275,6 +275,7 @@ function resetWorldForNewLevel() {
   tileIsWalkable.fill(0);
   tilePropLists.fill(null); tileSignLists.fill(null);
   worldProps.length = 0; dynamicBoxProps.length = 0; doors.length = 0; interactables.length = 0;
+  clearLooseObjects();
   roamingWaypoints.length = 0;
   clearHollowHatches();
   clearNoisyFloor();
@@ -921,6 +922,18 @@ function findNearestWalkableTileIndex(x, z) {
 const navigationQueue = new Int32Array(TILE_COUNT);
 const NAVIGATION_UNREACHABLE = 32000;
 
+// A working array with one number for every tile of the map, for a function to use while it runs.
+// The map is 1024 by 1024 tiles, so a fresh one is two megabytes. Building and checking a station used to make
+// dozens of them and throw them away, faster than a browser clears up after itself; this hands out the same
+// one again instead. Each caller asks for its own by name, so no two functions ever share one. Whoever
+// borrows one must not keep it after returning and must not expect anything of what is in it
+// (computeDistanceField fills it before use).
+const borrowedTileFields = {};
+function borrowTileField(name) {
+  if (!borrowedTileFields[name]) borrowedTileFields[name] = new Int16Array(TILE_COUNT);
+  return borrowedTileFields[name];
+}
+
 // Flood-fills walking distance (in tiles) outward from a target tile.
 // `forbiddenZone` lets a walker refuse to enter one zone; `allowedZones` restricts it to a set.
 function computeDistanceField(field, targetIndex, forbiddenZone, allowedZones) {
@@ -949,16 +962,38 @@ function computeDistanceField(field, targetIndex, forbiddenZone, allowedZones) {
   }
 }
 
-// True when a straight walk between two points never leaves walkable tiles.
-function hasClearWalkingLine(fromX, fromZ, toX, toZ) {
-  const distance = distanceBetweenPoints(fromX, fromZ, toX, toZ);
-  const stepCount = Math.max(1, Math.ceil(distance / 0.3));
-  for (let step = 0; step <= stepCount; step++) {
-    const amount = step / stepCount;
-    const sampleX = fromX + (toX - fromX) * amount, sampleZ = fromZ + (toZ - fromZ) * amount;
-    if (!isWalkableAt(Math.floor(sampleX), Math.floor(sampleZ))) return false;
+// Goes along a straight line tile by tile and asks `isTileClear(tileX, tileZ)` about every tile the line
+// touches, however little of it. True if all of them are clear.
+//
+// Every tile, and not a point every so often along the line: the things that walk have no collision of their
+// own, so a line that passes this is one they will walk. A line that cuts the corner of a wall is inside the
+// wall for less than the gap between two such points, and a walker that goes along it ends up standing in the wall.
+//
+// `ignoresStartTile` leaves out the tile the line starts in: for a walker that is asking how to get out of it.
+function isLineClearOfTiles(fromX, fromZ, toX, toZ, isTileClear, ignoresStartTile) {
+  let tileX = Math.floor(fromX), tileZ = Math.floor(fromZ);
+  if (!ignoresStartTile && !isTileClear(tileX, tileZ)) return false;
+  const deltaX = toX - fromX, deltaZ = toZ - fromZ;
+  const stepX = deltaX > 0 ? 1 : -1, stepZ = deltaZ > 0 ? 1 : -1;
+  // How far along the line (0 at its start, 1 at its end) it next crosses into another column, and another row;
+  // and how much further along the one after that is.
+  const amountPerColumn = deltaX !== 0 ? Math.abs(1 / deltaX) : Infinity;
+  const amountPerRow = deltaZ !== 0 ? Math.abs(1 / deltaZ) : Infinity;
+  let nextColumnAt = deltaX !== 0 ? (deltaX > 0 ? tileX + 1 - fromX : fromX - tileX) * amountPerColumn : Infinity;
+  let nextRowAt = deltaZ !== 0 ? (deltaZ > 0 ? tileZ + 1 - fromZ : fromZ - tileZ) * amountPerRow : Infinity;
+  // The line ends in a known tile, so the number of crossings is known too: counting them down cannot overshoot.
+  let crossingsLeft = Math.abs(Math.floor(toX) - tileX) + Math.abs(Math.floor(toZ) - tileZ);
+  while (crossingsLeft-- > 0) {
+    if (nextColumnAt < nextRowAt) { tileX += stepX; nextColumnAt += amountPerColumn; }
+    else { tileZ += stepZ; nextRowAt += amountPerRow; }
+    if (!isTileClear(tileX, tileZ)) return false;
   }
   return true;
+}
+
+// True when a straight walk between two points never leaves walkable tiles.
+function hasClearWalkingLine(fromX, fromZ, toX, toZ) {
+  return isLineClearOfTiles(fromX, fromZ, toX, toZ, isWalkableAt, false);
 }
 
 // ---------------------------------------------------------------------------

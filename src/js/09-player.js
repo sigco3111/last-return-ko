@@ -14,6 +14,9 @@ const input = {
   touchScanHeld: false,
   touchSprint: false,
   touchCrouch: false,
+  touchUseHeld: false,  // a finger is on USE: with something in the beam, holding it winds up a throw
+  isGrabHeld: false,    // the right mouse button is down: it carries what you are looking at for as long as it is
+  wantsUseCarried: false, // Q has been pressed: set off what the beam is carrying
   moveStickX: 0,
   moveStickZ: 0,
   lookDeltaX: 0,
@@ -48,6 +51,7 @@ const player = {
   scannerActivity: 0,
   centerRange: -1,
   focusedInteractable: null,
+  focusedLooseObject: null, // something that can be picked up, when that is what you are looking at
   isPainting: false
 };
 
@@ -126,6 +130,7 @@ function resetPlayerToStart() {
   player.eyeHeight = TUNING.eyeHeightStanding;
   player.floorY = getFloorHeightAt(player.x, player.z);
   player.focusedInteractable = null;
+  player.focusedLooseObject = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -168,6 +173,7 @@ function initializeInput() {
     if (game.mode === 'playing') {
       if (code === 'KeyE') input.wantsInteract = true;
       else if (code === 'KeyF') input.wantsSweep = true;
+      else if (code === 'KeyQ') input.wantsUseCarried = true; // sets off what the beam is carrying, if it is something that does anything
       else if (code === 'Tab' || code === 'KeyM') toggleMapOverlay();
       else if (code === 'Digit1') setScannerSpread(5);
       else if (code === 'Digit2') setScannerSpread(TUNING.scannerSpreadDefaultDegrees);
@@ -187,6 +193,7 @@ function initializeInput() {
     input.keysDown.clear();
     input.isScanHeld = false;
     input.isLookDragging = false;
+    input.isGrabHeld = false;
   });
 
   canvas.addEventListener('mousedown', function (event) {
@@ -195,13 +202,18 @@ function initializeInput() {
       if (!input.isPointerLocked && !input.useDragLook) requestPointerLockOnCanvas();
       input.isScanHeld = true;
     } else if (event.button === 2) {
-      if (input.isPointerLocked) input.wantsSweep = true;
+      // Held, the right button carries what you are looking at (08-loose-objects.js). Where the browser will
+      // not capture the mouse it is the button you drag to look around with, as before.
+      if (input.isPointerLocked) input.isGrabHeld = true;
       else input.isLookDragging = true;
+    } else if (event.button === 1) {
+      event.preventDefault(); // the wheel button: a full sweep (and not the browser's scrolling)
+      if (input.isPointerLocked) input.wantsSweep = true;
     }
   });
   window.addEventListener('mouseup', function (event) {
     if (event.button === 0) input.isScanHeld = false;
-    if (event.button === 2) input.isLookDragging = false;
+    if (event.button === 2) { input.isLookDragging = false; input.isGrabHeld = false; }
   });
   window.addEventListener('mousemove', function (event) {
     if (game.mode !== 'playing') return;
@@ -227,6 +239,7 @@ function initializeInput() {
     }
     if (!input.isPointerLocked) {
       input.isScanHeld = false;
+      input.isGrabHeld = false;
       // Losing the mouse normally means the player pressed Escape. With the debug panel up it means they want the cursor.
       if (game.mode === 'playing' && !input.useDragLook && !input.isTouchDevice && !debugState.isPanelOpen) pauseGame();
     }
@@ -348,6 +361,13 @@ function initializeTouchControls() {
     if (input.touchCrouch) { input.touchSprint = false; document.getElementById('touch-run').classList.remove('is-held'); }
     element.classList.toggle('is-held', input.touchCrouch);
   });
+  // USE is also what lets go of something you carry, and held down it winds up a throw: the game needs to
+  // know for how long a finger stays on it.
+  const useButton = document.getElementById('touch-use');
+  useButton.addEventListener('touchstart', function () { input.touchUseHeld = true; }, { passive: true });
+  const releaseUse = function () { input.touchUseHeld = false; };
+  useButton.addEventListener('touchend', releaseUse);
+  useButton.addEventListener('touchcancel', releaseUse);
   bindTapButton('touch-spread', function () {
     const next = player.spreadDegrees < 8 ? TUNING.scannerSpreadDefaultDegrees : (player.spreadDegrees < 18 ? 24 : 5);
     setScannerSpread(next);
@@ -385,7 +405,7 @@ function updatePlayerMovement(dt) {
   const hasNoRoomToStand = getHeadroomAt(player.x, player.z) < 1.75;
   player.isCrouching = keys.has('KeyC') || input.touchCrouch || hasNoRoomToStand;
   player.isInVent = isInVent;
-  const wantsSprint = (keys.has('ShiftLeft') || keys.has('ShiftRight') || input.touchSprint) && !player.isCrouching;
+  const wantsSprint = (keys.has('ShiftLeft') || keys.has('ShiftRight') || input.touchSprint) && !player.isCrouching && canSprintWhileCarrying();
   player.isSprinting = wantsSprint && hasMoveInput && forwardInput > 0.2 && !player.isStaminaLocked && player.sweepTimeRemaining <= 0;
 
   if (player.isSprinting) {
@@ -406,6 +426,7 @@ function updatePlayerMovement(dt) {
   const flags = getTileFlagsAtPosition(player.x, player.z);
   const isInWater = (flags & TILE_FLAG_WATER) !== 0;
   if (isInWater) speed *= TUNING.waterSpeedFactor;
+  speed *= getCarrySpeedFactor(); // something in the beam slows you by its weight
 
   const forwardX = Math.sin(player.yaw), forwardZ = -Math.cos(player.yaw);
   const rightX = Math.cos(player.yaw), rightZ = Math.sin(player.yaw);
@@ -417,7 +438,7 @@ function updatePlayerMovement(dt) {
 
   const previousX = player.x, previousZ = player.z;
   const resolved = resolveBodyCollision(player.x + player.velocityX * dt, player.z + player.velocityZ * dt,
-    TUNING.playerRadius, player.isCrouching ? 1.0 : 1.7, getFloorHeightAt(player.x, player.z));
+    TUNING.playerRadius, player.isCrouching ? (canCrawlWhileCarrying() ? 1.0 : 1.2) : 1.7, getFloorHeightAt(player.x, player.z));
   player.x = resolved.x; player.z = resolved.z;
   // Follow the floor. Stairs are taken smoothly; anything bigger (a teleport, a checkpoint) lands at once.
   // TWEAK: 2.5 = how fast the view rises and falls on stairs, in metres per second. Lower feels floatier.
@@ -465,6 +486,11 @@ function updatePlayerMovement(dt) {
     game.hasShownVentHint = true;
     showMessage(input.isTouchDevice ? 'A vent. Hold CROUCH to crawl in. It is not quiet in there.' : 'A vent. Hold C to crawl in. It is not quiet in there.', 6, 'info');
   }
+  // Crouched at a vent with both arms full: say why you are not going in.
+  if (!canCrawlWhileCarrying() && player.isCrouching && hasMoveInput && !isInVent &&
+      (getTileFlagsAtPosition(player.x + forwardX * 0.9, player.z + forwardZ * 0.9) & TILE_FLAG_VENT) !== 0) {
+    showMessage('The ' + getHeldLooseObject().kind.label + ' will not go in there with you.', 3, 'info');
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -489,26 +515,132 @@ function markInteractableDiscovered(objectId) {
   if (interactable && !interactable.isDiscovered) interactable.isDiscovered = true;
 }
 
-// Fires one pulse offset from the view direction by (horizontalTangent, verticalTangent).
-function fireScannerPulse(originX, originY, originZ, horizontalTangent, verticalTangent, drawBeam) {
-  const basis = scannerBasis;
-  let directionX = basis.forwardX + basis.rightX * horizontalTangent + basis.upX * verticalTangent;
-  let directionY = basis.forwardY + basis.rightY * horizontalTangent + basis.upY * verticalTangent;
-  let directionZ = basis.forwardZ + basis.rightZ * horizontalTangent + basis.upZ * verticalTangent;
-  const length = Math.sqrt(directionX * directionX + directionY * directionY + directionZ * directionZ);
-  directionX /= length; directionY /= length; directionZ /= length;
-  if (!castScannerRay(originX, originY, originZ, directionX, directionY, directionZ, TUNING.scannerMaximumRange)) return false;
+// ---- Where scanning light comes from ----
+//
+// A pulse is fired from a point, along a direction, and stops on the first thing in its way: rock, a prop,
+// a door, a creature, a loose object. `fireScanPulse` is that. It does not care where the point is: the title
+// screen fires from its camera, and anything that should scan one day from where it lies (something thrown,
+// another player's scanner) can fire from there.
+//
+// The player's own scanner has one refinement, because you aim it with your eyes and hold it in your hand
+// (see castScannerPulse below).
+
+// Where the light that is being fired comes from, on the plan. A creature that is lit takes note of it: that
+// is the place it comes to, which is you when it is your scanner and somewhere else when it is not.
+const scanSource = { x: 0, z: 0 };
+
+// Notes what a pulse has just landed on (it is in `rayHit`): the scan point, and what the game makes of it.
+function recordScanHit(drawBeam) {
   let lifeCode = 0;
   const figure = rayHit.figure;
   if (figure !== null) {
+    figure.beamSourceX = scanSource.x; figure.beamSourceZ = scanSource.z;
     figure.hitsThisFrame++;
     figure.totalHits++;
     figure.lastScannedTime = game.time;
     lifeCode = convertSecondsToPointLifeCode(TUNING[figure.imprintTuningKey]);
   }
-  addScanPoint(rayHit.x, rayHit.y, rayHit.z, rayHit.intensity, rayHit.surfaceClass, lifeCode);
+  const looseObject = rayHit.looseObject;
+  if (looseObject !== null) { lifeCode = getLooseObjectPointLifeCode(looseObject); noteLooseObjectScanned(looseObject); }
+  addScanPoint(rayHit.x, rayHit.y, rayHit.z, rayHit.intensity, rayHit.surfaceClass, lifeCode, looseObject !== null);
   if (rayHit.objectId !== 0) markInteractableDiscovered(rayHit.objectId);
   if (drawBeam) addBeamLine(rayHit.x, rayHit.y, rayHit.z, 0.1 + Math.random() * 0.12);
+}
+
+// Fires one pulse from (originX, Y, Z) along a direction of length one. Leaves a scan point where it lands and
+// returns true, or returns false if it met nothing within the scanner's range.
+function fireScanPulse(originX, originY, originZ, directionX, directionY, directionZ, drawBeam) {
+  scanSource.x = originX; scanSource.z = originZ;
+  if (!castScannerRay(originX, originY, originZ, directionX, directionY, directionZ, TUNING.scannerMaximumRange)) return false;
+  recordScanHit(drawBeam);
+  return true;
+}
+
+// The same, for something that scans from where it lies and should not waste its light on whatever it is lying
+// against: a pulse that would land on the station nearer than `nearestMetres` is not fired at all. Returns 1 if
+// the pulse landed, 0 if it met nothing, and -1 if it was held back for landing too near (try another direction).
+// A creature or a loose object is never too near: light on those always counts.
+function fireScanPulseBeyond(originX, originY, originZ, directionX, directionY, directionZ, nearestMetres) {
+  scanSource.x = originX; scanSource.z = originZ;
+  if (!castScannerRay(originX, originY, originZ, directionX, directionY, directionZ, TUNING.scannerMaximumRange)) return 0;
+  if (rayHit.distance < nearestMetres && rayHit.figure === null && rayHit.looseObject === null) return -1;
+  recordScanHit(false);
+  return 1;
+}
+
+// The player's scanner: where you aim from, and where the light leaves it.
+const scanEmitter = {
+  x: 0, y: 0, z: 0,             // where the light leaves: the lens, or the eye when there is no scanner in a hand
+  eyeX: 0, eyeY: 0, eyeZ: 0,    // where the aiming is done from
+  isAtEye: true
+};
+
+// For a view with no scanner in a hand (the title screen's camera, the workshop): the light leaves the eye.
+function updateScanEmitterAtEye(eyeX, eyeY, eyeZ) {
+  scanEmitter.x = scanEmitter.eyeX = eyeX; scanEmitter.y = scanEmitter.eyeY = eyeY; scanEmitter.z = scanEmitter.eyeZ = eyeZ;
+  scanEmitter.isAtEye = true;
+}
+
+// For the player: the light leaves the scanner's lens. Call computeScannerBasis first.
+function updateScanEmitterAtLens(eyeX, eyeY, eyeZ) {
+  const basis = scannerBasis, lens = getSteadyLensInView(getPlayFieldOfViewDegrees());
+  let offsetX = basis.rightX * lens.x + basis.upX * lens.y - basis.forwardX * lens.z;
+  let offsetY = basis.rightY * lens.x + basis.upY * lens.y - basis.forwardY * lens.z;
+  let offsetZ = basis.rightZ * lens.x + basis.upZ * lens.y - basis.forwardZ * lens.z;
+  const reach = Math.sqrt(offsetX * offsetX + offsetY * offsetY + offsetZ * offsetZ);
+  // With your face to a wall the scanner would be inside it. You hold it back instead: it stays a hand's
+  // width short of whatever is between your eyes and where it would be.
+  if (castRayAgainstWorld(eyeX, eyeY, eyeZ, offsetX / reach, offsetY / reach, offsetZ / reach, reach + TUNING.scannerClearanceMetres)) {
+    const shorter = Math.max(0.02, rayHit.distance - TUNING.scannerClearanceMetres) / reach;
+    if (shorter < 1) { offsetX *= shorter; offsetY *= shorter; offsetZ *= shorter; }
+  }
+  scanEmitter.eyeX = eyeX; scanEmitter.eyeY = eyeY; scanEmitter.eyeZ = eyeZ;
+  scanEmitter.x = eyeX + offsetX; scanEmitter.y = eyeY + offsetY; scanEmitter.z = eyeZ + offsetZ;
+  scanEmitter.isAtEye = false;
+}
+
+// One pulse of the player's scanner, to land (horizontalTangent, verticalTangent) off the middle of the view:
+// 0, 0 is the centre of the aiming ring. Fills `rayHit` and returns true on a hit.
+//
+// You aim with your eyes, so everything is scanned exactly as you see it: the pulse lands on whatever is in
+// that direction from your eyes, be it a wall, a creature or something lying on the floor. (Worked out from
+// the scanner alone, the corner of a doorway beside your scanner hand blocked what your eyes could plainly see
+// past it, and a creature close in front of you was lit a hand's width to one side of where you aimed.)
+// The one thing that is different is what the scanner's own beam is carrying. That hangs in front of the lens,
+// in your right hand, and it is in the way when it is on the straight line from the lens to the spot the pulse
+// was going to, which is the line the beam is drawn along.
+// Call computeScannerBasis and one of the two updateScanEmitter functions first.
+function castScannerPulse(horizontalTangent, verticalTangent) {
+  const basis = scannerBasis, emitter = scanEmitter, range = TUNING.scannerMaximumRange;
+  let directionX = basis.forwardX + basis.rightX * horizontalTangent + basis.upX * verticalTangent;
+  let directionY = basis.forwardY + basis.rightY * horizontalTangent + basis.upY * verticalTangent;
+  let directionZ = basis.forwardZ + basis.rightZ * horizontalTangent + basis.upZ * verticalTangent;
+  let length = Math.sqrt(directionX * directionX + directionY * directionY + directionZ * directionZ);
+  directionX /= length; directionY /= length; directionZ /= length;
+  const carried = emitter.isAtEye ? null : getHeldLooseObject();
+  if (carried === null) return castScannerRay(emitter.eyeX, emitter.eyeY, emitter.eyeZ, directionX, directionY, directionZ, range);
+  // Where your eyes see this pulse land, looking past what you carry (or, if on nothing, where it runs out).
+  looseRaySkipped = carried;
+  const isLanding = castScannerRay(emitter.eyeX, emitter.eyeY, emitter.eyeZ, directionX, directionY, directionZ, range);
+  looseRaySkipped = null;
+  const reach = isLanding ? rayHit.distance : range;
+  // The line from the lens to that spot: is what you carry on it?
+  let alongX = emitter.eyeX + directionX * reach - emitter.x, alongY = emitter.eyeY + directionY * reach - emitter.y, alongZ = emitter.eyeZ + directionZ * reach - emitter.z;
+  length = Math.sqrt(alongX * alongX + alongY * alongY + alongZ * alongZ);
+  if (length < 0.05) return isLanding;
+  alongX /= length; alongY /= length; alongZ /= length;
+  const distance = intersectRayWithLooseObject(carried, emitter.x, emitter.y, emitter.z, alongX, alongY, alongZ, length);
+  if (distance <= 0) return isLanding;
+  fillRayHit(distance, SURFACE_INTERACTIVE, 0.6 + Math.random() * 0.3, 0, emitter.x, emitter.y, emitter.z, alongX, alongY, alongZ);
+  rayHit.looseObject = carried;
+  return true;
+}
+
+// Fires one pulse of the player's scanner and leaves its point.
+function fireScannerPulse(horizontalTangent, verticalTangent, drawBeam) {
+  scanSource.x = scanEmitter.eyeX; scanSource.z = scanEmitter.eyeZ;
+  if (!castScannerPulse(horizontalTangent, verticalTangent)) return false;
+  recordScanHit(drawBeam);
   return true;
 }
 
@@ -516,6 +648,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
   const quality = QUALITY_PRESETS[settings.quality];
   computeScannerBasis(player.yaw, player.pitch);
   const basis = scannerBasis;
+  updateScanEmitterAtLens(eyeX, eyeY, eyeZ); // the light leaves the lens: what is between it and the wall is in the way
   // Roughly where the scanner is held. While the scanner is on screen the renderer moves the start of the
   // laser lines onto its lens (moveBeamLineOriginsToViewmodelLens); this is what is left when it is not.
   resetBeamLines(
@@ -552,7 +685,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
       // TWEAK: 0.5 spreads pulses evenly over the cone, lower values crowd them toward the centre.
       const radius = Math.pow(Math.random(), 0.62) * spreadTangent;
       const angle = Math.random() * TWO_PI;
-      fireScannerPulse(eyeX, eyeY, eyeZ, Math.cos(angle) * radius, Math.sin(angle) * radius, rayIndex % beamEvery === 0);
+      fireScannerPulse(Math.cos(angle) * radius, Math.sin(angle) * radius, rayIndex % beamEvery === 0);
     }
     player.scannerHumTimer -= dt;
     if (player.scannerHumTimer <= 0) {
@@ -573,7 +706,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
       const lineProgress = previousProgress + (progress - previousProgress) * Math.random();
       const verticalTangent = interpolateLinear(halfHeightTangent, -halfHeightTangent, lineProgress);
       const horizontalTangent = (Math.random() * 2 - 1) * halfWidthTangent;
-      fireScannerPulse(eyeX, eyeY, eyeZ, horizontalTangent, verticalTangent, rayIndex % beamEvery === 0);
+      fireScannerPulse(horizontalTangent, verticalTangent, rayIndex % beamEvery === 0);
     }
   } else {
     player.heat = Math.max(0, player.heat - TUNING.heatCoolingPerSecond * dt);
@@ -592,7 +725,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
   player.scannerActivity = approachValue(player.scannerActivity, wantsPaint || isSweeping ? 1 : 0, dt * 9);
 
   // The range readout always measures straight ahead, even when not scanning.
-  if (castScannerRay(eyeX, eyeY, eyeZ, basis.forwardX, basis.forwardY, basis.forwardZ, TUNING.scannerMaximumRange)) {
+  if (castScannerPulse(0, 0)) {
     player.centerRange = rayHit.distance;
   } else {
     player.centerRange = -1;
@@ -611,9 +744,22 @@ function updateInteractionFocus(eyeX, eyeY, eyeZ) {
     const score = distance < 0.7 ? 1 : alignment;
     if (score > bestScore) { bestScore = score; best = interactable; }
   }
+  // Something loose that can be picked up wins when it is the better lined up of the two.
+  const looseObject = findLooseObjectInFocus(eyeX, eyeY, eyeZ, best ? bestScore : 0.9);
+  if (looseObject) best = null;
   player.focusedInteractable = best;
+  player.focusedLooseObject = looseObject;
+  // E (USE on a phone) does whatever you are looking at: uses it, or picks it up. With something in the beam
+  // and nothing to use in front of you, it lets go of what you carry.
   if (input.wantsInteract) {
     input.wantsInteract = false;
-    if (best) useInteractable(best);
+    if (looseObject) {
+      if (getHeldLooseObject()) showMessage('The beam is already holding something.', 2, 'info');
+      else pickUpLooseObject(looseObject);
+    } else if (best) {
+      useInteractable(best);
+    } else if (getHeldLooseObject()) {
+      beginLettingGo();
+    }
   }
 }

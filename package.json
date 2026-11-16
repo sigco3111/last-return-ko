@@ -1,6 +1,6 @@
 {
   "name": "game-last-return",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "private": true,
   "license": "MIT",
   "description": "Last Return: a first-person horror game where a handheld LiDAR scanner is the only way to see.",
@@ -8,7 +8,7 @@
     "build": "node build.js && node --check build/bundle.js",
     "build:dev": "node build.js --dev && node --check build/bundle.js && node --check build/workshop-bundle.js",
     "dev": "node tools/dev-server.js",
-    "test": "npm run build:dev && node tools/playthrough-test.js && node tools/generated-station-test.js && node tools/generators-test.js && node tools/quests-test.js && node tools/custom-difficulty-test.js && node tools/locked-doors-test.js && node tools/noisy-floor-test.js && node tools/captions-test.js && node tools/apparition-test.js && node tools/workshop-test.js",
+    "test": "npm run build:dev && node tools/playthrough-test.js && node tools/generated-station-test.js && node tools/generators-test.js && node tools/quests-test.js && node tools/custom-difficulty-test.js && node tools/locked-doors-test.js && node tools/noisy-floor-test.js && node tools/captions-test.js && node tools/loose-objects-test.js && node tools/apparition-test.js && node tools/workshop-test.js",
     "screenshots": "npm run build:dev && node tools/take-screenshots.js",
     "audio-check": "npm run build:dev && node tools/audio-check.js",
     "voice-script": "node tools/write-voice-script.js",

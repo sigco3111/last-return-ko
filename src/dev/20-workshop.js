@@ -325,9 +325,9 @@ function finishWorkshopWorld() {
 // The rectangle is given in tangents: (0, 0) is the middle of the view.
 function fireWorkshopScan(rayCount, centerHorizontal, centerVertical, halfWidth, halfHeight) {
   computeScannerBasis(player.yaw, player.pitch);
-  const eyeY = getPlayerEyeY();
+  updateScanEmitterAtEye(player.x, getPlayerEyeY(), player.z);
   for (let rayIndex = 0; rayIndex < rayCount; rayIndex++) {
-    fireScannerPulse(player.x, eyeY, player.z,
+    fireScannerPulse(
       centerHorizontal + (Math.random() * 2 - 1) * halfWidth, centerVertical + (Math.random() * 2 - 1) * halfHeight, false);
   }
 }

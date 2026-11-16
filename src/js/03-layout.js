@@ -704,7 +704,7 @@ function furnishClassicDeepCorridor(random) {
 // Reports anything the walking creatures could not reach. Used by the automated checks.
 function auditFacilityLayout() {
   const problems = [];
-  const field = new Int16Array(TILE_COUNT);
+  const field = borrowTileField('auditLayout');
   computeDistanceField(field, findNearestWalkableTileIndex(PLAYER_START.x, PLAYER_START.z), 0, null);
   const checkReachable = function (label, x, z) {
     const index = findNearestWalkableTileIndex(x, z);

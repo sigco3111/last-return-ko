@@ -27,7 +27,7 @@ const GENERATED_SIZE_PRESETS = {
   small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], errands: [0, 0], extraGenerators: [0, 1], extraSpools: [0, 0], spineLength: [10, 14] },
   medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], errands: [0, 1], extraGenerators: [0, 2], extraSpools: [0, 0], spineLength: [13, 18] },
   large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], errands: [0, 1], extraGenerators: [1, 2], extraSpools: [0, 1], spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 7, keycards: 3, extraJobs: [2, 3], errands: [1, 2], extraGenerators: [1, 3], extraSpools: [0, 1], spineLength: [18, 26] },
+  massive: { label: 'Massive', fillers: [15, 8, 6], loops: 8, vents: 14, keycards: 3, extraJobs: [2, 3], errands: [1, 2], extraGenerators: [1, 3], extraSpools: [0, 2], spineLength: [15, 28] },
 };
 
 // TWEAK: how spread out a station is.
@@ -572,19 +572,37 @@ function planRoom(plan, roomKey, tier, floorY, onlyOwnSocketIndex) {
   return null;
 }
 
+// What routeDuctThroughRock keeps while it works: for every tile, coming from each of four directions, the
+// cheapest way found so far and where it came from. That is 24 megabytes. It used to be made afresh for every
+// duct that was tried, dozens of times for one station; now it is made once for a station, wiped only where
+// a search wrote in it, and let go of when the station is built (releaseDuctRouteScratch).
+let ductRouteScratch = null;
+function releaseDuctRouteScratch() { ductRouteScratch = null; }
+
 // Finds a way for a one-tile-wide service duct through solid rock, from one tile to another.
 // `blocked` marks tiles the duct may not use. Bends cost extra, so ducts come out mostly straight.
 // Returns the tiles of the route in order, or null when there is none short enough.
 function routeDuctThroughRock(blocked, startX, startZ, startDirection, goalX, goalZ, maximumCost) {
+  if (ductRouteScratch === null) {
+    ductRouteScratch = { bestCost: new Int16Array(TILE_COUNT * 4).fill(32000), cameFrom: new Int32Array(TILE_COUNT * 4).fill(-1), written: [] };
+  }
+  const scratch = ductRouteScratch;
+  const route = routeDuctWithScratch(scratch.bestCost, scratch.cameFrom, scratch.written, blocked, startX, startZ, startDirection, goalX, goalZ, maximumCost);
+  // Leave it as it was found: untouched everywhere.
+  for (let entry = 0; entry < scratch.written.length; entry++) { scratch.bestCost[scratch.written[entry]] = 32000; scratch.cameFrom[scratch.written[entry]] = -1; }
+  scratch.written.length = 0;
+  return route;
+}
+
+function routeDuctWithScratch(bestCost, cameFrom, written, blocked, startX, startZ, startDirection, goalX, goalZ, maximumCost) {
   const BEND_COST = 3; // TWEAK: higher = straighter ducts, but fewer places a duct can be fitted
   const startIndex = tileIndexAt(startX, startZ), goalIndex = tileIndexAt(goalX, goalZ);
   if (blocked[startIndex] || blocked[goalIndex]) return null;
-  const bestCost = new Int16Array(TILE_COUNT * 4).fill(32000);
-  const cameFrom = new Int32Array(TILE_COUNT * 4).fill(-1);
   const buckets = [];
   for (let cost = 0; cost <= maximumCost; cost++) buckets.push([]);
   const startState = startIndex * 4 + startDirection;
   bestCost[startState] = 0;
+  written.push(startState);
   buckets[0].push(startState);
   for (let cost = 0; cost <= maximumCost; cost++) {
     const bucket = buckets[cost];
@@ -607,6 +625,7 @@ function routeDuctThroughRock(blocked, startX, startZ, startDirection, goalX, go
         const nextCost = cost + 1 + (nextDirection === direction ? 0 : BEND_COST);
         const nextState = nextIndex * 4 + nextDirection;
         if (nextCost > maximumCost || nextCost >= bestCost[nextState]) continue;
+        if (bestCost[nextState] === 32000) written.push(nextState);
         bestCost[nextState] = nextCost;
         cameFrom[nextState] = state;
         buckets[nextCost].push(nextState);
@@ -958,7 +977,7 @@ function findDropSpot(room, random, takenSpots) {
 // Direction signs, like the ones in Kessel-9: which way to the lift, and which way to where you are probably going.
 // The arrows come from real walking distances, so they are right however the station came out.
 function addCorridorDirectionSigns(plan) {
-  const fieldToLift = new Int16Array(TILE_COUNT), fieldToPumpHall = new Int16Array(TILE_COUNT), fieldToShaft = new Int16Array(TILE_COUNT);
+  const fieldToLift = borrowTileField('signsToLift'), fieldToPumpHall = borrowTileField('signsToPumpHall'), fieldToShaft = borrowTileField('signsToShaft');
   const pumpHall = plan.rooms.find(function (room) { return room.key === 'pumpHall'; });
   computeDistanceField(fieldToLift, findNearestWalkableTileIndex(LIFT_POSITION.x, LIFT_POSITION.z), 0, null);
   computeDistanceField(fieldToPumpHall, findNearestWalkableTileIndex((pumpHall.startX + pumpHall.endX) / 2, (pumpHall.startZ + pumpHall.endZ) / 2), 0, null);
@@ -1253,6 +1272,7 @@ function pushPhantom(x, z, yaw, triggerZone, onlyBeforePower) {
 // Empties the map and builds either the classic station or a generated one.
 function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
   const wasBuiltAsAsked = buildStationRooms(kind, seed, sizeKey, layoutKey, levelsKey);
+  releaseDuctRouteScratch(); // the 24 megabytes the ducts were routed with are not needed again until the next station
   // Last of all, the ceiling hatches of the Hollow's crawlspace: they depend on where the locked doors ended up.
   placeHollowHatches();
   // And the loose things on the floor that are loud to walk on. After the hatches, so that none lies under one.
@@ -1285,7 +1305,7 @@ function buildStationRooms(kind, seed, sizeKey, layoutKey, levelsKey) {
 //   with the keycard: everything
 function auditLevelProgression() {
   const problems = [];
-  const field = new Int16Array(TILE_COUNT);
+  const field = borrowTileField('auditProgression');
   // `isShut` says which doors are locked in the situation being checked.
   const reach = function (isShut) {
     const closed = [];

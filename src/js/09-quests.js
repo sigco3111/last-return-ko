@@ -371,7 +371,7 @@ function placeQuests(plan, stationRandom) {
   };
   // The rooms of ring `highestTier` and below other than `ownRoom`, each with how many steps it is from (x, z)
   // to the nearest floor of that room, nearest first.
-  const field = new Int16Array(TILE_COUNT);
+  const field = borrowTileField('questRooms');
   const roomsNearestFirst = function (x, z, highestTier, ownRoom) {
     computeDistanceField(field, findNearestWalkableTileIndex(x, z), 0, null);
     return ordinaryRooms.filter(function (room) { return room !== ownRoom && room.tier <= highestTier; }).map(function (room) {
