@@ -12,7 +12,7 @@
     "screenshots": "npm run build:dev && node tools/take-screenshots.js",
     "audio-check": "npm run build:dev && node tools/audio-check.js",
     "voice-script": "node tools/write-voice-script.js",
-    "deploy": "/usr/bin/env bash /home/stefan/Projects/game-no-return/deploy.sh"
+    "deploy": "./deploy.sh"
   },
   "devDependencies": {
     "playwright": "^1.56.0"
