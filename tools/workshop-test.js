@@ -221,11 +221,13 @@ function checkSourcePatching() {
     await page.click('#workshop-tab-creatures');
     await frames(4);
     // The body walks on the spot, and its height rises and falls some twenty centimetres with every stride.
-    // So "how tall" is the tallest it gets over a whole stride. One drawn frame moves the game on by a
-    // twentieth of a second at most, and at its wandering pace a stride is then some 42 frames: 45 are taken.
+    // So "how tall" is the tallest it gets at eight places round the stride. The stride is put at each place by
+    // hand, one drawn frame each: letting it walk there by itself took ninety frames, which is minutes on a
+    // machine that draws slowly.
     const tallestOverAStride = async () => {
       let tallest = 0;
-      for (let frame = 0; frame < 45; frame++) {
+      for (let place = 0; place < 8; place++) {
+        await inPage((phase) => { window.lastReturnDebug.creatureWorkshop.standIn.walkPhase = phase; }, place * Math.PI / 4);
         await frames(1);
         tallest = Math.max(tallest, await inPage(() => { const figure = window.lastReturnDebug.creatureWorkshop.figure; return (figure.boundsCenterY - figure.y) * 2; }));
       }

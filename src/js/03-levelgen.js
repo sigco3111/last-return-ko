@@ -19,12 +19,13 @@ const ZONE_GENERATED_ROOM = 250; // stand-in zone for rooms that only exist in g
 const GENERATED_SIZE_PRESETS = {
   // vents: crawl-height tunnels between rooms. loops: full-height service ducts. Both join places far apart on foot.
   // extraJobs: the fewest and the most extra jobs a station of this size is given (see EXTRA_JOBS below).
+  // extraGenerators: the fewest and the most generators it has besides Generator 2 (see EXTRA_GENERATOR_FUEL_CHANCE below).
   // keycards: 1 to 3. Each card opens one more ring of doors, and the next card is somewhere inside that ring;
   //           Shaft 9 is behind the last. The third number of "fillers" is shared out between the rings.
-  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], spineLength: [10, 14] },
-  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 7, keycards: 3, extraJobs: [2, 3], spineLength: [18, 26] },
+  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], extraGenerators: [0, 1], spineLength: [10, 14] },
+  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], extraGenerators: [0, 2], spineLength: [13, 18] },
+  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], extraGenerators: [1, 2], spineLength: [16, 22] },
+  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 7, keycards: 3, extraJobs: [2, 3], extraGenerators: [1, 3], spineLength: [18, 26] },
 };
 
 // TWEAK: how spread out a station is.
@@ -45,6 +46,16 @@ const GENERATED_LAYOUT_PRESETS = {
 //            door, and then get back to the lobby with the lift already on its way and the Hollow told where you are.
 // Remove a name from the list and no station will get that job.
 const EXTRA_JOBS = ['fuel', 'cores', 'breaker'];
+
+// More generators. Besides Generator 2, which restores the mains, a station can have up to three small sets
+// (Generator 1, 3 and 4) that the lift winch needs before the car will come. They only start once the mains
+// is on, so they are always started with the Hollow awake, and starting one is loud.
+// How many a station has is the `extraGenerators` range of its size, above. Set both numbers to 0 for none.
+// TWEAK: how likely it is that one of them has an empty tank and needs a fuel can (0 = never, 1 = always).
+const EXTRA_GENERATOR_FUEL_CHANCE = 0.5;
+// TWEAK: a fuel can goes in the nearest other room, unless that is more than this many steps' walk (a step is
+// a metre) from its generator: then it goes in the generator's own room, at the far side of it.
+const FUEL_CAN_NEAR_STEPS = 30;
 
 // How many levels a station has. With two, everything behind the keycard (Shaft 9 included) is down a flight of stairs.
 const GENERATED_LEVEL_PRESETS = {
@@ -867,6 +878,14 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   const jobCount = Math.min(EXTRA_JOBS.length, jobRange[0] + Math.floor(random() * (jobRange[1] - jobRange[0] + 1)));
   const jobs = EXTRA_JOBS.map(function (job) { return [random(), job]; }).sort(function (a, b) { return a[0] - b[0]; }).slice(0, jobCount).map(function (pair) { return pair[1]; });
   plan.mission = { needsFuel: jobs.indexOf('fuel') >= 0, coreCount: jobs.indexOf('cores') >= 0 ? 2 + Math.floor(random() * 3) : 0, needsBreaker: jobs.indexOf('breaker') >= 0 };
+  // The extra generators have a sequence of random numbers of their own, started from the seed. Drawing them
+  // from the station's own sequence would give every existing seed different jobs and different places for them.
+  plan.seed = seed;
+  const generatorRandom = createSeededRandomGenerator((Math.imul(seed + 1, 0x9e3779b1) ^ 0x6e3a7011) >>> 0);
+  const generatorRange = size.extraGenerators || [0, 0];
+  const generatorCount = Math.min(MAXIMUM_EXTRA_GENERATORS, generatorRange[0] + Math.floor(generatorRandom() * (generatorRange[1] - generatorRange[0] + 1)));
+  plan.mission.extraGenerators = [];
+  for (let index = 0; index < generatorCount; index++) plan.mission.extraGenerators.push({ needsFuel: generatorRandom() < EXTRA_GENERATOR_FUEL_CHANCE });
   return plan;
 }
 
@@ -966,7 +985,7 @@ function findDropSpot(room, random, takenSpots) {
 // so the station is never left asking for something that is not there.
 function placeMissionObjects(plan, random) {
   const mission = level.mission;
-  mission.needsFuel = false; mission.coreCount = 0; mission.needsBreaker = false;
+  mission.needsFuel = false; mission.coreCount = 0; mission.needsBreaker = false; mission.extraGenerators.length = 0;
   const takenSpots = [];
   const roomsOfTiers = function (lowestTier, highestTier) {
     const rooms = plan.rooms.filter(function (room) {
@@ -989,8 +1008,14 @@ function placeMissionObjects(plan, random) {
     return null;
   };
   if (plan.mission.needsFuel) {
-    // Somewhere you can get to before the power is on.
-    mission.needsFuel = placeIn(roomsOfTiers(0, 0), function (x, z) { addFuelCan(x, z); }) !== null;
+    // The fuel can used to be put in any room you can reach without power, which could be the far end of the
+    // station. It now goes near the generator, further down. The old choice is still made here and its place
+    // kept free, only so that the numbers drawn, and so where the core samples and the breaker end up, stay
+    // what they were for every seed.
+    for (const room of roomsOfTiers(0, 0)) {
+      const oldSpot = findDropSpot(room, random, takenSpots);
+      if (oldSpot) { takenSpots.push(oldSpot); break; }
+    }
   }
   if (plan.mission.coreCount > 0) {
     // Scattered through everything short of the last ring, one to a room.
@@ -1013,8 +1038,82 @@ function placeMissionObjects(plan, random) {
     // Behind a powered door, so it cannot be dealt with before the Hollow is awake.
     mission.needsBreaker = placeIn(roomsOfTiers(1, 1), function (x, z) { addWinchBreaker(x, z); }) !== null;
   }
-  // The crates and the cabinet stand on the floor: work out again where things can walk.
+  placeGeneratorsAndFuel(plan, takenSpots);
+  // The crates, the cabinet and the generators stand on the floor: work out again where things can walk.
   computeNavigationGrid();
+}
+
+// The fuel can for Generator 2 (if this station's tank is empty), the extra generators, and a fuel can for each
+// of those that needs one. A can is never far from the generator it is for: it goes in the nearest room, by the
+// way you would walk, that is not the generator's own room and has a free spot; if that is further than
+// FUEL_CAN_NEAR_STEPS, in the generator's own room. All of it is drawn from a sequence of random numbers of
+// its own (see planStation).
+function placeGeneratorsAndFuel(plan, takenSpots) {
+  const mission = level.mission;
+  mission.extraGenerators.length = 0;
+  const random = createSeededRandomGenerator((Math.imul(plan.seed + 1, 0x85ebca6b) ^ 0x2f6b3d01) >>> 0);
+  const ordinaryRooms = plan.rooms.filter(function (room) {
+    return !room.isCorridor && ['liftLobby', 'generatorRoom', 'calibrationStore', 'shaftChamber', 'stairwell'].indexOf(room.key) < 0;
+  });
+  const placeInRoom = function (room, place) {
+    const spot = findDropSpot(room, random, takenSpots);
+    if (!spot) return null;
+    takenSpots.push(spot);
+    clearPlacement();
+    placement.offsetY = room.floorY;
+    place(spot[0], spot[1]);
+    clearPlacement();
+    return spot;
+  };
+  // The rooms of tier `highestTier` and below other than `ownRoom`, each with how many steps it is from (x, z)
+  // to the nearest floor of that room, nearest first.
+  const field = new Int16Array(TILE_COUNT);
+  const roomsNearestFirst = function (x, z, highestTier, ownRoom) {
+    computeDistanceField(field, findNearestWalkableTileIndex(x, z), 0, null);
+    return ordinaryRooms.filter(function (room) { return room !== ownRoom && room.tier <= highestTier; }).map(function (room) {
+      let steps = NAVIGATION_UNREACHABLE;
+      for (let tileZ = room.startZ; tileZ < room.endZ; tileZ++) {
+        for (let tileX = room.startX; tileX < room.endX; tileX++) {
+          const index = tileIndexAt(tileX, tileZ);
+          if (tileZone[index] === room.zone && field[index] < steps) steps = field[index];
+        }
+      }
+      return [steps, room];
+    }).filter(function (pair) { return pair[0] < NAVIGATION_UNREACHABLE; }).sort(function (a, b) { return a[0] - b[0] || a[1].zone - b[1].zone; });
+  };
+  const placeFuelCanNear = function (x, z, highestTier, ownRoom, objectId) {
+    const place = function (canX, canZ) { addFuelCan(canX, canZ, objectId); };
+    const others = roomsNearestFirst(x, z, highestTier, ownRoom);
+    for (const pair of others) if (pair[0] <= FUEL_CAN_NEAR_STEPS && placeInRoom(pair[1], place)) return true;
+    // No other room near enough has a free spot: its own room, if it has one (Generator 2's room does not).
+    if (ownRoom !== null && placeInRoom(ownRoom, place)) return true;
+    for (const pair of others) if (pair[0] > FUEL_CAN_NEAR_STEPS && placeInRoom(pair[1], place)) return true;
+    return false;
+  };
+
+  // Generator 2 is started before the power is on, so its can must be in reach without power.
+  mission.needsFuel = plan.mission.needsFuel && placeFuelCanNear(GENERATOR_POSITION.x, GENERATOR_POSITION.z, 0, null, OBJECT_FUEL_CAN);
+
+  // The extra generators: one to a room, anywhere short of the last ring, in an order the seed decides.
+  const hosts = ordinaryRooms.filter(function (room) { return room.tier < plan.finalTier; })
+    .map(function (room) { return [random(), room]; }).sort(function (a, b) { return a[0] - b[0]; }).map(function (pair) { return pair[1]; });
+  for (const wanted of plan.mission.extraGenerators) {
+    const slot = mission.extraGenerators.length;
+    if (slot >= MAXIMUM_EXTRA_GENERATORS) break;
+    const objectId = OBJECT_EXTRA_GENERATOR_FIRST + slot, number = EXTRA_GENERATOR_NUMBERS[slot];
+    let spot = null, host = null;
+    while (hosts.length > 0 && !spot) {
+      host = hosts.shift();
+      spot = placeInRoom(host, function (x, z) { addExtraGenerator(objectId, number, x, z); });
+    }
+    if (!spot) break; // no room left with a free spot: the station has fewer of them
+    const generator = { objectId: objectId, number: number, needsFuel: false, fuelCanId: 0, x: spot[0], z: spot[1] };
+    // Its can may be behind any door the generator itself is behind, but no door beyond that.
+    if (wanted.needsFuel && placeFuelCanNear(spot[0], spot[1], host.tier, host, OBJECT_EXTRA_FUEL_CAN_FIRST + slot)) {
+      generator.needsFuel = true; generator.fuelCanId = OBJECT_EXTRA_FUEL_CAN_FIRST + slot;
+    }
+    mission.extraGenerators.push(generator);
+  }
 }
 
 // Direction signs, like the ones in Kessel-9: which way to the lift, and which way to where you are probably going.
@@ -1406,6 +1505,21 @@ function auditLevelProgression() {
     mustExistOnce.push(OBJECT_CORE_FIRST + core);
   }
   if (mission.coreCount === 1) problems.push('a station asks for exactly one core sample');
+  // The extra generators: each can be reached with the mains on and without the last keycard, and the fuel
+  // can of one that needs fuel is behind no door the generator is not behind itself.
+  for (const generator of mission.extraGenerators) {
+    mustExistOnce.push(generator.objectId);
+    if (generator.needsFuel) mustExistOnce.push(generator.fuelCanId);
+    let cardsNeeded = -1;
+    for (let held = 0; held <= level.keycardCount && cardsNeeded < 0; held++) {
+      reach(function (door) { return door.kind === DOOR_KIND_KEYCARD && door.cardLevel > held; });
+      if (!canReach(generator.objectId)) continue;
+      cardsNeeded = held;
+      if (generator.needsFuel && !canReach(generator.fuelCanId)) problems.push('the fuel can for generator ' + generator.number + ' is behind a door the generator is not behind');
+    }
+    if (cardsNeeded < 0) problems.push('generator ' + generator.number + ' cannot be reached at all');
+    else if (cardsNeeded >= level.keycardCount) problems.push('generator ' + generator.number + ' is behind the last keycard door');
+  }
   if (!level.storeZone) problems.push('there is no calibration store');
   // Everything you must use has to be within arm's reach of somewhere you can stand.
   for (const objectId of mustExistOnce) {

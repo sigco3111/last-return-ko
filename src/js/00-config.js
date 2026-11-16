@@ -138,6 +138,7 @@ const TUNING = {
   noiseRadiusSweep: 22,
   noiseRadiusDoor: 8,           // a door you open (doors the Hollow opens do not count)
   noiseRadiusPickup: 4,
+  noiseRadiusGeneratorStart: 30, // starting one of the small generators (1, 3, 4). On Standard that is heard from 24 m, and within 7 m of it the Hollow knows where you are.
   // ---- Captions (the lines themselves are in CAPTIONS, further down) ----
   captionMostLines: 4,              // never more than this many caption lines on screen at once
   captionCloseMetres: 5,            // with "every sound" on, a sound nearer than this is called "close" ...
@@ -375,6 +376,7 @@ const RADIO_MESSAGES = {
   // ---- Extra jobs. A generated station may have none, one or several of these (see "mission" in 03-levelgen.js).
   //      They are new, so they have no recordings yet: docs/voice-lines.md lists them. ----
   generatorNoFuel: 'Day tank reads empty from here. There will be a fuel can somewhere on your level. Bring it to Generator 2.',
+  generatorsWanted: 'One set will not lift the car. There are more generators on your level, and the winch wants every one of them running before you call the lift. We have marked them for you. They are not quiet.',
   coresWanted: 'One more thing while you are down there. The lab wants the core samples Crew 2 pulled. Grey tubes. Bring them all.',
   winchBreakerOpen: 'Upload received. But the car is not answering. The winch breaker has tripped. I have marked the panel on your map. Close it.',
   breakerClosed: 'Breaker is in. The car is on its way down. Forty seconds. Get back to the lobby.',
@@ -539,6 +541,9 @@ const OBJECTIVE_TEXT = {
   findFuel: 'Generator 2 has no fuel. Find the fuel can on this level.',
   bringFuel: 'Carry the fuel can to Generator 2, off Pump Hall B.',
   collectCores: 'Dispatch also wants the core samples.',   // added after the spool objective while samples are missing
+  // Added while some of the station's generators are not running. {running} and {total} count Generator 2 as well.
+  startGenerators: 'The lift winch needs every generator running: {running} of {total} so far. They are marked on the map.',
+  fuelForGenerator: 'You are carrying a fuel can. One of the generators has an empty tank.',
   closeBreaker: 'The lift will not come. Close the winch breaker: it is marked on the map.',
   surviveLift: 'The lift is coming. Stay alive until it arrives.',
   boardLift: 'Board the lift.'

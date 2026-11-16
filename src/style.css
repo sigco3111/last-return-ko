@@ -176,6 +176,7 @@ body.is-touch #hud-prompt { top: calc(50% + 48px); }
 .legend-swatch { display: inline-block; width: 9px; height: 9px; margin-right: 6px; vertical-align: baseline; }
 .legend-you { background: var(--return); }
 .legend-item { background: var(--instrument); }
+.legend-item-later { background: rgba(163, 122, 54, 0.5); }
 .legend-door { background: var(--clear); }
 
 /* ---------- screens ---------- */

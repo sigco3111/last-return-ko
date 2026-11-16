@@ -214,11 +214,21 @@ Three things keep them fair, and are worth knowing:
 
 **Extra jobs** only come up in the Uncharted annex. The seed decides which of the three a station has: a small station has none or one, a medium one, a large one or two, a massive two or all three.
 
-- **No fuel.** Generator 2 will not start: the day tank is empty. A fuel can stands somewhere you can reach without power. You find out at the generator, so the walk for the can is a walk back through rooms you thought you were done with.
+- **No fuel.** Generator 2 will not start: the day tank is empty. A fuel can stands in a room near the generator that you can reach without power: about twenty-five metres' walk, never the far end of the station.
 - **Core samples.** Dispatch wants the grey sample tubes Crew 2 pulled, two to four of them, one to a room, anywhere short of the last keycard's doors. The lift terminal refuses the upload until you carry them all.
 - **The winch breaker.** The upload goes through, but the lift does not come: its breaker has tripped. The panel is somewhere behind a powered door, dispatch marks it on your map, and it needs mains power to hold. Close it and the forty seconds start there, a long way from the lobby. If you find the panel earlier and close it then, the upload calls the lift as usual.
 
+**More generators.** A generated station may also have one to three small generators besides Generator 2: Generator 1, 3 and 4, each a set on a skid standing in some room short of the last keycard's doors. A small station has none or one, a medium one up to two, a large one or two, a massive one to three.
+
+- Generator 2 still restores the mains, and still wakes what is in the shaft. The small ones only start once the mains is on, so they are always started with the Hollow about.
+- The lift winch needs every one of them. Until they all run, the lift terminal refuses the upload and says how many do. A little after Generator 2 starts, Dispatch tells you and marks them on your map.
+- **Starting one is loud.** On Standard the Hollow hears it from 24 m and comes to look at that generator; within 7 m of it, it knows where you are. Start it and be somewhere else.
+- About half of them have an empty tank. The fuel can for one stands in the nearest room that has space, usually ten to twenty-five metres' walk away, and never behind a door the generator is not behind itself.
+- Any can fills any tank, and you carry one can at a time.
+
 What you are carrying for these jobs is listed on the map with the spools and the keycards.
+
+**The map marks what you have found in two ways.** Bright: something you can act on now (a spool, a keycard, a core sample, a generator that will start, a fuel can while some tank is empty). Dim and smaller: found, but not of use yet (a note, a small generator before the mains is on or without its fuel, the lift terminal while it would only refuse). Nothing you have found is ever hidden.
 
 Three threat levels are offered on the title screen. "Survey only" removes everything that hunts you.
 
@@ -371,7 +381,7 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/01-math.js` | Small math helpers and 4×4 matrices |
 | `src/js/02-world.js` | Tile grid, props, signs, doors, collision, navigation, occluder mesh |
 | `src/js/03-layout.js` | Every hand-built room with its props, signs and pickups, and how Kessel-9 puts them together |
-| `src/js/03-levelgen.js` | Generated stations: the extra rooms, the room catalogue, the planner, locks, ducts and signs |
+| `src/js/03-levelgen.js` | Generated stations: the extra rooms, the room catalogue, the planner, locks, ducts and signs; the extra jobs, the small generators and where fuel cans go |
 | `src/js/03-noisy-floor.js` | Noisy things on the floor: the kinds, where a station gets them, what stepping on one does |
 | `src/js/03-workshop-rooms.js` | Rooms made in the workshop: what they can contain, and how a file in `src/rooms/` becomes a catalogue room |
 | `src/js/04-figures.js` | The capsule bodies used for everything that stands upright |
@@ -432,6 +442,8 @@ It then builds 120 generated stations (40 of each size, across the three layouts
 
 Then the Hollow and locked doors: each kind of door with the Hollow standing at it (the keycard door and the lift door stay shut, even with every card in your pocket), a keycard door shut between it and you (it never walks through, goes round through the crawlspace, and takes the time the numbers say: the climb, the metres, the full warning), a look from straight underneath it (a scan finds nothing and it cannot reach down), the landing (under the hatch that rattled, harmless for its first second), a keycard door held open by you (it simply walks through), pounding on a door (one bout, the door holds, it leaves that door alone for a while; the second bout adds to the damage; the third breaks it and it comes straight through; the broken door stays open and can be walked over; no pounding without the card, none on the lift door, harder when angry, and it stops if the door opens), short walks from under a hatch (it never takes to the ceiling for those), the lift car, the hatches being shut until it has been through them (the one it climbs into is forced as it goes in, the one it comes out of only as it drops, the rest stay shut, and a new descent shuts them all), and the hatches themselves. The 120 generated stations are each checked too: every locked-off part has a hatch, the Hollow can reach everywhere it may go, and without the crawlspace it really is shut in.
 
+Then the generators: 64 stations of every size have as many small generators as their size allows, each still finishable, each fuel can near its generator (half within 25 steps, none over 60; for Generator 2 half within 30, none over 45), and the same seed gives the same ones. Then the rules in one station: a small generator will not start before the mains is on or with an empty tank; any can fills any tank and a second can is refused while you carry one; Dispatch tells you and marks them; the lift terminal refuses while one is not running; starting one brings a Hollow twelve metres off to that generator, and one four metres off straight at you; with all running the lift is called; a new descent puts everything back. The map's bright and dim marks are checked at each step.
+
 Then the noisy things on the floor: Kessel-9 and a generated station get the number the size calls for, of more than one kind, none in a bad place, and the same seed puts them in the same places. Then a patch is walked over with the Hollow standing far enough away that it could not have heard a footstep (it comes to look at that very spot, and you are told what it was), crossed again crouched with the Hollow three and a half metres off (nothing carries, it does not stir), run over with the Hollow further away than a running step carries, and walked over by the Hollow itself (once or twice in a crossing; made to shuffle to and fro over the edge for three seconds, it sets it off once, not thirty times; with you two metres away a line on screen says so, and with you at the lift none does). The 120 generated stations each have theirs checked for being in a place they are allowed.
 
 Then the captions: every caption the game asks for is in the table and every one in the table is used; a new game starts on "tells", both menus change the level, and it is kept between visits; off shows none, tells shows only the tells, every sound shows all; each caption shows just inside its distance and not just outside it; the arrow is right in all eight directions and follows both a sound that moves and a player who turns; the growl waits for a snarl on the line they share; a sound that goes on is one steady line; there are never more than four. Then each caption is made to happen in play, from the Hollow wandering past (footsteps and growl; footsteps gone when it stops to listen) to a door it opens eight metres away, the Stills, the breath, the lift bell, the station's own sounds and a vent in a generated station. The locked-door and noisy-floor tests run with captions on every sound and check theirs.
@@ -489,6 +501,8 @@ The noisy things on the floor are checked for where they lie and for what steppi
 The captions are checked for what shows when and where. Whether "every sound" is enough to play by has not been tried by anyone who cannot hear the game, and that is the only test that counts. The distances come from measurements of each sound alone in silence, down to the level of the room tone; with the growl and a heartbeat going, ears lose the quiet ones sooner than the captions do. The wording, the three distance words and the limit of four lines are first guesses.
 
 The apparitions keep to their rules, which is what the test can show. How often is right, whether the dummy that comes closer frightens or annoys, and whether the one in your face reads as a face or only as a mass of points a metre away, need playing. All their numbers are in `src/js/00-config.js` under "Apparitions", and debug mode can summon each kind where you stand.
+
+The small generators are checked for their rules and for where they and their cans stand. Whether two or three of them make a descent tenser or only longer has not been played, and neither has how loud "loud" should be: `noiseRadiusGeneratorStart` in `src/js/00-config.js` is a first guess. Their two sounds were tuned by measuring, not by ear. Dispatch's line for them (`generatorsWanted`) has no recording yet.
 
 The extra jobs and the stations with two or three keycards are checked the same way: they can always be finished, and the rules do what this page says. Whether a second walk for a fuel can is dread or a chore has not been played. Dispatch's five new lines for them (`lowerKeycardTaken`, `generatorNoFuel`, `coresWanted`, `winchBreakerOpen`, `breakerClosed`) have no recordings yet and show as text.
 

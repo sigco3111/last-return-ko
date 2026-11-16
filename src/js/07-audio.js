@@ -44,6 +44,8 @@ const SOUND_LEVELS = {
   door: 1,
   generatorStart: 1,      // the turns of the starter
   generatorRunning: 1,
+  extraGeneratorStart: 1,   // one of the small generators (1, 3, 4): a pull of its starter and the catch
+  extraGeneratorRunning: 1, // ... and its engine running, a higher and busier note than Generator 2
   liftMachinery: 1,       // arriving, leaving, on its way down
   liftBell: 1,
 
@@ -517,6 +519,46 @@ function initializeAudioEngine() {
   generatorRattle.connect(generatorRattleFilter); generatorRattleFilter.connect(generatorRattleGain);
   generatorRattleGain.connect(audio.generatorGain);
   generatorRattle.start();
+
+  // The small generators a station may have besides Generator 2. They share one engine sound: a higher hum
+  // and a quicker, lighter chug. Each has a place and a volume of its own, silent until it is started.
+  const smallEngine = context.createGain();
+  smallEngine.gain.value = 1;
+  for (const partial of [[86, 0.4], [172.7, 0.22], [259.1, 0.1]]) {
+    const hum = context.createOscillator();
+    hum.type = 'triangle';
+    hum.frequency.value = partial[0];
+    const humGain = context.createGain();
+    humGain.gain.value = partial[1];
+    hum.connect(humGain); humGain.connect(smallEngine);
+    hum.start();
+  }
+  const smallRattle = context.createBufferSource();
+  smallRattle.buffer = audio.brownNoiseBuffer;
+  smallRattle.loop = true;
+  const smallRattleFilter = context.createBiquadFilter();
+  smallRattleFilter.type = 'bandpass';
+  smallRattleFilter.frequency.value = 520;
+  smallRattleFilter.Q.value = 0.8;
+  const smallRattleGain = context.createGain();
+  smallRattleGain.gain.value = 1.6;
+  const smallChug = context.createOscillator();
+  smallChug.frequency.value = 21.5; // firing strokes per second
+  const smallChugDepth = context.createGain();
+  smallChugDepth.gain.value = 1.0;
+  smallChug.connect(smallChugDepth); smallChugDepth.connect(smallRattleGain.gain);
+  smallChug.start();
+  smallRattle.connect(smallRattleFilter); smallRattleFilter.connect(smallRattleGain);
+  smallRattleGain.connect(smallEngine);
+  smallRattle.start();
+  audio.extraGeneratorPanners = []; audio.extraGeneratorGains = [];
+  for (let slot = 0; slot < MAXIMUM_EXTRA_GENERATORS; slot++) {
+    const panner = createPannerNode(0, 0.6, 0, 3, 1.1);
+    const gain = context.createGain();
+    gain.gain.value = 0;
+    smallEngine.connect(gain); gain.connect(panner);
+    audio.extraGeneratorPanners.push(panner); audio.extraGeneratorGains.push(gain);
+  }
 
   audio.liftPanner = createPannerNode(LIFT_POSITION.x, 2.5, LIFT_POSITION.z, 5, 0.8);
   audio.liftGain = context.createGain();
@@ -1507,6 +1549,41 @@ function startGeneratorSound() {
 function setGeneratorSoundRunning(isRunning) {
   if (!isAudioReady()) return;
   audio.generatorGain.gain.setTargetAtTime(isRunning ? 0.75 * SOUND_LEVELS.generatorRunning : 0, audio.context.currentTime, 0.3);
+}
+
+// One of the small generators is started at (x, z): three pulls of the starter, each quicker, then it catches
+// and runs. `slot` is which of them (0, 1 or 2); each keeps running from its own place until
+// stopExtraGeneratorSounds.
+function startExtraGeneratorSound(slot, x, z) {
+  if (!isAudioReady() || !audio.extraGeneratorGains[slot]) return;
+  const now = audio.context.currentTime, y = getFloorHeightAt(x, z) + 0.6;
+  const panner = audio.extraGeneratorPanners[slot], gain = audio.extraGeneratorGains[slot];
+  if (panner.positionX) { panner.positionX.value = x; panner.positionY.value = y; panner.positionZ.value = z; } else panner.setPosition(x, y, z);
+  const starter = createTemporaryPanner(x, y, z);
+  for (let pullIndex = 0; pullIndex < 3; pullIndex++) {
+    const delay = pullIndex * 0.36;
+    playNoiseBurst({ duration: 0.24, filterType: 'bandpass', frequency: 420 + pullIndex * 110, frequencyEnd: 620 + pullIndex * 140, resonance: 2, gain: 2.6 * SOUND_LEVELS.extraGeneratorStart, attack: 0.03, delay: delay, destination: starter });
+    playTone({ waveform: 'triangle', frequency: 150 + pullIndex * 30, frequencyEnd: 230 + pullIndex * 40, duration: 0.24, gain: 1.1 * SOUND_LEVELS.extraGeneratorStart, attack: 0.03, delay: delay, destination: starter });
+  }
+  // The catch: a cough, then the engine comes up.
+  playNoiseBurst({ duration: 0.35, filterType: 'bandpass', frequency: 300, frequencyEnd: 700, resonance: 1.5, gain: 3.4 * SOUND_LEVELS.extraGeneratorStart, attack: 0.01, delay: 1.1, destination: starter });
+  gain.gain.cancelScheduledValues(now);
+  gain.gain.setValueAtTime(0, now + 1.1);
+  gain.gain.linearRampToValueAtTime(0.42 * SOUND_LEVELS.extraGeneratorRunning, now + 2.0);
+}
+
+// Sets one of the small generators running or not, without the starter (used when a descent is picked up again).
+function setExtraGeneratorSoundRunning(slot, isRunning, x, z) {
+  if (!isAudioReady() || !audio.extraGeneratorGains[slot]) return;
+  if (isRunning) setPannerPosition(audio.extraGeneratorPanners[slot], x, getFloorHeightAt(x, z) + 0.6, z);
+  const now = audio.context.currentTime;
+  audio.extraGeneratorGains[slot].gain.cancelScheduledValues(now);
+  audio.extraGeneratorGains[slot].gain.setTargetAtTime(isRunning ? 0.42 * SOUND_LEVELS.extraGeneratorRunning : 0, now, 0.3);
+}
+
+function stopExtraGeneratorSounds() {
+  if (!isAudioReady()) return;
+  for (let slot = 0; slot < audio.extraGeneratorGains.length; slot++) setExtraGeneratorSoundRunning(slot, false, 0, 0);
 }
 
 function playLiftDepartSound() {

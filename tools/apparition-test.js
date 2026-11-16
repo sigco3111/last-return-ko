@@ -347,9 +347,13 @@ const labSource = String(function () {
       lab.freshStation.apply(null, station);
       const run = { station: station.slice(0, 2).join(' '), budget: director.budget, events: [], mostAtOnce: 0, lateEvents: 0 };
       let time = 0, current = null, event = null, sinceMove = 99, timeFull = -1;
+      // Time is read off the game's own clock. Counting a quarter second for every step below would run slow:
+      // the game moves on in thirtieths of a second, so a step of "0.25" is really eight of those, 0.267 s.
+      // An apparition that came at the first moment it was allowed would then seem to have come too early.
+      const clockAtStart = d.game.time;
       while (time < 1500 && (timeFull < 0 || time < timeFull + 90)) {
         if (!director.current && sinceMove > 3) { lab.standSomewhere(); sinceMove = 0; }
-        d.simulate(0.25); time += 0.25; sinceMove += 0.25;
+        d.simulate(0.25); sinceMove += d.game.time - clockAtStart - time; time = d.game.time - clockAtStart;
         run.mostAtOnce = Math.max(run.mostAtOnce, d.phantoms.filter((phantom) => phantom.isChance && phantom.state !== 2).length);
         if (director.current !== current) {
           if (event) { event.ended = time; event.seen = event.phantom.wasEverSeen; delete event.phantom; }

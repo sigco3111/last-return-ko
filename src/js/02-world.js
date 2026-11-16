@@ -158,7 +158,9 @@ const level = {
   ventCount: 0,           // crawl-height vents (generated stations only)
   keycardRoomText: 'the laboratory', // filled into the security office note
   // Extra jobs on top of "power, three spools, lift". Kessel-9 has none; a generated station may have some.
-  mission: { needsFuel: false, coreCount: 0, needsBreaker: false },
+  // The extra jobs of this station. extraGenerators: one entry for each generator besides Generator 2:
+  // { objectId, number (as it is called), needsFuel, fuelCanId (0 if it needs none), x, z }.
+  mission: { needsFuel: false, coreCount: 0, needsBreaker: false, extraGenerators: [] },
   keycardCount: 1,        // how many keycards this station has. Card 1 opens "card 1" doors, card 2 the next ring in, and so on.
   loopCount: 0,
   storeZone: 0,           // the calibration store: the Hollow will not enter it

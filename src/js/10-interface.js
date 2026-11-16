@@ -355,12 +355,13 @@ function drawMinimap() {
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(interfaceState.mapSourceCanvas, sourceX, sourceY, sourceSize, sourceSize, 0, 0, canvas.width, canvas.height);
   const scale = canvas.width / spanMetres;
-  context.fillStyle = '#f2a93b';
   for (const interactable of interactables) {
     if (!interactable.isAvailable || !interactable.isDiscovered) continue;
     const markerX = (interactable.x - player.x) * scale + canvas.width / 2;
     const markerY = (interactable.z - player.z) * scale + canvas.height / 2;
     if (markerX < 0 || markerY < 0 || markerX > canvas.width || markerY > canvas.height) continue;
+    // Bright for what can be acted on now, dim for the rest (see isInteractableWantedNow).
+    context.fillStyle = isInteractableWantedNow(interactable) ? MAP_MARKER_WANTED_COLOUR : MAP_MARKER_OTHER_COLOUR;
     context.fillRect(markerX - 3, markerY - 3, 6, 6);
   }
   if (debugHooks.drawMapMarkers) {
@@ -389,6 +390,10 @@ function fitFullMapCanvasToScreen(canvas) {
   if (canvas.width !== wantedWidth) canvas.width = wantedWidth;
   if (canvas.height !== wantedHeight) canvas.height = wantedHeight;
 }
+
+// TWEAK: the colours of the marks on the map. "Wanted" is something you can act on right now.
+const MAP_MARKER_WANTED_COLOUR = '#f2a93b';
+const MAP_MARKER_OTHER_COLOUR = 'rgba(163, 122, 54, 0.5)';
 
 function drawFullMap() {
   flushMapPixels();
@@ -429,8 +434,10 @@ function drawFullMap() {
   context.textAlign = 'left';
   for (const interactable of interactables) {
     if (!interactable.isAvailable || !interactable.isDiscovered) continue;
-    context.fillStyle = '#f2a93b';
-    context.fillRect(toCanvasX(interactable.x) - 4, toCanvasY(interactable.z) - 4, 8, 8);
+    // Bright, with a full-size mark, for what can be acted on now; dim and smaller for the rest.
+    const isWanted = isInteractableWantedNow(interactable), half = isWanted ? 4 : 3;
+    context.fillStyle = isWanted ? MAP_MARKER_WANTED_COLOUR : MAP_MARKER_OTHER_COLOUR;
+    context.fillRect(toCanvasX(interactable.x) - half, toCanvasY(interactable.z) - half, half * 2, half * 2);
     if (interactable.mapLabel) context.fillText(interactable.mapLabel, toCanvasX(interactable.x) + 8, toCanvasY(interactable.z) + 4);
   }
   if (debugHooks.drawMapMarkers) debugHooks.drawMapMarkers(context, toCanvasX, toCanvasY, 7);
@@ -616,6 +623,7 @@ function getExtraJobStatusText() {
   const flags = game.flags, parts = [];
   if (flags.hasFuel) parts.push('FUEL CAN');
   if (level.mission.coreCount > 0) parts.push('CORES ' + flags.coresCollected + '/' + level.mission.coreCount);
+  if (level.mission.extraGenerators.length > 0 && flags.knowsAboutGenerators) parts.push('GENERATORS ' + (1 + flags.extraGeneratorsRunning) + '/' + (1 + level.mission.extraGenerators.length));
   if (flags.spoolsUploaded && !flags.breakerClosed) parts.push('BREAKER OPEN');
   return parts.join(' · ');
 }

@@ -92,8 +92,8 @@ async function measure(filters) {
   const cases = [];
   for (const entry of await page.evaluate(`(${board})().list()`)) {
     const place = entry.hasPlace ? ', ' + nearDistance + ' m away' : '';
-    cases.push({ key: entry.key, group: entry.group, name: entry.label + place, goesOn: entry.goesOn, distance: nearDistance });
-    if (entry.key === 'growlHunt') cases.push({ key: entry.key, group: entry.group, name: entry.label + ', ' + FAR_DISTANCE + ' m away', goesOn: true, distance: FAR_DISTANCE });
+    cases.push({ key: entry.key, group: entry.group, name: entry.label + place, goesOn: entry.goesOn, distance: nearDistance, hasPlace: entry.hasPlace === true });
+    if (entry.key === 'growlHunt') cases.push({ key: entry.key, group: entry.group, name: entry.label + ', ' + FAR_DISTANCE + ' m away', goesOn: true, distance: FAR_DISTANCE, hasPlace: true });
   }
   const wanted = cases.filter((item) => filters.length === 0 || filters.some((filter) => (item.group + ' ' + item.name + ' ' + item.key).toLowerCase().includes(filter)));
   if (wanted.length === 0) { console.log('No sound has ' + filters.map((filter) => '"' + filter + '"').join(' or ') + ' in its name.'); await browser.close(); process.exit(1); }
@@ -117,7 +117,7 @@ async function measure(filters) {
     }
     console.log(('  ' + item.name).padEnd(nameWidth) + (Math.round(result.loudness) + ' dB').padEnd(9) + result.peak.toFixed(2).padEnd(7) +
       (result.heldBack >= 1 ? Math.round(result.heldBack) + ' dB' : '-').padEnd(8) + (Math.round(result.centre) + ' Hz').padEnd(10) +
-      (item.distance > 0 && isFinite(result.loudness) ? Math.round(metresHeardTo(result.loudness, item.distance)) + ' m' : ''));
+      (item.hasPlace && isFinite(result.loudness) ? Math.round(metresHeardTo(result.loudness, item.distance)) + ' m' : ''));
     if (result.isInvalid) failures.push(item.name + ': invalid numbers in the output');
     if (result.peak < limits.silentPeak) failures.push(item.name + ': silent');
     if (result.peak > limits.distortingPeak) overloading.push(item.name + ': peak ' + result.peak.toFixed(2) + ', heard at ' + Math.round(result.loudness) + ' dB');

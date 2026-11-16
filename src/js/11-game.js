@@ -19,9 +19,11 @@ const game = {
     // The extra jobs (level.mission says which of them this station has):
     hasFuel: false,          // carrying the fuel can
     knowsAboutFuel: false,   // has tried the generator and found the tank empty
+    knowsAboutGenerators: false, // has been told that the lift needs the station's other generators too
     coresCollected: 0,
     spoolsUploaded: false,   // the upload is done but the lift has not been called, because the winch breaker is open
-    breakerClosed: false
+    breakerClosed: false,
+    extraGeneratorsRunning: 0 // how many of the station's small generators (level.mission.extraGenerators) are running
   },
   objectiveText: '',
   liftCountdown: -1,
@@ -80,6 +82,84 @@ function areCoresMissing() {
   return game.flags.coresCollected < level.mission.coreCount;
 }
 
+// ---- the generators a station has besides Generator 2 (level.mission.extraGenerators) ----
+
+function areGeneratorsMissing() {
+  return game.flags.extraGeneratorsRunning < level.mission.extraGenerators.length;
+}
+
+function findExtraGenerator(objectId) {
+  for (const generator of level.mission.extraGenerators) if (generator.objectId === objectId) return generator;
+  return null;
+}
+
+// "2 of 3": how many generators are running out of all the station has, Generator 2 counted with the rest.
+function describeGeneratorsRunning() {
+  return ((game.flags.powerOn ? 1 : 0) + game.flags.extraGeneratorsRunning) + ' of ' + (1 + level.mission.extraGenerators.length);
+}
+
+// Whether a generator that could be started right now has an empty tank: a fuel can is worth picking up.
+function isFuelWantedNow() {
+  if (!game.flags.powerOn) return level.mission.needsFuel;
+  for (const generator of level.mission.extraGenerators) if (generator.needsFuel && !generator.isFilled && !generator.isRunning) return true;
+  return false;
+}
+
+// The sentence about the generators that goes with the objective while some are not running.
+function getGeneratorObjectiveText() {
+  const total = 1 + level.mission.extraGenerators.length;
+  return OBJECTIVE_TEXT.startGenerators.replace('{running}', String(1 + game.flags.extraGeneratorsRunning)).replace('{total}', String(total));
+}
+
+// Whether a thing you have found is something you can act on right now. The map draws those brightly and
+// the rest dimly: a note, a generator that will not start yet, the lift terminal while it would only refuse.
+function isInteractableWantedNow(interactable) {
+  const flags = game.flags, objectId = interactable.objectId;
+  if (objectId === OBJECT_GENERATOR) return !flags.powerOn;
+  if (isFuelCanId(objectId)) return !flags.hasFuel && isFuelWantedNow();
+  if (isExtraGeneratorId(objectId)) {
+    const generator = findExtraGenerator(objectId);
+    return flags.powerOn && generator !== null && (!generator.needsFuel || generator.isFilled || flags.hasFuel);
+  }
+  if (objectId === OBJECT_WINCH_BREAKER) return flags.powerOn && !flags.breakerClosed;
+  if (objectId === OBJECT_LIFT_TERMINAL) {
+    return flags.powerOn && flags.spoolsCollected >= 3 && !areCoresMissing() && !areGeneratorsMissing() && !(flags.spoolsUploaded && !flags.breakerClosed) && !flags.uploadStarted;
+  }
+  if (objectId === OBJECT_NOTE_SECURITY || objectId === OBJECT_NOTE_LOCKER || objectId === OBJECT_NOTE_LAB || objectId === OBJECT_NOTE_ARCHIVE) return false;
+  return true; // spools, keycards and core samples are always worth going for
+}
+
+// Starting one of the small generators: only with the mains on, and with fuel if its tank is empty. It is loud.
+function useExtraGenerator(interactable) {
+  const flags = game.flags, generator = findExtraGenerator(interactable.objectId);
+  if (!generator || generator.isRunning) return;
+  const name = 'GENERATOR ' + generator.number;
+  if (!flags.powerOn) {
+    playDeniedSound();
+    showMessage(name + ': no control power. It needs the mains. Start Generator 2 first.', 5, 'warning');
+    return;
+  }
+  if (generator.needsFuel && !generator.isFilled) {
+    if (!flags.hasFuel) {
+      playDeniedSound();
+      showMessage(name + ': day tank empty. There is a fuel can not far from it.', 5, 'warning');
+      return;
+    }
+    flags.hasFuel = false;
+    generator.isFilled = true;
+    showMessage('Fuel can emptied into the day tank.', 3, 'info');
+  }
+  generator.isRunning = true;
+  interactable.isAvailable = false;
+  flags.extraGeneratorsRunning++;
+  startExtraGeneratorSound(generator.objectId - OBJECT_EXTRA_GENERATOR_FIRST, generator.x, generator.z);
+  emitNoise(generator.x, generator.z, TUNING.noiseRadiusGeneratorStart);
+  saveCheckpoint();
+  refreshObjective();
+  showMessage(areGeneratorsMissing() ? 'Generator ' + generator.number + ' running. Generators running: ' + describeGeneratorsRunning() + '.'
+    : 'Generator ' + generator.number + ' running. That is all of them: the winch has its power.', 4, 'info');
+}
+
 function refreshObjective() {
   const flags = game.flags;
   if (!flags.hasLeftLift) setObjective(OBJECTIVE_TEXT.leaveLift);
@@ -91,9 +171,17 @@ function refreshObjective() {
     else setObjective(OBJECTIVE_TEXT.findGenerator);
   }
   else if (flags.spoolsUploaded && !flags.breakerClosed) setObjective(OBJECTIVE_TEXT.closeBreaker);
-  else if (flags.spoolsCollected < 3) setObjective(OBJECTIVE_TEXT.collectSpools + (areCoresMissing() ? ' ' + OBJECTIVE_TEXT.collectCores : ''));
-  else if (areCoresMissing()) setObjective(OBJECTIVE_TEXT.collectCores.replace('also wants', 'still wants'));
-  else setObjective(OBJECTIVE_TEXT.returnToLift);
+  else {
+    // With the mains on: the spools, and whatever else this station asks for before the lift can be called.
+    const parts = [];
+    if (flags.spoolsCollected < 3) parts.push(OBJECTIVE_TEXT.collectSpools);
+    if (areCoresMissing()) parts.push(parts.length > 0 ? OBJECTIVE_TEXT.collectCores : OBJECTIVE_TEXT.collectCores.replace('also wants', 'still wants'));
+    if (areGeneratorsMissing() && flags.knowsAboutGenerators) {
+      parts.push(getGeneratorObjectiveText());
+      if (flags.hasFuel) parts.push(OBJECTIVE_TEXT.fuelForGenerator);
+    }
+    setObjective(parts.length > 0 ? parts.join(' ') : OBJECTIVE_TEXT.returnToLift);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -106,6 +194,9 @@ function resetWorldState() {
   flags.spoolsCollected = 0; flags.uploadStarted = false; flags.liftArrived = false;
   flags.hasHeardOfBrokenDoor = false;
   flags.hasFuel = false; flags.knowsAboutFuel = false; flags.coresCollected = 0; flags.spoolsUploaded = false; flags.breakerClosed = false;
+  flags.extraGeneratorsRunning = 0; flags.knowsAboutGenerators = false;
+  for (const generator of level.mission.extraGenerators) { generator.isRunning = false; generator.isFilled = false; }
+  stopExtraGeneratorSounds();
   game.liftCountdown = -1;
   game.scheduledEvents.length = 0;
   game.statistics.elapsed = 0; game.statistics.distanceWalked = 0; game.statistics.deaths = 0;
@@ -366,6 +457,19 @@ function useInteractable(interactable) {
     refreshObjective();
     return;
   }
+  if (isExtraGeneratorId(interactable.objectId)) { useExtraGenerator(interactable); return; }
+  if (isFuelCanId(interactable.objectId)) {
+    // Any can fills any tank, and you carry one at a time.
+    if (flags.hasFuel) { showMessage('You are already carrying a fuel can.', 3, 'info'); return; }
+    removeInteractableFromWorld(interactable);
+    flags.hasFuel = true;
+    playPickupSound();
+    emitNoise(player.x, player.z, TUNING.noiseRadiusPickup);
+    saveCheckpoint();
+    showMessage('Fuel can taken.', 3, 'info');
+    refreshObjective();
+    return;
+  }
   switch (interactable.objectId) {
     case OBJECT_LIFT_TERMINAL:
       if (!flags.powerOn) {
@@ -377,6 +481,10 @@ function useInteractable(interactable) {
       } else if (areCoresMissing()) {
         playDeniedSound();
         showMessage('LIFT CONTROL: manifest incomplete. Core samples loaded: ' + flags.coresCollected + ' of ' + level.mission.coreCount + '.', 5, 'warning');
+      } else if (areGeneratorsMissing()) {
+        playDeniedSound();
+        showMessage('LIFT CONTROL: winch supply low. Generators running: ' + describeGeneratorsRunning() + '. All must run.', 5, 'warning');
+        tellAboutExtraGenerators(false);
       } else if (!flags.uploadStarted && level.mission.needsBreaker && !flags.breakerClosed) {
         // The upload goes through, but the car will not move until the winch breaker is closed.
         if (!flags.spoolsUploaded) {
@@ -409,17 +517,8 @@ function useInteractable(interactable) {
         refreshObjective();
         break;
       }
-      if (flags.hasFuel) { flags.hasFuel = false; showMessage('Fuel can emptied into the day tank.', 3, 'info'); }
+      if (level.mission.needsFuel && flags.hasFuel) { flags.hasFuel = false; showMessage('Fuel can emptied into the day tank.', 3, 'info'); }
       startGenerator(interactable);
-      break;
-    case OBJECT_FUEL_CAN:
-      removeInteractableFromWorld(interactable);
-      flags.hasFuel = true;
-      playPickupSound();
-      emitNoise(player.x, player.z, TUNING.noiseRadiusPickup);
-      saveCheckpoint();
-      showMessage('Fuel can taken.', 3, 'info');
-      refreshObjective();
       break;
     case OBJECT_WINCH_BREAKER:
       if (flags.breakerClosed) { showMessage('WINCH BREAKER: closed.', 3, 'info'); break; }
@@ -471,6 +570,19 @@ function useInteractable(interactable) {
   }
 }
 
+// The player learns that the lift needs the other generators too: they go on the map, and the objective names
+// them. Dispatch says it the first time (`withRadio`), unless the lift terminal has already said it.
+function tellAboutExtraGenerators(withRadio) {
+  if (game.flags.knowsAboutGenerators || level.mission.extraGenerators.length === 0) return;
+  game.flags.knowsAboutGenerators = true;
+  for (const generator of level.mission.extraGenerators) {
+    const interactable = findInteractableByObjectId(generator.objectId);
+    if (interactable) interactable.isDiscovered = true;
+  }
+  if (withRadio && areGeneratorsMissing()) playRadioLine('generatorsWanted');
+  refreshObjective();
+}
+
 function startGenerator(interactable) {
   game.flags.powerOn = true;
   interactable.isAvailable = false;
@@ -479,6 +591,8 @@ function startGenerator(interactable) {
   refreshObjective();
   showMessage('Generator 2 running. Mains restored.', 4, 'info');
   scheduleEvent(4.5, function () { playRadioLine('generatorStarted'); });
+  // If this station has more generators, dispatch says so once the first has settled, and marks them.
+  if (level.mission.extraGenerators.length > 0) scheduleEvent(game.difficulty.hollowEnabled ? 19 : 11, function () { tellAboutExtraGenerators(true); });
   if (game.difficulty.hollowEnabled) {
     scheduleEvent(11, function () { playRadioLine('generatorFollowUp'); });
     scheduleEvent(TUNING.hollowWakeDelaySeconds, function () {
@@ -712,6 +826,7 @@ function updateAscending(dt) {
     game.mode = 'ending';
     setLiftMachinerySound(0);
     setGeneratorSoundRunning(false);
+    stopExtraGeneratorSounds();
     if (document.exitPointerLock && input.isPointerLocked) document.exitPointerLock();
     if (debugState.hasBeenUsedThisRun) {
       game.statistics.bestTime = null; // a run with debug mode does not count
@@ -909,7 +1024,11 @@ function startApplication() {
     grantPower: function () { game.flags.powerOn = true; refreshObjective(); },
     grantKeycard: function () { setKeycardLevel(3); },
     keycardObjectIds: KEYCARD_OBJECT_IDS,
-    missionObjectIds: { fuelCan: OBJECT_FUEL_CAN, winchBreaker: OBJECT_WINCH_BREAKER, firstCore: OBJECT_CORE_FIRST },
+    missionObjectIds: { fuelCan: OBJECT_FUEL_CAN, winchBreaker: OBJECT_WINCH_BREAKER, firstCore: OBJECT_CORE_FIRST, firstExtraGenerator: OBJECT_EXTRA_GENERATOR_FIRST, firstExtraFuelCan: OBJECT_EXTRA_FUEL_CAN_FIRST },
+    // The generators besides Generator 2: whether the lift still waits for them, and what can be acted on now (the map shows that brighter).
+    areGeneratorsMissing: areGeneratorsMissing, isFuelWantedNow: isFuelWantedNow, isInteractableWantedNow: isInteractableWantedNow, tellAboutExtraGenerators: tellAboutExtraGenerators,
+    startExtraGeneratorSound: startExtraGeneratorSound, stopExtraGeneratorSounds: stopExtraGeneratorSounds,
+    sizePresets: GENERATED_SIZE_PRESETS,
     grantSpools: function () { game.flags.spoolsCollected = 3; refreshObjective(); },
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
     // The Hollow and locked doors: its ceiling hatches, what is shut to it right now, and its way round.
