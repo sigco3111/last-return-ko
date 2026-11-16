@@ -3,7 +3,7 @@
 // the things that make a sound in play really put their caption up.
 const fs = require('fs');
 const path = require('path');
-const { openGame, startGame } = require('./browser-harness.js');
+const { openGame, startGame, drawFrames } = require('./browser-harness.js');
 
 const failures = [];
 function check(description, condition, detail) {
@@ -432,6 +432,82 @@ function check(description, condition, detail) {
     kept === 'off' && repaired.setting === 'tells' && repaired.titleShows === 'tells', { kept: kept, repaired: repaired });
 
   await browser.close();
+
+  // --- where the captions stand on the screen: a phone held sideways, a tablet, a desktop screen ---
+  // The longest sentence the work order can show, with its numbers filled in: it makes the work order tallest.
+  const questSource = fs.readFileSync(path.join(sourceFolder, '09-quests.js'), 'utf8');
+  const objectiveSentences = Array.from(questSource.matchAll(/objective: '((?:[^'\\]|\\.)+)'/g)).map((match) => match[1].replace(/\{[a-z]+\}/gi, '3'));
+  const longestObjective = objectiveSentences.reduce((longest, sentence) => (sentence.length > longest.length ? sentence : longest), '');
+  check('the longest sentence for the work order was found in the quests', longestObjective.length >= 100, longestObjective);
+  const screens = [
+    { name: 'phone 844 x 390', width: 844, height: 390, isPhone: true, isSideColumn: true },
+    { name: 'phone 800 x 360', width: 800, height: 360, isPhone: true, isSideColumn: true },
+    { name: 'phone 667 x 375', width: 667, height: 375, isPhone: true, isSideColumn: true },
+    { name: 'tablet 1024 x 768', width: 1024, height: 768, isPhone: true, isSideColumn: false },
+    { name: 'desktop 1280 x 720', width: 1280, height: 720, isPhone: false, isSideColumn: false }
+  ];
+  for (const screen of screens) {
+    const opened = await openGame({ dev: true, width: screen.width, height: screen.height, isPhone: screen.isPhone });
+    await startGame(opened.page, screen.isPhone);
+    const measureLayout = async (objectiveText) => {
+      const putUp = () => opened.page.evaluate((objective) => {
+        const d = window.lastReturnDebug;
+        d.setDebugOption('invulnerable', true);
+        d.hollow.isActive = false;
+        d.settings.captions = 'all';
+        if (objective) d.game.objectiveText = objective;
+        d.simulate(0.3); // the work order is written out afresh ten times a second
+        const source = { x: d.player.x + 2, z: d.player.z + 2 };
+        for (const key of ['hollowRoar', 'doorPoundedLast', 'hollowVentSteps', 'hatchForced']) d.showCaption(key, source);
+        d.getCaptionLines();
+        const boxOf = (selector) => {
+          const element = document.querySelector(selector);
+          if (!element || element.hidden || element.closest('[hidden]')) return null;
+          const rectangle = element.getBoundingClientRect();
+          return { left: Math.round(rectangle.left), top: Math.round(rectangle.top), right: Math.round(rectangle.right), bottom: Math.round(rectangle.bottom) };
+        };
+        const lines = Array.from(document.querySelectorAll('.hud-caption-line'));
+        return {
+          boxes: { captions: boxOf('#hud-caption'), workOrder: boxOf('#hud-block-objective'), map: boxOf('#touch-map'), pause: boxOf('#touch-pause'),
+            minimap: boxOf('#hud-block-map'), meters: boxOf('#hud-block-instruments'), ring: boxOf('#reticle-ring') },
+          lineCount: lines.length,
+          linesWithWhereFirst: lines.filter((line) => line.firstElementChild.classList.contains('hud-caption-where')).length
+        };
+      }, objectiveText);
+      await putUp();
+      await drawFrames(opened.page, 3); // the ring takes its size from the beam when a frame is drawn
+      return putUp();
+    };
+    const overlapsIn = (boxes) => {
+      const names = Object.keys(boxes).filter((name) => boxes[name] !== null), overlaps = [];
+      for (let first = 0; first < names.length; first++) {
+        for (let second = first + 1; second < names.length; second++) {
+          const one = boxes[names[first]], other = boxes[names[second]];
+          if (one.left < other.right && other.left < one.right && one.top < other.bottom && other.top < one.bottom) overlaps.push(names[first] + ' over ' + names[second]);
+        }
+      }
+      return overlaps;
+    };
+    const usual = await measureLayout('');
+    if (screen.isSideColumn) {
+      const withLongest = await measureLayout(longestObjective);
+      check(screen.name + ': four captions, the work order, MAP, PAUSE, the minimap, the meters and the aiming ring keep clear of one another',
+        usual.lineCount === 4 && overlapsIn(usual.boxes).length === 0, { overlaps: overlapsIn(usual.boxes), boxes: usual.boxes });
+      check(screen.name + ': the same with the longest sentence in the work order, and the captions hang under it',
+        withLongest.lineCount === 4 && overlapsIn(withLongest.boxes).length === 0 && withLongest.boxes.workOrder.bottom > usual.boxes.workOrder.bottom &&
+        withLongest.boxes.captions.top >= withLongest.boxes.workOrder.bottom, { overlaps: overlapsIn(withLongest.boxes), boxes: withLongest.boxes });
+      check(screen.name + ': the arrow and the distance come first in every caption line', usual.linesWithWhereFirst === 4, usual.linesWithWhereFirst);
+    } else {
+      const captions = usual.boxes.captions;
+      const isCentred = Math.abs((captions.left + captions.right) / 2 - screen.width / 2) <= 1;
+      const isWhereItWas = screen.isPhone ? Math.abs(captions.top - screen.height * 0.16) <= 1 : Math.abs(captions.bottom - screen.height * 0.97) <= 1;
+      check(screen.name + ': the captions are where they were (in the middle, ' + (screen.isPhone ? 'under the work order' : 'at the bottom') + '), the text first and the arrow after',
+        usual.lineCount === 4 && isCentred && isWhereItWas && usual.linesWithWhereFirst === 0 && overlapsIn({ captions: captions, ring: usual.boxes.ring }).length === 0,
+        { captions: captions, ring: usual.boxes.ring, whereFirst: usual.linesWithWhereFirst });
+    }
+    check(screen.name + ': no script errors were reported', opened.problems.length === 0, opened.problems);
+    await opened.browser.close();
+  }
 
   if (failures.length > 0) {
     console.log('\n' + failures.length + ' caption check(s) failed:');

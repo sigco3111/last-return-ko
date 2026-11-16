@@ -155,12 +155,26 @@ body.is-touch #hud-messages { bottom: 36%; }
 body.is-touch .hud-message { font-size: 13px; }
 body.is-touch #hud-caption { bottom: auto; top: 16%; } /* the thumbs have the bottom of the screen: captions go under the work order, and grow downward */
 body.is-touch #hud-prompt { top: calc(50% + 48px); }
+/* A phone held sideways (10-interface.js sets is-side-column there). Four caption lines do not fit between
+   the work order and the aiming ring, so they go in a column to the left of the ring, hanging under the work
+   order: --work-order-bottom is kept up to date in 10-interface.js. The column ends short of the ring at the
+   default beam, where the ring is 27% of the screen's height across. A long caption wraps, and the arrow and
+   the distance come first in the line so that they are never left alone on a row. */
+body.is-touch #hud-caption.is-side-column {
+  left: var(--gutter-left); transform: none; bottom: auto; top: calc(var(--work-order-bottom, 100px) + 8px); align-items: flex-start;
+  width: auto; max-width: calc(50% - 14vh - 6px - var(--gutter-left));
+}
+body.is-touch #hud-caption.is-side-column .hud-caption-line { text-align: left; }
+body.is-touch #hud-caption.is-side-column .hud-caption-where { margin-left: 0; margin-right: 10px; }
 @media (max-height: 480px) {
   body.is-touch .hud-bottom-left { top: auto; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); right: auto; left: var(--gutter-left); }
   body.is-touch .touch-top-buttons { top: calc(14px + env(safe-area-inset-top, 0px)); right: calc(var(--gutter-right) + 116px); }
   body.is-touch #hud-messages { bottom: calc(8px + env(safe-area-inset-bottom, 0px)); width: min(400px, 44%); }
   body.is-touch .hud-message { font-size: 12px; padding: 5px 9px; }
-  body.is-touch #hud-caption { bottom: auto; top: 24%; }
+  /* The work order ends short of MAP here, so that a long sentence wraps and does not run under MAP and PAUSE.
+     (The buttons and the minimap take 248 px at the right. Narrower than this and the chips take a second row
+     in a wider font, and the work order grows down into the room the captions need.) */
+  body.is-touch .hud-top-left { max-width: calc(100% - 300px); }
 }
 
 /* ---------- map overlay ---------- */

@@ -16,6 +16,7 @@ const interfaceState = {
   lastStatusSignature: '',  // objective and chip state as last shown, to notice when it changes
   objectiveShownUntil: 0,   // on the quiet screen the objective block is visible until this moment
   messages: [],
+  workOrderBottom: -1,  // how far down the screen the work order ends, in CSS pixels, as last told to the stylesheet
   captionLines: [],     // the caption lines on screen: { slot, key, rank, source, expiresAt, element, textElement, whereElement, whereText }
   captionCounts: {},    // how often each caption has been shown since the page was opened, by key (for the tests)
   textRefreshTimer: 0,
@@ -580,10 +581,15 @@ function updateCaptions() {
   if (!container) return;
   const isEverySound = settings.captions === 'all';
   container.classList.toggle('is-every-sound', isEverySound);
+  // A phone held sideways: the captions are a column at the left (see style.css), and in a column the arrow
+  // and the distance come before the text. The 480 is the same one as in the stylesheet's "max-height: 480px".
+  const isSideColumn = document.body.classList.contains('is-touch') && window.innerHeight <= 480;
+  container.classList.toggle('is-side-column', isSideColumn);
   for (let index = interfaceState.captionLines.length - 1; index >= 0; index--) {
     const line = interfaceState.captionLines[index];
     // (The second test: a new descent starts the clock again, and a line left over from the last one must not outstay it.)
     if (game.time > line.expiresAt || line.expiresAt - game.time > 30 || !isCaptionLevelShown(CAPTIONS[line.key].level)) { removeCaptionLine(line); continue; }
+    if (isSideColumn !== (line.element.firstChild === line.whereElement)) line.element.insertBefore(line.whereElement, isSideColumn ? line.textElement : null);
     const where = isEverySound && line.source ? describeCaptionSource(line.source) : null;
     const whereText = where ? (where.eighth >= 0 ? CAPTION_ARROWS[where.eighth] + ' ' : '') + where.word : '';
     if (whereText !== line.whereText) {
@@ -703,6 +709,14 @@ function updateHud(realDt) {
     const extraText = getExtraJobStatusText();
     elements['chip-extra'].hidden = extraText === '';
     elements['chip-extra'].textContent = extraText;
+    // On a phone held sideways the captions hang under the work order (see style.css), and the work order
+    // is as tall as its sentence is long: the stylesheet is told where it ends.
+    const workOrderBlock = elements['hud-block-objective'];
+    const workOrderBottom = workOrderBlock.offsetTop + workOrderBlock.offsetHeight;
+    if (workOrderBottom !== interfaceState.workOrderBottom) {
+      interfaceState.workOrderBottom = workOrderBottom;
+      elements['hud-caption'].style.setProperty('--work-order-bottom', workOrderBottom + 'px');
+    }
 
     const zone = getZoneAtPosition(player.x, player.z);
     if (zone) interfaceState.visitedZones.add(zone);
