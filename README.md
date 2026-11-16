@@ -212,11 +212,18 @@ Three things keep them fair, and are worth knowing:
 
 **The lift** takes forty seconds to arrive once the spools are uploaded, and the Hollow can hear it from anywhere in the station.
 
-**Extra jobs** only come up in the Uncharted annex. The seed decides which of the three a station has: a small station has none or one, a medium one, a large one or two, a massive two or all three.
+**Quests** are what a descent asks of you besides power, the spools and the lift. They only come up in the Uncharted annex; the seed decides which a station has. A quest holds up one of three moments: Generator 2 starting, the lift terminal taking the spools, or the lift coming after it has.
 
-- **No fuel.** Generator 2 will not start: the day tank is empty. A fuel can stands in a room near the generator that you can reach without power: about twenty-five metres' walk, never the far end of the station.
-- **Core samples.** Dispatch wants the grey sample tubes Crew 2 pulled, two to four of them, one to a room, anywhere short of the last keycard's doors. The lift terminal refuses the upload until you carry them all.
-- **The winch breaker.** The upload goes through, but the lift does not come: its breaker has tripped. The panel is somewhere behind a powered door, dispatch marks it on your map, and it needs mains power to hold. Close it and the forty seconds start there, a long way from the lobby. If you find the panel earlier and close it then, the upload calls the lift as usual.
+| Quest | What it asks | Holds up |
+|---|---|---|
+| **No fuel** | Generator 2's day tank is empty. A fuel can stands in a room near it that you can reach without power. | The mains |
+| **Core samples** | Two to four grey sample tubes, one to a room, anywhere short of the last keycard's doors. | The upload |
+| **More generators** | One to three small generators that the lift winch needs. See below. | The upload |
+| **Crew badges** | Two or three badges of Crew 2, each clipped to a hard hat left on a crate. | The upload |
+| **Isolation valves** | Two or three valves to drive shut. They need the mains, and their actuators squeal: on Standard the Hollow hears one from 14 m. Dispatch marks them on your map once you have taken a keycard. | The upload |
+| **The winch breaker** | The upload goes through, but the lift does not come until the breaker is closed. The panel is behind a powered door, Dispatch marks it, and the forty seconds start there. Close it earlier and the upload calls the lift as usual. | The lift |
+
+How many a station has depends on its size. The first, second and last come from one draw (a small station has none or one of them, a medium one, a large one or two, a massive two or three). Badges and valves come from a second draw (small none, medium and large none or one, massive one or two). The generators are counted by themselves. A massive station can have all six, and that is a long descent.
 
 **More generators.** A generated station may also have one to three small generators besides Generator 2: Generator 1, 3 and 4, each a set on a skid standing in some room short of the last keycard's doors. A small station has none or one, a medium one up to two, a large one or two, a massive one to three.
 
@@ -226,7 +233,7 @@ Three things keep them fair, and are worth knowing:
 - About half of them have an empty tank. The fuel can for one stands in the nearest room that has space, usually ten to twenty-five metres' walk away, and never behind a door the generator is not behind itself.
 - Any can fills any tank, and you carry one can at a time.
 
-What you are carrying for these jobs is listed on the map with the spools and the keycards.
+What you are carrying for a quest, and how far along each one is, is listed on the map with the spools and the keycards.
 
 **The map marks what you have found in two ways.** Bright: something you can act on now (a spool, a keycard, a core sample, a generator that will start, a fuel can while some tank is empty). Dim and smaller: found, but not of use yet (a note, a small generator before the mains is on or without its fuel, the lift terminal while it would only refuse). Nothing you have found is ever hidden.
 
@@ -357,6 +364,12 @@ For looks and feel that live elsewhere (point colours and size, glow, mouse sens
 
 Every caption is one line in `CAPTIONS` in `src/js/00-config.js`: what it says, whether it is a tell or a sound, from how far it shows, how long it stays, and which captions it shares a line with. If you make a sound louder in `SOUND_LEVELS`, it carries further; `npm run audio-check` prints a **heard to** distance for every sound that comes from somewhere, which is the number to put in that caption's `withinMetres`. To caption a new sound, add a line to the table and call `showCaption('itsName', whereItComesFrom)` next to the line that plays the sound.
 
+**Adding a quest** is one entry in `QUESTS` in `src/js/09-quests.js`; the top of that file explains every field. The entry says what kind it is (`collect`: take things; `activate`: switch machines on; `supply`: bring something to a machine that is already there), what it holds up, how many things it has, which ring of rooms they stand in, what builds one of them, and every sentence it uses. Nothing else needs to change: which stations get it, placing, the rules, the objective line, the count on screen, the marks on the map, the terminal's refusal and the check that it can be finished all come from the entry. The crew badges are 14 lines there and the isolation valves 20, plus a few lines each in `src/js/03-layout.js` for what the thing looks like. A quest draws its random numbers from a sequence of its own, so adding one moves nothing in any existing station.
+
+How many quests a size of station gets is in `GENERATED_SIZE_PRESETS` at the top of `src/js/03-levelgen.js`: `extraJobs`, `errands` and `extraGenerators`, each a fewest and a most. Set both to 0 and that draw gives none.
+
+**When Dispatch speaks** is the table `DISPATCH_CUES` in `src/js/00-config.js`: something that happens, the line he says, how many seconds after. What can happen includes the Stills of a room waking (`stillsWake`) and you setting foot in a room for the first time (`enter:PUMP HALL B`), so a line can go with a place and not with how far along you are. A line about a quest is with its quest instead (`tell`). None of the quest lines names a number, so one recording does for every station; the number is on screen.
+
 To change rooms, objects or wall lettering, see the short guide at the top of `buildFacilityLayout` in `src/js/03-layout.js`. To see what a change to a room or a body looks like while you make it, use [the workshop](#the-workshop).
 
 Generated stations are tuned at the top of `src/js/03-levelgen.js`: `GENERATED_SIZE_PRESETS` sets how many extra rooms and ducts each size gets, and `GENERATED_LAYOUT_PRESETS` sets how often rooms get corridors and how far from the lift they spread. `STAIR_STEP_COUNT` and `STAIR_STEP_HEIGHT` set how long and steep the stairs are, and so how deep the lower level is. Each size's `vents` is how many vents it tries to fit; `VENT_HEIGHT` in `src/js/02-world.js` is how high they are inside. To add a kind of room, build it in [the workshop](#the-workshop), or write a `furnish...` function for it there (the room's north-west corner is at 0, 0) and add one entry to `ROOM_CATALOGUE` with its size, the places a door may go, and which lock tiers it may sit behind. Keep the floor just inside each door clear. Then run `npm test`: it builds 120 stations and reports any that cannot be walked or finished.
@@ -381,7 +394,7 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/01-math.js` | Small math helpers and 4×4 matrices |
 | `src/js/02-world.js` | Tile grid, props, signs, doors, collision, navigation, occluder mesh |
 | `src/js/03-layout.js` | Every hand-built room with its props, signs and pickups, and how Kessel-9 puts them together |
-| `src/js/03-levelgen.js` | Generated stations: the extra rooms, the room catalogue, the planner, locks, ducts and signs; the extra jobs, the small generators and where fuel cans go |
+| `src/js/03-levelgen.js` | Generated stations: the extra rooms, the room catalogue, the planner, locks, ducts and signs |
 | `src/js/03-noisy-floor.js` | Noisy things on the floor: the kinds, where a station gets them, what stepping on one does |
 | `src/js/03-workshop-rooms.js` | Rooms made in the workshop: what they can contain, and how a file in `src/rooms/` becomes a catalogue room |
 | `src/js/04-figures.js` | The capsule bodies used for everything that stands upright |
@@ -392,6 +405,7 @@ The game is plain JavaScript and WebGL 2 with no libraries and no asset files.
 | `src/js/08-entities.js` | Doors, the Hollow and its director, the Stills |
 | `src/js/08-phantoms.js` | The apparitions: each kind, and the part that decides when one comes |
 | `src/js/09-difficulty.js` | Threat levels: turns the "Custom" settings into the same kind of record a preset is |
+| `src/js/09-quests.js` | Quests: every quest described once, and the code that places them, runs their rules and checks them |
 | `src/js/09-player.js` | Keyboard, mouse and touch input, movement, the scanner |
 | `src/js/10-interface.js` | HUD, map, messages, captions and overlay screens |
 | `src/js/11-game.js` | Objectives, checkpoints, death, ending and the main loop |
@@ -441,6 +455,8 @@ plays the whole objective chain in a headless browser and checks each step: leav
 It then builds 120 generated stations (40 of each size, across the three layouts, half with one level and half with two) and checks each one: nothing unreachable, every door usable from both sides, every objective within arm's reach, the generator reachable without power, each keycard only with the one before it, the shaft only with the last, and the fuel can, the core samples and the winch breaker where their rules say they must be. It checks that a seed always gives the same station (also after the browser has warmed up, which is what once broke it), plays the rules of each extra job, builds eight massive stations with three keycards each, walks down a flight of stairs on foot, tries a vent standing (no) and crouched (yes), sends the Hollow through it, and plays one two-level station from lift to lift, whatever extra job that station has, which includes the Hollow climbing the stairs from the shaft. Set `GENERATED_SEEDS` to try more, for example `GENERATED_SEEDS=300 node tools/generated-station-test.js`.
 
 Then the Hollow and locked doors: each kind of door with the Hollow standing at it (the keycard door and the lift door stay shut, even with every card in your pocket), a keycard door shut between it and you (it never walks through, goes round through the crawlspace, and takes the time the numbers say: the climb, the metres, the full warning), a look from straight underneath it (a scan finds nothing and it cannot reach down), the landing (under the hatch that rattled, harmless for its first second), a keycard door held open by you (it simply walks through), pounding on a door (one bout, the door holds, it leaves that door alone for a while; the second bout adds to the damage; the third breaks it and it comes straight through; the broken door stays open and can be walked over; no pounding without the card, none on the lift door, harder when angry, and it stops if the door opens), short walks from under a hatch (it never takes to the ceiling for those), the lift car, the hatches being shut until it has been through them (the one it climbs into is forced as it goes in, the one it comes out of only as it drops, the rest stay shut, and a new descent shuts them all), and the hatches themselves. The 120 generated stations are each checked too: every locked-off part has a hatch, the Hollow can reach everywhere it may go, and without the crawlspace it really is shut in.
+
+Then the quest system: every quest is described completely (kind, what it holds up, sentences, lines Dispatch really has); 64 stations with whatever quests their seeds gave them can each be finished; each size gets as many as its ranges allow; no two things share an object number; three stations have their fuel cans, core samples, breaker and generators exactly where they stood before the quest system existed. Then a made-up quest is added as one more entry while the test runs: it turns up in every station, not one thing of any other quest moves, the terminal refuses for it, it can be done, and the upload then goes through. Then the badges and the valves are played by their rules, Dispatch's fuel line is said once for a small generator, "Do not stay in that room" comes with the Stills waking, and a line tied to a room is said the first time you enter it and not the second.
 
 Then the generators: 64 stations of every size have as many small generators as their size allows, each still finishable, each fuel can near its generator (half within 25 steps, none over 60; for Generator 2 half within 30, none over 45), and the same seed gives the same ones. Then the rules in one station: a small generator will not start before the mains is on or with an empty tank; any can fills any tank and a second can is refused while you carry one; Dispatch tells you and marks them; the lift terminal refuses while one is not running; starting one brings a Hollow twelve metres off to that generator, and one four metres off straight at you; with all running the lift is called; a new descent puts everything back. The map's bright and dim marks are checked at each step.
 
@@ -501,6 +517,8 @@ The noisy things on the floor are checked for where they lie and for what steppi
 The captions are checked for what shows when and where. Whether "every sound" is enough to play by has not been tried by anyone who cannot hear the game, and that is the only test that counts. The distances come from measurements of each sound alone in silence, down to the level of the room tone; with the growl and a heartbeat going, ears lose the quiet ones sooner than the captions do. The wording, the three distance words and the limit of four lines are first guesses.
 
 The apparitions keep to their rules, which is what the test can show. How often is right, whether the dummy that comes closer frightens or annoys, and whether the one in your face reads as a face or only as a mass of points a metre away, need playing. All their numbers are in `src/js/00-config.js` under "Apparitions", and debug mode can summon each kind where you stand.
+
+The quest system is checked for doing what each entry says, and for leaving every older station as it was. What it cannot check is the sum: a massive station can now ask for six things besides the spools, and nobody has played one. The numbers that set that are the three ranges in `GENERATED_SIZE_PRESETS`. The badges and the valves are new and unplayed; the valve's squeal was tuned by measuring. Three of Dispatch's lines for quests have no recording yet (`generatorsWanted`, `badgesWanted`, `valvesWanted`), and `allSpools.mp3` still says "all three" where the text now says "all of them".
 
 The small generators are checked for their rules and for where they and their cans stand. Whether two or three of them make a descent tenser or only longer has not been played, and neither has how loud "loud" should be: `noiseRadiusGeneratorStart` in `src/js/00-config.js` is a first guess. Their two sounds were tuned by measuring, not by ear. Dispatch's line for them (`generatorsWanted`) has no recording yet.
 

@@ -27,8 +27,8 @@ const MAXIMUM_EXTRA_GENERATORS = 3;
 const EXTRA_GENERATOR_NUMBERS = [1, 3, 4]; // what they are called: Generator 1, Generator 3, Generator 4 (2 is the big one)
 const OBJECT_EXTRA_FUEL_CAN_FIRST = 40;  // the fuel can that goes with extra generator 30 is 40, with 31 it is 41 ...
 
-function isExtraGeneratorId(objectId) { return objectId >= OBJECT_EXTRA_GENERATOR_FIRST && objectId < OBJECT_EXTRA_GENERATOR_FIRST + MAXIMUM_EXTRA_GENERATORS; }
-function isFuelCanId(objectId) { return objectId === OBJECT_FUEL_CAN || (objectId >= OBJECT_EXTRA_FUEL_CAN_FIRST && objectId < OBJECT_EXTRA_FUEL_CAN_FIRST + MAXIMUM_EXTRA_GENERATORS); }
+const SPOOL_COUNT = 3; // the survey spools of a descent
+// (Quests that do not name object numbers of their own are given them from 100 upward: see 09-quests.js.)
 
 // Where things are in the station that is loaded. The rooms below fill these in as they are built,
 // so they are right for the classic station and for generated ones.
@@ -104,6 +104,30 @@ function addWinchBreaker(x, z) {
   const handle = addBoxBetween(x - 0.05, 1.05, z + 0.2, x + 0.05, 1.4, z + 0.27, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const handleBack = addBoxBetween(x - 0.05, 1.05, z - 0.27, x + 0.05, 1.4, z - 0.2, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   registerInteractable(OBJECT_WINCH_BREAKER, x, 1.2, z, 'Close the winch breaker', [handle, handleBack], { mapLabel: 'WINCH BREAKER' });
+}
+
+// A crew badge: a hard hat left on a low crate, with the badge clipped to its brim. The badge is what you take.
+function addCrewBadge(objectId, x, z, yaw) {
+  addBoxBetween(x - 0.28, 0, z - 0.28, x + 0.28, 0.34, z + 0.28);
+  addSphereProp(x, 0.34 + 0.07, z, 0.15, { blocksMovement: false });                                                    // the hat
+  addCylinderProp(AXIS_Y, x, 0.34 + 0.02, z, 0.19, 0.012, { blocksMovement: false });                                  // its brim
+  const badge = addBoxProp(x + Math.cos(yaw) * 0.2, 0.34 + 0.03, z + Math.sin(yaw) * 0.2, 0.07, 0.008, 0.045,
+    { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  const clip = addBoxProp(x + Math.cos(yaw) * 0.16, 0.34 + 0.045, z + Math.sin(yaw) * 0.16, 0.012, 0.012, 0.012,
+    { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  registerInteractable(objectId, x, 0.42, z, 'Take the crew badge', [badge, clip], { removeWhenUsed: true, mapLabel: 'BADGE' });
+}
+
+// An isolation valve: a stub of pipe coming up out of the floor, the valve body on it, and the box of the
+// actuator on top with its push panel. `letter` is its name: A, B or C.
+function addIsolationValve(objectId, letter, x, z) {
+  addVerticalPipe(x, z, 0, 0.75, 0.13, true);
+  addBoxBetween(x - 0.2, 0.75, z - 0.2, x + 0.2, 1.0, z + 0.2, { surfaceClass: SURFACE_METAL });                       // the valve body
+  addCylinderProp(AXIS_X, x, 0.875, z, 0.09, 0.34, { surfaceClass: SURFACE_METAL, blocksMovement: false });             // the line through it
+  addBoxBetween(x - 0.16, 1.0, z - 0.16, x + 0.16, 1.32, z + 0.16, { surfaceClass: SURFACE_METAL });                   // the actuator
+  const panel = addBoxBetween(x - 0.1, 1.06, z + 0.16, x + 0.1, 1.26, z + 0.2, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  const panelBack = addBoxBetween(x - 0.1, 1.06, z - 0.2, x + 0.1, 1.26, z - 0.16, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
+  registerInteractable(objectId, x, 1.16, z, 'Shut isolation valve ' + letter, [panel, panelBack], { mapLabel: 'VALVE ' + letter });
 }
 
 // A generated station may move the first spool or the keycard out of its usual room (see 03-levelgen.js).
@@ -525,7 +549,7 @@ function buildFacilityLayout() {
   level.description = 'Kessel-9 (classic)';
   level.keycardRoomText = 'the laboratory';
   level.keycardCount = 1;
-  level.mission.needsFuel = false; level.mission.coreCount = 0; level.mission.needsBreaker = false; level.mission.extraGenerators.length = 0;
+  clearQuests(); addBuiltInQuests(); // Kessel-9 asks for nothing but power, the spools and the lift
   level.stillZones.length = 0;
   level.stillZones.push(ZONE_CALIBRATION_STORE, ZONE_ARCHIVE);
   level.unlabelledZones.length = 0;

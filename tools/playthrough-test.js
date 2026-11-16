@@ -52,6 +52,11 @@ function check(description, condition, detail) {
   // So it is looked at here and not further down with the rest of the quiet screen: by then the pause screen has
   // come and gone, and on a machine that draws slowly that takes most of those eight seconds, or all of them.
   await drawFrames(page, 1);
+  // The screen learns of the new objective in the first frame it draws after the change, and one screenshot
+  // does not promise that such a frame has been drawn: on the machine that checks pull requests the look
+  // below once came first, and found the objective still hidden from before. So this waits for the screen
+  // itself, as the heat meter's check further down does. If the objective never shows, the check says so.
+  await page.waitForFunction(() => !document.getElementById('hud-block-objective').classList.contains('is-faded'), null, { polling: 20, timeout: 3000 }).catch(() => {});
   const objectiveFadedJustAfterItChanged = await inGame(() => document.getElementById('hud-block-objective').classList.contains('is-faded'));
   await inGame(() => window.lastReturnDebug.simulate(4));
   check('lift door closes behind the player', (await inGame(() => window.lastReturnDebug.doors[0].openFraction)) === 0);

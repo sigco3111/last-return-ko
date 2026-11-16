@@ -165,6 +165,8 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'Doors and machinery', key: 'extraGeneratorRunning', level: 'extraGeneratorRunning', label: 'A small generator, running', seconds: 2, hasPlace: true,
     start: function () { setExtraGeneratorSoundRunning(0, true, getSoundBoardListenerX(), getSoundBoardSourceZ()); },
     stop: function () { setExtraGeneratorSoundRunning(0, false, 0, 0); } },
+  { group: 'Doors and machinery', key: 'valve', level: 'valve', label: 'An isolation valve is driven shut', hint: 'The squeal of an actuator that has not turned in years, then the thud as the valve seats.', seconds: 2, hasPlace: true,
+    play: function () { playValveSound(getSoundBoardListenerX(), getSoundBoardSourceZ()); } },
   { group: 'Doors and machinery', key: 'liftMachinery', level: 'liftMachinery', label: 'Lift machinery, the car on its way down', seconds: 2, hasPlace: true,
     start: function () { setLiftMachinerySound(0.85); },
     stop: function () { setLiftMachinerySound(0); } },

@@ -377,6 +377,27 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
       !refused.started && !refused.uploaded && /generator/i.test(refused.objective) && furthestReach < 2 &&
       (await inGame(() => window.lastReturnDebug.game.flags.extraGeneratorsRunning)) === mission.extraGenerators.length, { refused: refused, furthestReach: furthestReach });
   }
+  // Whatever else this station asks for before the upload (quests added since the checks above were written):
+  // the terminal refuses for each in turn, and each of its things can be walked to and used.
+  const otherQuests = await inGame(() => window.lastReturnDebug.level.quests
+    .filter((quest) => quest.definition.blocks === 'upload' && ['spools', 'cores', 'generators'].indexOf(quest.key) < 0)
+    .map((quest) => ({ key: quest.key, objects: quest.objects.map((object) => ({ objectId: object.objectId, needsItem: object.needsItem, itemObjectId: object.itemObjectId })) })));
+  for (const quest of otherQuests) {
+    await standNear(1);
+    await inGame(() => window.lastReturnDebug.use(1));
+    const refused = await inGame(() => ({ started: window.lastReturnDebug.game.flags.uploadStarted, uploaded: window.lastReturnDebug.game.flags.spoolsUploaded }));
+    let furthestReach = 0;
+    for (const object of quest.objects) {
+      if (object.needsItem) {
+        furthestReach = Math.max(furthestReach, await standNear(object.itemObjectId));
+        await inGame((id) => window.lastReturnDebug.use(id), object.itemObjectId);
+      }
+      furthestReach = Math.max(furthestReach, await standNear(object.objectId));
+      await inGame((id) => { window.lastReturnDebug.use(id); window.lastReturnDebug.hollow.isActive = false; }, object.objectId);
+    }
+    check('the quest "' + quest.key + '": the terminal refuses until it is done, and each of its things can be walked to and used',
+      !refused.started && !refused.uploaded && furthestReach < 2 && (await inGame((key) => window.lastReturnDebug.isQuestUnfinished(key), quest.key)) === false, { refused: refused, furthestReach: furthestReach });
+  }
   await standNear(1);
   await inGame(() => window.lastReturnDebug.use(1));
   if (mission.needsBreaker) {
@@ -449,10 +470,10 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   const jobRules = await inGame(() => {
     const debug = window.lastReturnDebug, flags = debug.game.flags, ids = debug.missionObjectIds, result = {};
     const findStation = (wanted) => { for (let seed = 1; seed < 80; seed++) { debug.loadStation('generated', seed, 'large', 'mixed', 'one'); if (wanted(debug.level.mission)) return seed; } return -1; };
-    // These stations have more generators as well, and the lift waits for those too. This gets them running
-    // (tools/generators-test.js is where their own rules are checked).
+    // These stations have other quests as well, and the lift waits for those too. This does every one of them
+    // but the two these checks are about (each quest's own rules are checked in generators-test and quests-test).
     const startEveryGenerator = () => {
-      for (const generator of debug.level.mission.extraGenerators) { if (generator.needsFuel) debug.use(generator.fuelCanId); debug.use(generator.objectId); }
+      for (const quest of debug.level.quests) if (['spools', 'fuel', 'cores', 'breaker'].indexOf(quest.key) < 0) debug.doQuest(quest.key);
       debug.hollow.isActive = false;
     };
     // Core samples, and no breaker to muddy it.

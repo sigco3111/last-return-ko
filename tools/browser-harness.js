@@ -45,9 +45,12 @@ async function startGame(page, isPhone) {
 }
 
 // Headless Chromium only draws new frames when asked, so this nudges it to draw a few.
+// A frame is drawn in software, and on a machine that is busy with other work one frame has been seen to
+// take seven seconds where it usually takes a tenth of one. So a frame gets two minutes, not the usual
+// thirty seconds, before the test gives up on it: a slow machine is not a fault in the game.
 async function drawFrames(page, frameCount) {
   for (let frameIndex = 0; frameIndex < (frameCount || 2); frameIndex++) {
-    await page.screenshot({ type: 'jpeg', quality: 5 });
+    await page.screenshot({ type: 'jpeg', quality: 5, timeout: 120000 });
   }
 }
 

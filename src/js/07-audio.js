@@ -46,6 +46,7 @@ const SOUND_LEVELS = {
   generatorRunning: 1,
   extraGeneratorStart: 1,   // one of the small generators (1, 3, 4): a pull of its starter and the catch
   extraGeneratorRunning: 1, // ... and its engine running, a higher and busier note than Generator 2
+  valve: 1,                 // an isolation valve driven shut: the squeal of its actuator and the thud as it seats
   liftMachinery: 1,       // arriving, leaving, on its way down
   liftBell: 1,
 
@@ -1570,6 +1571,22 @@ function startExtraGeneratorSound(slot, x, z) {
   gain.gain.cancelScheduledValues(now);
   gain.gain.setValueAtTime(0, now + 1.1);
   gain.gain.linearRampToValueAtTime(0.42 * SOUND_LEVELS.extraGeneratorRunning, now + 2.0);
+}
+
+// An isolation valve is driven shut at (x, z): a motor that has not turned in years squeals up, grinds for a
+// second and a half, and the valve seats with a thud.
+function playValveSound(x, z) {
+  const panner = createTemporaryPanner(x, getFloorHeightAt(x, z) + 1.1, z);
+  if (!panner) return;
+  const level = SOUND_LEVELS.valve;
+  // The squeal: two narrow bands of noise sliding up, a little apart, so that they beat against each other.
+  playResonantNoise({ frequency: 420, frequencyEnd: 980, resonance: 26, duration: 1.5, gain: 1.0 * level, attack: 0.08, destination: panner });
+  playResonantNoise({ frequency: 455, frequencyEnd: 1060, resonance: 22, duration: 1.5, gain: 0.75 * level, attack: 0.12, destination: panner });
+  // The gearbox under it.
+  playNoiseBurst({ duration: 1.5, filterType: 'bandpass', frequency: 260, frequencyEnd: 330, resonance: 3, gain: 0.65 * level, attack: 0.1, destination: panner });
+  // Seated.
+  playNoiseBurst({ duration: 0.22, filterType: 'bandpass', frequency: 240, resonance: 2, gain: 1.3 * level, attack: 0.004, delay: 1.5, destination: panner });
+  playTone({ waveform: 'triangle', frequency: 170, frequencyEnd: 110, duration: 0.3, gain: 0.6 * level, attack: 0.004, delay: 1.5, destination: panner });
 }
 
 // Sets one of the small generators running or not, without the starter (used when a descent is picked up again).

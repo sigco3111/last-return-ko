@@ -138,6 +138,7 @@ const TUNING = {
   noiseRadiusSweep: 22,
   noiseRadiusDoor: 8,           // a door you open (doors the Hollow opens do not count)
   noiseRadiusPickup: 4,
+  noiseRadiusValve: 18,          // shutting an isolation valve: its actuator squeals. On Standard that is heard from 14 m.
   noiseRadiusGeneratorStart: 30, // starting one of the small generators (1, 3, 4). On Standard that is heard from 24 m, and within 7 m of it the Hollow knows where you are.
   // ---- Captions (the lines themselves are in CAPTIONS, further down) ----
   captionMostLines: 4,              // never more than this many caption lines on screen at once
@@ -373,18 +374,41 @@ const RADIO_MESSAGES = {
   // Only in stations with more than one keycard: said for every card except the last.
   lowerKeycardTaken: 'That card opens some of the doors. Not the way to Shaft 9. There is another card further in.',
   secondSpool: 'That is two. Do not stay in that room.',
-  // ---- Extra jobs. A generated station may have none, one or several of these (see "mission" in 03-levelgen.js).
-  //      They are new, so they have no recordings yet: docs/voice-lines.md lists them. ----
-  generatorNoFuel: 'Day tank reads empty from here. There will be a fuel can somewhere on your level. Bring it to Generator 2.',
+  // ---- Quests. A generated station may have none, one or several (09-quests.js says which line goes with
+  //      which quest and when). None of these names a number: how many there are is on screen, so one recording
+  //      does for every station. docs/voice-lines.md lists the ones still to be recorded. ----
+  // Said the first time any generator will not start for want of fuel, Generator 2 or one of the small ones.
+  generatorNoFuel: 'Day tank reads empty from here. There will be a fuel can somewhere on your level. Bring it to the generator.',
   generatorsWanted: 'One set will not lift the car. There are more generators on your level, and the winch wants every one of them running before you call the lift. We have marked them for you. They are not quiet.',
+  badgesWanted: 'Personnel wants the badges of Crew 2 back. They will be with whatever the crew left lying about. Bring every one you find. The terminal will count them.',
+  valvesWanted: 'One more for the list. The isolation valves on your level have to be shut before we bring you up. I have marked them. Those actuators have not turned in years. They will complain.',
   coresWanted: 'One more thing while you are down there. The lab wants the core samples Crew 2 pulled. Grey tubes. Bring them all.',
   winchBreakerOpen: 'Upload received. But the car is not answering. The winch breaker has tripped. I have marked the panel on your map. Close it.',
   breakerClosed: 'Breaker is in. The car is on its way down. Forty seconds. Get back to the lobby.',
   doorBroken: 'I just lost a door on the board. Those are rated for the whole shaft coming down. Do not count on the ones you have left.',
-  allSpools: 'That is all three. Go back to the lift lobby and upload them.',
+  allSpools: 'That is all of them. Go back to the lift lobby and upload them.',
   uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',
   liftArrived: 'The car is at your level. Get in quick.'
 };
+
+// TWEAK: when Dispatch speaks. Each entry: something that happens (`when`), the line of RADIO_MESSAGES he says,
+// and how many seconds after it. `onlyWithHollow: true` leaves a line out on a threat level with no Hollow.
+// What can happen:
+//   leftLift, mainsOn, firstSpool, allSpools, keycard (any card), lowerKeycard, lastKeycard,
+//   stillsWake      the Stills of a room have woken: a line that goes with that room, whatever you came for
+//   enter:NAME      the first time you set foot in a room, by the name on its door: 'enter:PUMP HALL B'
+// A line about a quest is not here but with its quest (`tell` in 09-quests.js). Three lines are said from the
+// code that does the thing itself: uploadStarted, breakerClosed and liftArrived (the lift), and doorBroken.
+const DISPATCH_CUES = [
+  { when: 'leftLift', line: 'leftLift', seconds: 3.0 },
+  { when: 'firstSpool', line: 'firstSpool', seconds: 1.5 },
+  { when: 'stillsWake', line: 'secondSpool', seconds: 1.5 },
+  { when: 'allSpools', line: 'allSpools', seconds: 1.5 },
+  { when: 'mainsOn', line: 'generatorStarted', seconds: 4.5 },
+  { when: 'mainsOn', line: 'generatorFollowUp', seconds: 11, onlyWithHollow: true },
+  { when: 'lastKeycard', line: 'keycardTaken', seconds: 1.5 },
+  { when: 'lowerKeycard', line: 'lowerKeycardTaken', seconds: 1.5 }
+];
 
 // ---------------------------------------------------------------------------
 // Captions: the lines in square brackets at the bottom of the screen.

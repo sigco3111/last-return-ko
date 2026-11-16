@@ -620,12 +620,7 @@ function getKeycardStatusText() {
 
 // What the extra jobs of this station want shown: "FUEL CAN", "CORES 1/3", "BREAKER OPEN". Empty when there is nothing to say.
 function getExtraJobStatusText() {
-  const flags = game.flags, parts = [];
-  if (flags.hasFuel) parts.push('FUEL CAN');
-  if (level.mission.coreCount > 0) parts.push('CORES ' + flags.coresCollected + '/' + level.mission.coreCount);
-  if (level.mission.extraGenerators.length > 0 && flags.knowsAboutGenerators) parts.push('GENERATORS ' + (1 + flags.extraGeneratorsRunning) + '/' + (1 + level.mission.extraGenerators.length));
-  if (flags.spoolsUploaded && !flags.breakerClosed) parts.push('BREAKER OPEN');
-  return parts.join(' · ');
+  return getQuestChips().join(' · ');
 }
 
 function updateHud(realDt) {

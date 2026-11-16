@@ -72,14 +72,14 @@ function check(description, condition, detail) {
   check('Kessel-9 has none of this and can still be finished', survey.classic.generators === 0 && survey.classic.cans === 0 && survey.classic.problems.length === 0, survey.classic);
 
   // --- the rules, in a large station with two extra generators, one with an empty tank and one without,
-  //     an empty tank on Generator 2 as well, and no other job to get in the way ---
+  //     an empty tank on Generator 2 as well, and no other quest to get in the way ---
   const found = await inGame(() => {
     const d = window.lastReturnDebug;
     for (let seed = 1; seed < 400; seed++) {
       if (!d.loadStation('generated', seed, 'large', 'mixed', 'one')) continue;
       const mission = d.level.mission, generators = mission.extraGenerators;
       if (generators.length >= 2 && generators.some((generator) => generator.needsFuel) && generators.some((generator) => !generator.needsFuel) &&
-          mission.needsFuel && mission.coreCount === 0 && !mission.needsBreaker) return { seed: seed, generators: JSON.parse(JSON.stringify(generators)) };
+          mission.needsFuel && d.level.quests.every((quest) => ['spools', 'fuel', 'generators'].indexOf(quest.key) >= 0)) return { seed: seed, generators: JSON.parse(JSON.stringify(generators)) };
     }
     return null;
   });
