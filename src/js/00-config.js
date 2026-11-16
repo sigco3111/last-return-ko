@@ -175,7 +175,7 @@ const TUNING = {
   hollowInvestigateSpeed: 2.5,      // walking to a noise it heard
   hollowHuntSpeed: 3.5,             // it knows where you are. Faster than your walk, slower than your sprint.
   hollowEnragedSpeed: 5.3,          // when its anger is full. Faster than your sprint on purpose.
-  hollowSpeedBonusWithAllSpools: 1.1, // speed multiplier once you carry all three spools (the walk back is harder)
+  hollowSpeedBonusWithAllSpools: 1.1, // speed multiplier once you carry every spool (the walk back is harder)
   hollowHeldSpeedFactor: 0.1,       // speed multiplier while the beam is on it. 0 freezes it, 1 means the beam does nothing.
   hollowVentSpeedFactor: 0.7,       // speed multiplier while it crawls through a vent. Below about 0.4 a vent stops being
                                     // a shortcut for it; at 1 it is as fast on its knees as on its feet.
@@ -368,12 +368,16 @@ const RADIO_MESSAGES = {
   // classic or generated: name rooms, never directions.
   leftLift: 'The car goes back up on its own when it is empty. Mains is dead on your level. Find Generator 2 and get it running. It is off Pump Hall B.',
   firstSpool: 'That is one. Crew 2 logged two more: one in the calibration store, one at the shaft.',
+  // The same moment in a station with more than three spools, where "two more" would not be true.
+  firstSpoolOfMany: 'That is one. Crew 2 logged more of them. One is in the calibration store, one is at the shaft, and the rest are wherever they left them.',
   generatorStarted: 'We see the load up here. Powered doors should answer now.',
   generatorFollowUp: 'Odd. The motion sensor in the shaft chamber just tripped. Probably the mains coming back.',
   keycardTaken: 'That card opens the keycard doors. Shaft 9 is behind one of them.',
   // Only in stations with more than one keycard: said for every card except the last.
   lowerKeycardTaken: 'That card opens some of the doors. Not the way to Shaft 9. There is another card further in.',
   secondSpool: 'That is two. Do not stay in that room.',
+  // Said when the Stills wake in a station with more than three spools, where the one in their room need not be your second.
+  stillsWake: 'Do not stay in that room.',
   // ---- Quests. A generated station may have none, one or several (09-quests.js says which line goes with
   //      which quest and when). None of these names a number: how many there are is on screen, so one recording
   //      does for every station. docs/voice-lines.md lists the ones still to be recorded. ----
@@ -393,6 +397,8 @@ const RADIO_MESSAGES = {
 
 // TWEAK: when Dispatch speaks. Each entry: something that happens (`when`), the line of RADIO_MESSAGES he says,
 // and how many seconds after it. `onlyWithHollow: true` leaves a line out on a threat level with no Hollow.
+// `ifSpools: 3` keeps a line for stations with exactly that many survey spools, `unlessSpools: 3` for the others:
+// two of the recordings count ("two more", "That is two"), which is only true where there are three.
 // What can happen:
 //   leftLift, mainsOn, firstSpool, allSpools, keycard (any card), lowerKeycard, lastKeycard,
 //   stillsWake      the Stills of a room have woken: a line that goes with that room, whatever you came for
@@ -401,8 +407,10 @@ const RADIO_MESSAGES = {
 // code that does the thing itself: uploadStarted, breakerClosed and liftArrived (the lift), and doorBroken.
 const DISPATCH_CUES = [
   { when: 'leftLift', line: 'leftLift', seconds: 3.0 },
-  { when: 'firstSpool', line: 'firstSpool', seconds: 1.5 },
-  { when: 'stillsWake', line: 'secondSpool', seconds: 1.5 },
+  { when: 'firstSpool', line: 'firstSpool', seconds: 1.5, ifSpools: 3 },
+  { when: 'firstSpool', line: 'firstSpoolOfMany', seconds: 1.5, unlessSpools: 3 },
+  { when: 'stillsWake', line: 'secondSpool', seconds: 1.5, ifSpools: 3 },
+  { when: 'stillsWake', line: 'stillsWake', seconds: 1.5, unlessSpools: 3 },
   { when: 'allSpools', line: 'allSpools', seconds: 1.5 },
   { when: 'mainsOn', line: 'generatorStarted', seconds: 4.5 },
   { when: 'mainsOn', line: 'generatorFollowUp', seconds: 11, onlyWithHollow: true },
@@ -487,9 +495,19 @@ const CAPTIONS = {
   heartbeat: { text: '[your heart is pounding]', level: 'sound', withinMetres: 0, seconds: 1.5 }
 };
 
-// Everything you can read: the three spools and the four notes.
+// Everything you can read: the three spools, the four notes, and what a spool with nothing on it says.
 // Each paragraph is one entry in the list; add or remove paragraphs freely.
 const LOG_ENTRIES = {
+  // A spool that is not one of Ripley's three. Bigger stations may have one or more. TWEAK: this is a stand-in:
+  // write what you like here, or give each extra spool an entry of its own (see getSpoolLog in 11-game.js).
+  spoolBlank: {
+    heading: 'Survey spool, unlabelled',
+    source: 'Crew 2 · no entry',
+    paragraphs: [
+      'The reel turns and the counter runs. Nothing comes off it but the hiss of tape that was never recorded on.',
+      'It is on the manifest all the same.'
+    ]
+  },
   spool1: {
     heading: 'Survey spool 1 of 3',
     source: 'Crew 2 · A. Ripley, survey lead · day 1',
@@ -561,6 +579,7 @@ const OBJECTIVE_TEXT = {
   leaveLift: 'Step out of the lift car.',
   findGenerator: 'Restore mains power. Generator 2 is off Pump Hall B.',
   collectSpools: 'Recover the three survey spools left by Crew 2.',
+  collectSpoolsOfMany: 'Recover the {total} survey spools left by Crew 2.', // in a station that has more than three
   returnToLift: 'Return to the lift lobby and upload the spools at the terminal.',
   findFuel: 'Generator 2 has no fuel. Find the fuel can on this level.',
   bringFuel: 'Carry the fuel can to Generator 2, off Pump Hall B.',

@@ -158,8 +158,9 @@ const level = {
   ventCount: 0,           // crawl-height vents (generated stations only)
   keycardRoomText: 'the laboratory', // filled into the security office note
   // Extra jobs on top of "power, three spools, lift". Kessel-9 has none; a generated station may have some.
-  // The quests of this station: what it asks of you besides power, spools and lift. See 09-quests.js.
+  // The quests of this station: the spools, and whatever else it asks of you before the lift. See 09-quests.js.
   quests: [],
+  spoolCount: 3,   // how many survey spools this station has: the three every station has, and any more a bigger one was given
   keycardCount: 1,        // how many keycards this station has. Card 1 opens "card 1" doors, card 2 the next ring in, and so on.
   loopCount: 0,
   storeZone: 0,           // the calibration store: the Hollow will not enter it
@@ -269,6 +270,7 @@ function setPitTile(tileX, tileZ, isPit) {
 
 // Empties the whole map so another station can be built.
 function resetWorldForNewLevel() {
+  clearQuests(); // the quests belong to the station that is being cleared away (09-quests.js)
   tileIsOpen.fill(0); tileFloorHeight.fill(0); tileCeilingHeight.fill(0); tileFlags.fill(0); tileZone.fill(0);
   tileIsWalkable.fill(0);
   tilePropLists.fill(null); tileSignLists.fill(null);

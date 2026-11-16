@@ -253,7 +253,9 @@ function isDirectorOverruled() {
 
 // How much faster than normal the whole cycle runs: the threat level sets a base, and every spool you carry adds to it.
 function getDirectorPaceFactor() {
-  return game.difficulty.pressureFactor * (1 + TUNING.directorPressurePerSpool * game.flags.spoolsCollected);
+  // What counts is how far along you are: holding every spool presses as hard as holding all three used to,
+  // however many this station has.
+  return game.difficulty.pressureFactor * (1 + TUNING.directorPressurePerSpool * 3 * game.flags.spoolsCollected / Math.max(1, level.spoolCount));
 }
 
 // How far its wandering has closed in on you since the last breather: 0 not at all, 1 fully.
@@ -642,7 +644,7 @@ function updateHollow(dt) {
     }
   }
 
-  speed *= game.difficulty.hollowSpeedFactor * (game.flags.spoolsCollected >= 3 ? TUNING.hollowSpeedBonusWithAllSpools : 1);
+  speed *= game.difficulty.hollowSpeedFactor * (game.flags.spoolsCollected >= level.spoolCount ? TUNING.hollowSpeedBonusWithAllSpools : 1);
   const isHollowInVent = (getTileFlagsAtPosition(figure.x, figure.z) & TILE_FLAG_VENT) !== 0;
   if (isHollowInVent) speed *= TUNING.hollowVentSpeedFactor;
   if (hollow.enragedTimer > 0) speed = TUNING.hollowEnragedSpeed * game.difficulty.hollowSpeedFactor;

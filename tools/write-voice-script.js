@@ -9,7 +9,8 @@ const config = new Function(configSource + '\nreturn { RADIO_MESSAGES: RADIO_MES
 // How each line should be said. Edit these freely; they only affect the sheet.
 const dispatchDirections = {
   leftLift: 'Routine. Reading a checklist for the hundredth time.',
-  firstSpool: 'Flat, mildly pleased. Already looking at the next item.',
+  firstSpool: 'Flat, mildly pleased. Already looking at the next item. Only in stations with exactly three spools.',
+  firstSpoolOfMany: 'The same, a little wearier: the list is longer than he would like. Only in stations with more than three spools.',
   generatorStarted: 'Matter-of-fact, eyes on a gauge.',
   generatorFollowUp: 'Mild curiosity on "Odd." Then talks himself out of it. Not worried.',
   keycardTaken: 'Helpful, brief.',
@@ -22,7 +23,8 @@ const dispatchDirections = {
   breakerClosed: 'Fast and low. The last sentence is an order. Only with the breaker job.',
   doorBroken: 'Shaken, and trying not to sound it. The second sentence is disbelief. The last is advice, quietly. Heard the first time it breaks a door down.',
   lowerKeycardTaken: 'Helpful, brief, a little apologetic. Only heard in large stations, which have more than one card.',
-  secondSpool: 'First sentence normal. Second sentence a little too quick. Said when the Stills of the calibration store wake, which today is when you take the spool there.',
+  secondSpool: 'First sentence normal. Second sentence a little too quick. Said when the Stills of the calibration store wake, in stations with exactly three spools.',
+  stillsWake: 'A little too quick, as if he has seen something on his board. Said when the Stills of the calibration store wake, in stations with more than three spools.',
   allSpools: 'Relief he is trying not to show. (The recording made before this text changed says "all three".)',
   uploadStarted: 'Businesslike. The last sentence is a dry understatement.',
   liftArrived: 'Urgent now, but still quiet. He does not raise his voice.'

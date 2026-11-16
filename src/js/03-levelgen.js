@@ -21,12 +21,13 @@ const GENERATED_SIZE_PRESETS = {
   // extraJobs, errands: the fewest and the most quests a station of this size is given from each of the two
   //           draws of quests (QUEST_POOLS in 09-quests.js, where every quest is described).
   // extraGenerators: the fewest and the most generators it has besides Generator 2.
+  // extraSpools: the fewest and the most survey spools it has besides the three every station has.
   // keycards: 1 to 3. Each card opens one more ring of doors, and the next card is somewhere inside that ring;
   //           Shaft 9 is behind the last. The third number of "fillers" is shared out between the rings.
-  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], errands: [0, 0], extraGenerators: [0, 1], spineLength: [10, 14] },
-  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], errands: [0, 1], extraGenerators: [0, 2], spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], errands: [0, 1], extraGenerators: [1, 2], spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 7, keycards: 3, extraJobs: [2, 3], errands: [1, 2], extraGenerators: [1, 3], spineLength: [18, 26] },
+  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], errands: [0, 0], extraGenerators: [0, 1], extraSpools: [0, 0], spineLength: [10, 14] },
+  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], errands: [0, 1], extraGenerators: [0, 2], extraSpools: [0, 0], spineLength: [13, 18] },
+  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], errands: [0, 1], extraGenerators: [1, 2], extraSpools: [0, 1], spineLength: [16, 22] },
+  massive: { label: 'Massive', fillers: [12, 6, 4], loops: 7, vents: 7, keycards: 3, extraJobs: [2, 3], errands: [1, 2], extraGenerators: [1, 3], extraSpools: [0, 1], spineLength: [18, 26] },
 };
 
 // TWEAK: how spread out a station is.

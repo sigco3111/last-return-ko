@@ -20,12 +20,14 @@ A night-shift controller at the surface, talking to you over a poor radio link. 
 | File | Line | How to say it |
 |---|---|---|
 | `leftLift.mp3` | The car goes back up on its own when it is empty. Mains is dead on your level. Find Generator 2 and get it running. It is off Pump Hall B. | Routine. Reading a checklist for the hundredth time. |
-| `firstSpool.mp3` | That is one. Crew 2 logged two more: one in the calibration store, one at the shaft. | Flat, mildly pleased. Already looking at the next item. |
+| `firstSpool.mp3` | That is one. Crew 2 logged two more: one in the calibration store, one at the shaft. | Flat, mildly pleased. Already looking at the next item. Only in stations with exactly three spools. |
+| `firstSpoolOfMany.mp3` | That is one. Crew 2 logged more of them. One is in the calibration store, one is at the shaft, and the rest are wherever they left them. | The same, a little wearier: the list is longer than he would like. Only in stations with more than three spools. |
 | `generatorStarted.mp3` | We see the load up here. Powered doors should answer now. | Matter-of-fact, eyes on a gauge. |
 | `generatorFollowUp.mp3` | Odd. The motion sensor in the shaft chamber just tripped. Probably the mains coming back. | Mild curiosity on "Odd." Then talks himself out of it. Not worried. |
 | `keycardTaken.mp3` | That card opens the keycard doors. Shaft 9 is behind one of them. | Helpful, brief. |
 | `lowerKeycardTaken.mp3` | That card opens some of the doors. Not the way to Shaft 9. There is another card further in. | Helpful, brief, a little apologetic. Only heard in large stations, which have more than one card. |
-| `secondSpool.mp3` | That is two. Do not stay in that room. | First sentence normal. Second sentence a little too quick. Said when the Stills of the calibration store wake, which today is when you take the spool there. |
+| `secondSpool.mp3` | That is two. Do not stay in that room. | First sentence normal. Second sentence a little too quick. Said when the Stills of the calibration store wake, in stations with exactly three spools. |
+| `stillsWake.mp3` | Do not stay in that room. | A little too quick, as if he has seen something on his board. Said when the Stills of the calibration store wake, in stations with more than three spools. |
 | `generatorNoFuel.mp3` | Day tank reads empty from here. There will be a fuel can somewhere on your level. Bring it to the generator. | Reading it off a screen. Mildly annoyed at the station, not at you. Said the first time any generator will not start for want of fuel. |
 | `generatorsWanted.mp3` | One set will not lift the car. There are more generators on your level, and the winch wants every one of them running before you call the lift. We have marked them for you. They are not quiet. | Starts as a routine correction. Slows down on the last sentence: he knows what noise means down there. Only in stations with more generators, a little after Generator 2 starts. |
 | `badgesWanted.mp3` | Personnel wants the badges of Crew 2 back. They will be with whatever the crew left lying about. Bring every one you find. The terminal will count them. | Passing on a request he did not want to pass on. Flat. A short pause before "Bring every one you find." Only in stations with the badges quest. |

@@ -694,8 +694,8 @@ function updateHud(realDt) {
     interfaceState.textRefreshTimer = 0.1;
     elements['hud-objective'].textContent = game.objectiveText;
     const spools = game.flags.spoolsCollected;
-    elements['chip-spools'].textContent = 'SPOOLS ' + spools + '/3';
-    elements['chip-spools'].classList.toggle('is-on', spools >= 3);
+    elements['chip-spools'].textContent = 'SPOOLS ' + spools + '/' + level.spoolCount;
+    elements['chip-spools'].classList.toggle('is-on', spools >= level.spoolCount);
     elements['chip-power'].textContent = game.flags.powerOn ? 'MAINS ON' : 'MAINS OFF';
     elements['chip-power'].classList.toggle('is-on', game.flags.powerOn);
     elements['chip-keycard'].textContent = getKeycardStatusText();
@@ -768,10 +768,11 @@ function updateHud(realDt) {
 // Reader, death and ending screens
 // ---------------------------------------------------------------------------
 
-function openReader(entry) {
+// `heading` replaces the entry's own heading when one is given.
+function openReader(entry, heading) {
   const elements = interfaceState.elements;
   elements['reader-source'].textContent = entry.source;
-  elements['reader-heading'].textContent = entry.heading;
+  elements['reader-heading'].textContent = heading || entry.heading;
   const body = elements['reader-body'];
   body.textContent = '';
   for (const paragraphText of entry.paragraphs) {

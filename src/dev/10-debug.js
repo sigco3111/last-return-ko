@@ -142,13 +142,14 @@ function debugGiveKeycard() {
 
 function debugGiveAllSpools() {
   markDebugUsed();
-  for (const objectId of [OBJECT_SPOOL_1, OBJECT_SPOOL_2, OBJECT_SPOOL_3]) {
-    const spool = findInteractableByObjectId(objectId);
+  const quest = findQuest('spools');
+  for (const object of quest ? quest.objects : []) {
+    const spool = findInteractableByObjectId(object.objectId);
     if (spool && spool.isAvailable) removeInteractableFromWorld(spool);
   }
-  game.flags.spoolsCollected = 3;
+  game.flags.spoolsCollected = level.spoolCount;
   refreshObjective();
-  showMessage('Debug: all three spools given.', 3, 'info');
+  showMessage('Debug: all ' + level.spoolCount + ' spools given.', 3, 'info');
 }
 
 // Puts out one apparition of the chosen kind. Each kind has its own idea of a good place (see 08-phantoms.js),
@@ -217,7 +218,7 @@ function debugBringLift() {
   markDebugUsed();
   if (game.flags.liftArrived) { showMessage('Debug: the lift is already here.', 3, 'info'); return; }
   if (!game.flags.powerOn) debugRestorePower();
-  if (game.flags.spoolsCollected < 3) debugGiveAllSpools();
+  if (game.flags.spoolsCollected < level.spoolCount) debugGiveAllSpools();
   if (!game.flags.uploadStarted) startLiftCall();
   game.liftCountdown = 0.5;
 }

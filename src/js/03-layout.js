@@ -27,7 +27,9 @@ const MAXIMUM_EXTRA_GENERATORS = 3;
 const EXTRA_GENERATOR_NUMBERS = [1, 3, 4]; // what they are called: Generator 1, Generator 3, Generator 4 (2 is the big one)
 const OBJECT_EXTRA_FUEL_CAN_FIRST = 40;  // the fuel can that goes with extra generator 30 is 40, with 31 it is 41 ...
 
-const SPOOL_COUNT = 3; // the survey spools of a descent
+const STORY_SPOOL_IDS = [OBJECT_SPOOL_1, OBJECT_SPOOL_2, OBJECT_SPOOL_3]; // the three every station has, each lying where its room puts it
+const OBJECT_EXTRA_SPOOL_FIRST = 50; // a bigger station may have more spools than those three: 50, 51, 52
+const MAXIMUM_EXTRA_SPOOLS = 3;
 // (Quests that do not name object numbers of their own are given them from 100 upward: see 09-quests.js.)
 
 // Where things are in the station that is loaded. The rooms below fill these in as they are built,
@@ -104,6 +106,12 @@ function addWinchBreaker(x, z) {
   const handle = addBoxBetween(x - 0.05, 1.05, z + 0.2, x + 0.05, 1.4, z + 0.27, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const handleBack = addBoxBetween(x - 0.05, 1.05, z - 0.27, x + 0.05, 1.4, z - 0.2, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   registerInteractable(OBJECT_WINCH_BREAKER, x, 1.2, z, 'Close the winch breaker', [handle, handleBack], { mapLabel: 'WINCH BREAKER' });
+}
+
+// A survey spool that is not one of the three with a room of its own: left on a low crate.
+function addLooseSpool(objectId, x, z) {
+  addBoxBetween(x - 0.28, 0, z - 0.28, x + 0.28, 0.3, z + 0.28);
+  addSurveySpool(objectId, x, 0.3, z, 'SPOOL');
 }
 
 // A crew badge: a hard hat left on a low crate, with the badge clipped to its brim. The badge is what you take.
@@ -549,7 +557,7 @@ function buildFacilityLayout() {
   level.description = 'Kessel-9 (classic)';
   level.keycardRoomText = 'the laboratory';
   level.keycardCount = 1;
-  clearQuests(); addBuiltInQuests(); // Kessel-9 asks for nothing but power, the spools and the lift
+  clearQuests();
   level.stillZones.length = 0;
   level.stillZones.push(ZONE_CALIBRATION_STORE, ZONE_ARCHIVE);
   level.unlabelledZones.length = 0;
@@ -644,6 +652,7 @@ function buildFacilityLayout() {
 
   computeNavigationGrid();
   computeLevelBounds();
+  addAlwaysQuests(); // Kessel-9 asks for nothing but power, its three spools and the lift
 }
 
 // Main corridor A (classic station only).

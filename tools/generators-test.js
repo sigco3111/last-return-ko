@@ -72,17 +72,23 @@ function check(description, condition, detail) {
   check('Kessel-9 has none of this and can still be finished', survey.classic.generators === 0 && survey.classic.cans === 0 && survey.classic.problems.length === 0, survey.classic);
 
   // --- the rules, in a large station with two extra generators, one with an empty tank and one without,
-  //     an empty tank on Generator 2 as well, and no other quest to get in the way ---
-  const found = await inGame(() => {
-    const d = window.lastReturnDebug;
-    for (let seed = 1; seed < 400; seed++) {
-      if (!d.loadStation('generated', seed, 'large', 'mixed', 'one')) continue;
-      const mission = d.level.mission, generators = mission.extraGenerators;
-      if (generators.length >= 2 && generators.some((generator) => generator.needsFuel) && generators.some((generator) => !generator.needsFuel) &&
-          mission.needsFuel && d.level.quests.every((quest) => ['spools', 'fuel', 'generators'].indexOf(quest.key) >= 0)) return { seed: seed, generators: JSON.parse(JSON.stringify(generators)) };
-    }
-    return null;
-  });
+  //     and an empty tank on Generator 2 as well ---
+  // (Looked for eight seeds at a time: building hundreds of stations in one go leaves the browser no moment to
+  // clear up after itself, and on a machine short of processor time its memory has been seen to run out.
+  // The station may have badges or valves as well; those are done out of the way further down.)
+  let found = null;
+  for (let firstSeed = 1; firstSeed < 400 && !found; firstSeed += 8) {
+    found = await inGame(([firstSeed]) => {
+      const d = window.lastReturnDebug;
+      for (let seed = firstSeed; seed < firstSeed + 8; seed++) {
+        if (!d.loadStation('generated', seed, 'large', 'mixed', 'one')) continue;
+        const mission = d.level.mission, generators = mission.extraGenerators;
+        if (generators.length >= 2 && generators.some((generator) => generator.needsFuel) && generators.some((generator) => !generator.needsFuel) &&
+            mission.needsFuel && d.level.quests.every((quest) => ['spools', 'fuel', 'generators', 'badges', 'valves'].indexOf(quest.key) >= 0)) return { seed: seed, generators: JSON.parse(JSON.stringify(generators)) };
+      }
+      return null;
+    }, [firstSeed]);
+  }
   check('there is a station to try the rules in', found !== null, found);
   if (found) {
     const rules = await inGame(([found]) => {
@@ -116,6 +122,10 @@ function check(description, condition, detail) {
       result.told = { knows: flags.knowsAboutGenerators, marked: found.generators.every((generator) => d.findInteractable(generator.objectId).isDiscovered),
         objective: d.game.objectiveText, radio: /more generators/.test(messages()) };
       d.setDebugOption('freezeCreatures', false);
+      d.hollow.isActive = false;
+
+      // Anything else this station asks for is done now, so that what is left is about the generators.
+      for (const key of ['badges', 'valves']) d.doQuest(key);
       d.hollow.isActive = false;
 
       // With the mains on.
@@ -153,7 +163,7 @@ function check(description, condition, detail) {
       for (const generator of found.generators) {
         if (d.findInteractable(generator.objectId).isAvailable) { if (generator.needsFuel) d.use(generator.fuelCanId); d.use(generator.objectId); d.hollow.isActive = false; }
       }
-      result.all = { running: flags.extraGeneratorsRunning, of: found.generators.length, missing: d.areGeneratorsMissing(), objective: d.game.objectiveText, terminalWanted: wanted(1), said: /That is all of them/.test(messages()) };
+      result.all = { running: flags.extraGeneratorsRunning, of: found.generators.length, missing: d.areGeneratorsMissing(), objective: d.game.objectiveText, terminalWanted: wanted(1), said: /the winch has its power/.test(messages()) };
       d.use(1);
       result.liftCalled = flags.uploadStarted === true;
       d.hollow.isActive = false;

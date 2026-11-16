@@ -98,6 +98,8 @@ function fireGameEvent(eventName) {
   for (const cue of DISPATCH_CUES) {
     if (cue.when !== eventName) continue;
     if (cue.onlyWithHollow && !game.difficulty.hollowEnabled) continue;
+    if (cue.ifSpools !== undefined && level.spoolCount !== cue.ifSpools) continue;
+    if (cue.unlessSpools !== undefined && level.spoolCount === cue.unlessSpools) continue;
     scheduleEvent(cue.seconds, function () { playRadioLine(cue.line); });
   }
   fireQuestEvent(eventName);
@@ -360,17 +362,32 @@ function removeInteractableFromWorld(interactable) {
   }
 }
 
-function collectSpool(interactable, logEntry) {
+// What is on a spool. Ripley's three each have their entry; any other spool has nothing on it.
+function getSpoolLog(objectId) {
+  if (objectId === OBJECT_SPOOL_1) return LOG_ENTRIES.spool1;
+  if (objectId === OBJECT_SPOOL_2) return LOG_ENTRIES.spool2;
+  if (objectId === OBJECT_SPOOL_3) return LOG_ENTRIES.spool3;
+  return LOG_ENTRIES.spoolBlank;
+}
+
+// Taking a survey spool. The spools are a quest like the others (09-quests.js, 'spools'); this is what taking
+// one of them does beyond being counted: it is read, and Dispatch may have something to say.
+function collectSpool(interactable) {
+  const objectId = interactable.objectId, log = getSpoolLog(objectId);
   removeInteractableFromWorld(interactable);
   game.flags.spoolsCollected++;
   playPickupSound();
   emitNoise(player.x, player.z, TUNING.noiseRadiusPickup);
   saveCheckpoint();
   refreshObjective();
-  openReader(logEntry);
+  // Ripley numbered hers "of 3". In a station with more spools than that, the heading counts them all.
+  openReader(log, level.spoolCount === 3 ? '' : log.heading.replace(' of 3', ' of ' + level.spoolCount));
   const collected = game.flags.spoolsCollected;
-  if (collected >= SPOOL_COUNT) fireGameEvent('allSpools');
+  if (collected >= level.spoolCount) fireGameEvent('allSpools');
   else if (collected === 1) fireGameEvent('firstSpool');
+  // The spool in the calibration store wakes the Stills of that room. What Dispatch says then goes with that
+  // (the 'stillsWake' entries of DISPATCH_CUES), not with how many spools you hold.
+  if (objectId === OBJECT_SPOOL_2) scheduleEvent(1.0, function () { awakenStills(); playStinger('still'); fireGameEvent('stillsWake'); });
 }
 
 function useInteractable(interactable) {
@@ -395,18 +412,6 @@ function useInteractable(interactable) {
       if (flags.powerOn) break;
       if (!doQuestsAllowTheMains()) break; // a quest holds up the mains (an empty tank), and has said so
       startGenerator(interactable);
-      break;
-    case OBJECT_SPOOL_1:
-      collectSpool(interactable, LOG_ENTRIES.spool1);
-      break;
-    case OBJECT_SPOOL_2:
-      collectSpool(interactable, LOG_ENTRIES.spool2);
-      // Taking this one wakes the Stills of the room it lies in. What Dispatch says then goes with that
-      // (the 'stillsWake' entry of DISPATCH_CUES), not with how many spools you hold.
-      scheduleEvent(1.0, function () { awakenStills(); playStinger('still'); fireGameEvent('stillsWake'); });
-      break;
-    case OBJECT_SPOOL_3:
-      collectSpool(interactable, LOG_ENTRIES.spool3);
       break;
     case OBJECT_KEYCARD:
     case OBJECT_KEYCARD_2:
@@ -877,7 +882,7 @@ function startApplication() {
     // Quests (09-quests.js): the descriptions, this station's, and the questions the game asks of them.
     quests: QUESTS, questPools: QUEST_POOLS, questItems: QUEST_ITEMS, findQuest: findQuest, isQuestUnfinished: isQuestUnfinished, getUnfinishedQuests: getUnfinishedQuests,
     getQuestChips: getQuestChips, fireGameEvent: fireGameEvent, dispatchCues: DISPATCH_CUES,
-    radioText: function (key) { return RADIO_MESSAGES[key]; }, clearMessages: clearMessages,
+    radioText: function (key) { return RADIO_MESSAGES[key]; }, clearMessages: clearMessages, closeReader: closeReader,
     // Does a quest the way a player would, thing by thing (fetching what a machine needs first), wherever the player stands.
     doQuest: function (key) {
       const instance = findQuest(key);
@@ -892,7 +897,7 @@ function startApplication() {
     isFuelWantedNow: function () { return isQuestItemWantedNow('fuel'); }, isInteractableWantedNow: isInteractableWantedNow,
     startExtraGeneratorSound: startExtraGeneratorSound, stopExtraGeneratorSounds: stopExtraGeneratorSounds,
     sizePresets: GENERATED_SIZE_PRESETS,
-    grantSpools: function () { game.flags.spoolsCollected = 3; refreshObjective(); },
+    grantSpools: function () { game.flags.spoolsCollected = level.spoolCount; refreshObjective(); },
     spawnHollow: function (x, z) { activateHollow(x, z, 2); },
     // The Hollow and locked doors: its ceiling hatches, what is shut to it right now, and its way round.
     hollowHatches: hollowHatches, tileBlocksHollow: tileBlocksHollow, auditHollowRoutes: auditHollowRoutes,

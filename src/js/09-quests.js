@@ -1,5 +1,5 @@
 // ---------------------------------------------------------------------------
-// Quests: everything a descent asks of you besides "power, three spools, lift".
+// Quests: everything a descent asks of you between "power" and "lift", the survey spools first among them.
 //
 // HOW TO ADD A QUEST
 // Add one entry to QUESTS below. Nothing else in the game needs to know about it: the entry says what kind
@@ -7,7 +7,7 @@
 // this file does the rest (which stations get it, placing, the rules, the objective line, the status chip,
 // the marks on the map, the lift terminal's refusal, Dispatch, and the check that it can be finished).
 //
-// There are three kinds:
+// There are three kinds (the spools, which every descent has, are a 'collect' quest like the rest):
 //   'collect'   Things lie about the station. Take them all.            (core samples, crew badges)
 //   'activate'  Machines stand about the station. Switch every one on.  (small generators, valves, the breaker)
 //               A machine may need the mains, may need something brought to it first, and may be loud.
@@ -24,6 +24,14 @@
 //   kind, blocks   as above
 //   pool           which draw decides whether a station has it (see QUEST_POOLS). Leave out for a quest
 //                  that decides for itself from `countFromSize`: no things, no quest.
+//   always         true: every station has it, Kessel-9 too (the spools)
+//   fixedObjectIds things of the quest that the rooms put out themselves, by object number; `count` then
+//                  says how many more are put out besides them
+//   placeLast      true: its things are put out after every other quest's, so that giving a station more
+//                  of them moves nothing else
+//   progress       instead of the count the quest keeps: a function returning { done, total }
+//   taken          for 'collect': function (instance, object, interactable) run in place of the usual
+//                  "take it and count it", for a thing that does more when taken
 //   count          how many things: a number, or [fewest, most] to let the seed decide
 //   countFromSize  instead of count: the name of a [fewest, most] pair in GENERATED_SIZE_PRESETS (03-levelgen.js)
 //   fewest         if fewer than this many find a place, the quest is taken out again
@@ -77,12 +85,23 @@ const QUEST_POOLS = {
 const QUEST_ITEM_NEAR_STEPS = 30;
 
 const QUESTS = [
-  // ---- the spools: part of every descent, here so that the terminal and the objective treat it like the rest ----
+  // ---- the survey spools: what every descent is for ----
+  // Three of them are part of every station and lie where their rooms put them (`fixedObjectIds`): the first
+  // where you can reach it without power, the second in the calibration store, the third at Shaft 9. A bigger
+  // station may have more (`countFromSize`), left on crates in ordinary rooms. Taking one does more than
+  // count it (`taken`): it is read, and Dispatch may speak.
   {
-    key: 'spools', kind: 'builtIn', blocks: 'upload',
-    progress: function () { return { done: game.flags.spoolsCollected, total: SPOOL_COUNT }; },
+    key: 'spools', kind: 'collect', blocks: 'upload', always: true, placeLast: true,
+    fixedObjectIds: STORY_SPOOL_IDS,
+    countFromSize: 'extraSpools', most: MAXIMUM_EXTRA_SPOOLS, firstObjectId: OBJECT_EXTRA_SPOOL_FIRST,
+    tiers: [0, 'beforeLast'],
+    build: function (objectId, x, z) { addLooseSpool(objectId, x, z); },
+    // How many you hold is game.flags.spoolsCollected, as it always was: the Hollow's pacing reads it, and so do the tests.
+    progress: function () { return { done: game.flags.spoolsCollected, total: level.spoolCount }; },
+    taken: function (instance, object, interactable) { collectSpool(interactable); },
     text: {
-      objective: OBJECTIVE_TEXT.collectSpools,
+      objective: function () { return level.spoolCount === 3 ? OBJECTIVE_TEXT.collectSpools : OBJECTIVE_TEXT.collectSpoolsOfMany; },
+      chip: '', // the spools have a place of their own on screen, beside the mains and the keycards
       refused: 'LIFT CONTROL: upload locked. Survey spools loaded: {done} of {total}.'
     }
   },
@@ -264,11 +283,11 @@ function planQuests(seed, size, stationRandom) {
     for (const definition of members) if (chosen.indexOf(definition) >= 0) planned[definition.key] = planOneQuest(definition, size, random);
   }
   for (const definition of QUESTS) {
-    if (definition.pool || definition.kind === 'builtIn') continue;
+    if (definition.pool) continue;
     const numbers = definition.legacy && definition.legacy.planNumbers;
     const random = numbers ? createSeededRandomGenerator((Math.imul(seed + 1, numbers[0]) ^ numbers[1]) >>> 0) : createQuestRandom(seed, 'plan ' + definition.key);
     const one = planOneQuest(definition, size, random);
-    if (one.count > 0) planned[definition.key] = one;
+    if (one.count > 0 || definition.always) planned[definition.key] = one;
   }
   return planned;
 }
@@ -295,14 +314,41 @@ function findQuest(key) {
   return null;
 }
 
-// The spools are part of every station, the classic one too.
-function addBuiltInQuests() {
-  for (const definition of QUESTS) if (definition.kind === 'builtIn') level.quests.push(createQuestInstance(definition));
+// A quest with the things its rooms have already put out (`fixedObjectIds`), and no others yet.
+function createQuestInstanceWithFixedThings(definition) {
+  const instance = createQuestInstance(definition);
+  for (const objectId of definition.fixedObjectIds || []) {
+    const interactable = findInteractableByObjectId(objectId);
+    if (!interactable) continue;
+    instance.objects.push({ objectId: objectId, index: instance.objects.length, name: '', x: interactable.x, z: interactable.z,
+      needsItem: false, itemObjectId: 0, isSupplied: false, isDone: false, isFixed: true });
+  }
+  instance.total = instance.objects.length;
+  return instance;
+}
+
+// Makes the list of a station's quests findable by object number, and notes how many spools there are.
+function registerQuests() {
+  for (const instance of level.quests) {
+    for (const object of instance.objects) {
+      if (object.objectId > 0) questLookup[object.objectId] = { instance: instance, object: object, isItem: false };
+      if (object.itemObjectId > 0) questLookup[object.itemObjectId] = { instance: instance, object: object, isItem: true };
+    }
+  }
+  const spools = findQuest('spools');
+  level.spoolCount = spools ? spools.total : 0;
+}
+
+// The quests every station has, with nothing but what its rooms put out. This is all of Kessel-9's quests;
+// a generated station goes through placeQuests instead, which may add to them.
+function addAlwaysQuests() {
+  clearQuests();
+  for (const definition of QUESTS) if (definition.always) level.quests.push(createQuestInstanceWithFixedThings(definition));
+  registerQuests();
 }
 
 function placeQuests(plan, stationRandom) {
   clearQuests();
-  addBuiltInQuests();
   const takenSpots = [];
   const lastRing = plan.finalTier - 1;
   const resolveTier = function (tier) { return tier === 'beforeLast' ? lastRing : (tier === 'last' ? plan.finalTier : tier); };
@@ -361,7 +407,10 @@ function placeQuests(plan, stationRandom) {
   // The order things are put out in. The quests written first keep the order they were written in, because
   // where each one's things end up depends on what was put out before it; the rest follow in the order of QUESTS.
   const planned = QUESTS.filter(function (definition) { return plan.quests[definition.key] !== undefined; });
-  const rankOf = function (definition) { return definition.legacy && definition.legacy.placeRank ? definition.legacy.placeRank : 100 + QUESTS.indexOf(definition); };
+  const rankOf = function (definition) {
+    if (definition.legacy && definition.legacy.placeRank) return definition.legacy.placeRank;
+    return (definition.placeLast ? 1000 : 100) + QUESTS.indexOf(definition);
+  };
   const usesStation = function (definition) { return Boolean(definition.legacy && definition.legacy.placeNumbers === 'station'); };
   const inOrder = planned.slice().sort(function (a, b) { return rankOf(a) - rankOf(b); });
 
@@ -378,7 +427,8 @@ function placeQuests(plan, stationRandom) {
 
   const placed = {};
   const placeOne = function (definition) {
-    const wanted = plan.quests[definition.key], random = randomFor(definition), instance = createQuestInstance(definition);
+    const wanted = plan.quests[definition.key], random = randomFor(definition), instance = createQuestInstanceWithFixedThings(definition);
+    const fixedCount = instance.objects.length;
     if (definition.kind === 'supply') {
       // One thing to bring, to a machine that is already there. It must be in reach before the mains is on.
       const target = definition.target(), objectId = getQuestObjectId(definition, 0, true);
@@ -388,26 +438,27 @@ function placeQuests(plan, stationRandom) {
     } else {
       const lowest = resolveTier(definition.tiers[0]), highest = resolveTier(definition.tiers[1]);
       const rooms = shuffledRooms(lowest, highest, random);
-      for (let index = 0; index < wanted.count; index++) {
-        const objectId = getQuestObjectId(definition, index, false);
+      for (let placedSoFar = 0; placedSoFar < wanted.count; placedSoFar++) {
+        const index = fixedCount + placedSoFar; // its place among all the quest's things, the fixed ones first
+        const objectId = getQuestObjectId(definition, placedSoFar, false);
         let spot = null, host = null;
         for (const room of rooms) {
-          spot = placeInRoom(room, random, function (x, z) { definition.build(objectId, x, z, random, index); });
+          spot = placeInRoom(room, random, function (x, z) { definition.build(objectId, x, z, random, placedSoFar); });
           if (spot) { host = room; break; }
         }
         if (!spot) break; // no room left with a free spot: the station has fewer of them
         rooms.splice(rooms.indexOf(host), 1); // one to a room
-        const object = { objectId: objectId, index: index, name: definition.names ? definition.names[index] : '', x: spot[0], z: spot[1],
+        const object = { objectId: objectId, index: index, name: definition.names ? definition.names[placedSoFar] : '', x: spot[0], z: spot[1],
           needsItem: false, itemObjectId: 0, isSupplied: false, isDone: false };
         // What it needs may be behind any door the machine itself is behind, but no door beyond that.
-        if (wanted.needsItem[index]) {
-          const itemObjectId = getQuestObjectId(definition, index, true);
+        if (wanted.needsItem[placedSoFar]) {
+          const itemObjectId = getQuestObjectId(definition, placedSoFar, true);
           if (placeItemNear(definition.requires.item, itemObjectId, spot[0], spot[1], host.tier, host, random)) { object.needsItem = true; object.itemObjectId = itemObjectId; }
         }
         instance.objects.push(object);
       }
       instance.total = instance.objects.length;
-      if (instance.total < (definition.fewest || 1)) {
+      if (instance.total < (definition.fewest || 1) && !definition.always) {
         // Too few of them found a place to make a quest of it. Take them back out.
         for (const object of instance.objects) {
           for (const objectId of [object.objectId, object.itemObjectId]) {
@@ -426,15 +477,8 @@ function placeQuests(plan, stationRandom) {
   for (const definition of inOrder) if (!usesStation(definition)) placeOne(definition);
 
   // The station's quests, in the order of QUESTS: the order the objective and the terminal speak of them in.
-  for (const definition of QUESTS) {
-    const instance = placed[definition.key];
-    if (!instance) continue;
-    level.quests.push(instance);
-    for (const object of instance.objects) {
-      if (object.objectId > 0) questLookup[object.objectId] = { instance: instance, object: object, isItem: false };
-      if (object.itemObjectId > 0) questLookup[object.itemObjectId] = { instance: instance, object: object, isItem: true };
-    }
-  }
+  for (const definition of QUESTS) if (placed[definition.key]) level.quests.push(placed[definition.key]);
+  registerQuests();
   // Crates, cabinets and machines stand on the floor: work out again where things can walk.
   computeNavigationGrid();
 }
@@ -449,7 +493,6 @@ function auditQuests(problems, reach, canReach, mustExistOnce) {
   const noPower = function (door) { return door.kind === DOOR_KIND_POWERED || door.kind === DOOR_KIND_KEYCARD; };
   for (const instance of level.quests) {
     const definition = instance.definition;
-    if (definition.kind === 'builtIn') continue;
     if (instance.total < (definition.fewest || 1)) problems.push('the quest "' + instance.key + '" has only ' + instance.total + ' of its things');
     if (definition.kind === 'supply') {
       reach(noPower);
@@ -463,6 +506,7 @@ function auditQuests(problems, reach, canReach, mustExistOnce) {
     const highest = definition.tiers[1] === 'beforeLast' ? level.keycardCount : (definition.tiers[1] === 'last' ? level.keycardCount + 1 : definition.tiers[1]);
     const mostCards = Math.max(0, highest - 1);
     for (const object of instance.objects) {
+      if (object.isFixed) continue; // put out by its room, and checked with the rooms (auditLevelProgression)
       const what = (object.name || 'thing ' + (object.index + 1)) + ' of the quest "' + instance.key + '"';
       mustExistOnce.push(object.objectId);
       if (object.needsItem) mustExistOnce.push(object.itemObjectId);
@@ -510,6 +554,7 @@ function getCarriedCount(itemKey) {
 // A sentence of a quest with its numbers and names filled in. '' if the quest has no such sentence.
 function fillQuestText(instance, textKey, object) {
   let text = instance.definition.text[textKey];
+  if (typeof text === 'function') text = text(instance, object);
   if (!text) return '';
   const progress = getQuestProgress(instance), extra = instance.definition.countsWith || 0;
   const name = object && object.name ? object.name : '';
@@ -600,6 +645,11 @@ function useQuestObject(interactable) {
   const instance = entry.instance, definition = instance.definition, object = entry.object, flags = game.flags;
   if (entry.isItem) { takeQuestItem(interactable, definition.requires.item); return true; }
 
+  if (definition.kind === 'collect' && definition.taken) {
+    object.isDone = true;
+    definition.taken(instance, object, interactable);
+    return true;
+  }
   if (definition.kind === 'collect') {
     removeInteractableFromWorld(interactable);
     object.isDone = true;

@@ -41,16 +41,16 @@ function check(description, condition, detail) {
     for (const quest of d.quests) {
       const say = (what) => wrong.push(quest.key + ': ' + what);
       if (d.quests.filter((other) => other.key === quest.key).length !== 1) say('its key is used twice');
-      if (['builtIn', 'collect', 'activate', 'supply'].indexOf(quest.kind) < 0) say('unknown kind ' + quest.kind);
+      if (['collect', 'activate', 'supply'].indexOf(quest.kind) < 0) say('unknown kind ' + quest.kind);
       if (['mains', 'upload', 'lift'].indexOf(quest.blocks) < 0) say('holds up nothing the game knows: ' + quest.blocks);
       if (quest.pool && !d.questPools[quest.pool]) say('its pool does not exist: ' + quest.pool);
       if (!quest.text) say('has no text');
       if (quest.tell && lines.indexOf(quest.tell.line) < 0) say('Dispatch has no line called ' + quest.tell.line);
       if (quest.releasedLine && lines.indexOf(quest.releasedLine) < 0) say('Dispatch has no line called ' + quest.releasedLine);
       if (quest.requires && !d.questItems[quest.requires.item]) say('needs an item that does not exist: ' + quest.requires.item);
-      if (quest.kind === 'builtIn') continue;
       if (quest.kind !== 'supply' && typeof quest.build !== 'function') say('has nothing to build its things with');
-      if (quest.kind === 'collect' && !(quest.text.taken && quest.text.refused && quest.text.objective && quest.text.chip)) say('a collect quest needs the sentences taken, refused, objective and chip');
+      // (A quest that does something of its own when a thing is taken has no sentence for that, and the spools have their own place on screen.)
+      if (quest.kind === 'collect' && !(quest.text.refused && quest.text.objective && (quest.text.taken || typeof quest.taken === 'function') && (quest.text.chip || quest.always))) say('a collect quest needs the sentences taken, refused, objective and chip');
       if (quest.kind === 'activate' && !(quest.text.activated && quest.text.objective && (quest.text.refused || quest.text.holding))) say('an activate quest needs the sentences activated, objective and refused (or holding)');
       if (quest.kind === 'activate' && quest.needsPower && !quest.text.noPower) say('needs the mains but has no sentence for when it is off');
       if (quest.kind === 'activate' && quest.requires && !quest.text.noItem) say('may need an item but has no sentence for when you have none');
@@ -247,6 +247,118 @@ function check(description, condition, detail) {
     valves.seed > 0 && !valves.refused.started && valves.refused.said && valves.afterAll.done === valves.total && valves.afterAll.said &&
     valves.afterAll.objective === 'Return to the lift lobby and upload the spools at the terminal.' && valves.accepted, [valves.refused, valves.afterAll, valves.accepted]);
 
+  // --- the survey spools are a quest too, and their number can vary ---
+  const spoolCounts = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.lab, result = { sizes: {}, bad: [] };
+    const layouts = ['tight', 'mixed', 'sprawling', 'sparse'];
+    for (const size of ['small', 'medium', 'large', 'massive']) {
+      const counts = [];
+      for (let seed = 1; seed <= 16; seed++) {
+        lab.fresh('generated', seed, size, layouts[seed % 4], seed % 2 ? 'one' : 'two');
+        const quest = d.findQuest('spools');
+        counts.push(d.level.spoolCount);
+        if (!quest || quest.total !== d.level.spoolCount || quest.objects.filter((object) => object.isFixed).length !== 3) result.bad.push(size + ' ' + seed + ': the quest and the station disagree');
+        if (d.level.quests[0].key !== 'spools') result.bad.push(size + ' ' + seed + ': the spools are not the first thing asked for');
+      }
+      const allowed = d.sizePresets[size].extraSpools;
+      result.sizes[size] = { fewest: Math.min.apply(null, counts), most: Math.max.apply(null, counts), allowed: [3 + allowed[0], 3 + allowed[1]], counts: counts.join('') };
+    }
+    lab.fresh('classic', 0);
+    result.classic = { count: d.level.spoolCount, things: d.findQuest('spools').objects.map((object) => object.objectId).join() };
+    return result;
+  });
+  check('every station has the three spools its rooms put out; a bigger one may have more, as many as its size allows; Kessel-9 has its three',
+    spoolCounts.bad.length === 0 && spoolCounts.classic.count === 3 && spoolCounts.classic.things === '3,4,5' &&
+    Object.keys(spoolCounts.sizes).every((size) => spoolCounts.sizes[size].fewest === spoolCounts.sizes[size].allowed[0] && spoolCounts.sizes[size].most === spoolCounts.sizes[size].allowed[1]), spoolCounts);
+
+  // A station with four spools and little else in the way.
+  const fourFound = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.lab;
+    for (let seed = 1; seed < 300; seed++) {
+      lab.fresh('generated', seed, 'large', 'mixed', 'one');
+      if (d.level.spoolCount === 4 && d.level.quests.every((quest) => ['spools', 'generators', 'fuel'].indexOf(quest.key) >= 0)) return { seed: seed, loose: d.findQuest('spools').objects.filter((object) => !object.isFixed).map((object) => object.objectId) };
+    }
+    return null;
+  });
+  check('there is a station with four spools to try', fourFound !== null && fourFound.loose.length === 1, fourFound);
+  if (fourFound) {
+    // Each spool taken opens its text; the reader is closed again before the next step.
+    const takeSpool = async (objectId) => {
+      const read = await inGame((id) => {
+        const d = window.lastReturnDebug;
+        d.use(id);
+        const result = { mode: d.game.mode, heading: document.getElementById('reader-heading').textContent, held: d.game.flags.spoolsCollected };
+        d.closeReader();
+        return result;
+      }, objectId);
+      return read;
+    };
+    const start = await inGame(() => {
+      const d = window.lastReturnDebug;
+      d.grantPower(); d.doQuest('generators'); d.hollow.isActive = false;
+      d.setDebugOption('freezeCreatures', true);
+      d.clearMessages();
+      return { objective: d.game.objectiveText };
+    });
+    await drawFrames(page, 3);
+    const chipAtStart = await inGame(() => document.getElementById('chip-spools').textContent);
+    const first = await takeSpool(3);
+    const afterFirst = await inGame(() => { const d = window.lastReturnDebug; d.simulate(2); return window.lab.messages(); });
+    const loose = await takeSpool(fourFound.loose[0]);
+    const store = await takeSpool(4);
+    const afterStore = await inGame(() => { const d = window.lastReturnDebug; d.clearMessages(); d.simulate(3); return window.lab.messages(); });
+    const refused = await inGame(() => {
+      const d = window.lastReturnDebug;
+      d.clearMessages(); d.use(1);
+      return { started: d.game.flags.uploadStarted, said: /Survey spools loaded: 3 of 4/.test(window.lab.messages()), objective: d.game.objectiveText };
+    });
+    const last = await takeSpool(5);
+    const afterLast = await inGame(() => {
+      const d = window.lastReturnDebug;
+      d.clearMessages(); d.simulate(2);
+      const said = window.lab.messages();
+      d.use(1);
+      return { said: said, objective: d.game.objectiveText, started: d.game.flags.uploadStarted };
+    });
+    await inGame(() => { window.lastReturnDebug.setDebugOption('freezeCreatures', false); window.lastReturnDebug.hollow.isActive = false; });
+    check('four spools: the objective and the screen say four, and Ripley\'s first is headed "1 of 4"',
+      start.objective === 'Recover the 4 survey spools left by Crew 2.' && chipAtStart === 'SPOOLS 0/4' && first.mode === 'reading' && first.heading === 'Survey spool 1 of 4' && first.held === 1,
+      { objective: start.objective, chip: chipAtStart, first: first });
+    check('four spools: Dispatch\'s line for the first one does not say "two more"',
+      /Crew 2 logged more of them/.test(afterFirst) && !/two more/.test(afterFirst), afterFirst);
+    check('four spools: the loose one can be taken, has nothing on it, and counts',
+      loose.mode === 'reading' && loose.heading === 'Survey spool, unlabelled' && loose.held === 2, loose);
+    check('four spools: when the Stills wake, Dispatch says "Do not stay in that room" and nothing about a count',
+      store.held === 3 && /Do not stay in that room/.test(afterStore) && !/That is two/.test(afterStore), afterStore);
+    check('four spools: with three in hand the terminal still refuses, and says three of four',
+      !refused.started && refused.said && /4 survey spools/.test(refused.objective), refused);
+    check('four spools: with all four, Dispatch says "That is all of them" and the upload goes through',
+      last.held === 4 && /That is all of them/.test(afterLast.said) && afterLast.started, [last, afterLast]);
+  }
+
+  // A station with three, as every station had: the recorded lines, word for word.
+  const three = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.lab, result = {};
+    lab.fresh('classic', 0);
+    d.setDebugOption('freezeCreatures', true);
+    result.objectiveAfterPower = (d.grantPower(), d.game.objectiveText);
+    d.use(3);
+    result.heading = document.getElementById('reader-heading').textContent;
+    d.closeReader(); d.simulate(2);
+    result.first = lab.messages();
+    d.clearMessages();
+    d.use(4); d.closeReader(); d.simulate(3);
+    result.store = lab.messages();
+    d.grantSpools();
+    result.granted = d.game.flags.spoolsCollected;
+    d.setDebugOption('freezeCreatures', false);
+    d.hollow.isActive = false;
+    return result;
+  });
+  check('three spools, as in Kessel-9: the objective says three, Ripley\'s first is "1 of 3", and Dispatch speaks the lines as they were recorded',
+    three.objectiveAfterPower === 'Recover the three survey spools left by Crew 2.' && three.heading === 'Survey spool 1 of 3' &&
+    /Crew 2 logged two more: one in the calibration store, one at the shaft\./.test(three.first) && /That is two\. Do not stay in that room\./.test(three.store) && three.granted === 3, three);
+
   // --- Dispatch's line about fuel is one line for every generator, said once a descent ---
   const fuelLine = await inGame(() => {
     const d = window.lastReturnDebug, lab = window.lab, result = {};
@@ -310,7 +422,7 @@ function check(description, condition, detail) {
     return result;
   });
   check('"Do not stay in that room" goes with the Stills waking, a second and a half after, and with nothing about how many spools you hold',
-    cues.cueForStills.join() === 'secondSpool after 1.5' && cues.cueForSecondSpool === 0 && !cues.stills.tooSoon && cues.stills.said, cues);
+    cues.cueForStills.join() === 'secondSpool after 1.5,stillsWake after 1.5' && cues.cueForSecondSpool === 0 && !cues.stills.tooSoon && cues.stills.said, cues);
   check('a line can go with a room: said the first time you set foot in it, and not when you come back',
     cues.room.place === 'PUMP HALL B' && !cues.room.beforeEntering && cues.room.onEntering && !cues.room.onComingBack, cues.room);
 
