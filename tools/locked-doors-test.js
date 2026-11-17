@@ -484,7 +484,8 @@ const labSource = String(function () {
 
   // --- doorways: it has no collision of its own, so the straight lines it walks must never cut the corner of a wall ---
   // (They once could. It then stood inside the wall beside the doorway for good, and you could walk past it.)
-  const doorways = await inGame(() => {
+  // This is about 125,000 frames of the game, so after every door the browser gets a moment (browser-harness.js says why).
+  const doorways = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, kinds = d.doorKinds;
     const result = { chases: 0, endedInAWall: [], stoppedShort: [], letOutOfAWall: 0, leftInAWall: [] };
     lab.fresh();
@@ -543,6 +544,7 @@ const labSource = String(function () {
         else if (hasStopped) result.stoppedShort.push(report);
         d.hollow.isActive = false; d.hollow.knowsPlayerPositionAlways = false;
       }
+      await window.letTheBrowserCatchUp(); // between two doors, with the Hollow put away
     }
 
     // And should it ever stand in a wall all the same: put there, just inside the corner beside a doorway, it
