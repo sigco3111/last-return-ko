@@ -17,7 +17,9 @@ function check(description, condition, detail) {
   await startGame(page, false);
 
   // --- how many, and where ---
-  const survey = await inGame(() => {
+  // 64 stations built one after another. Before each one the browser gets a moment to clear the last one away
+  // (browser-harness.js says why).
+  const survey = await inGame(async () => {
     const d = window.lastReturnDebug, result = { sizes: {}, bad: [], canSteps: [], mainCanSteps: [] };
     const layouts = ['tight', 'mixed', 'sprawling', 'sparse'];
     const describe = function () {
@@ -27,6 +29,7 @@ function check(description, condition, detail) {
     for (const size of ['small', 'medium', 'large', 'massive']) {
       const counts = [];
       for (let seed = 1; seed <= 16; seed++) {
+        await window.letTheBrowserCatchUp();
         const built = d.loadStation('generated', seed, size, layouts[seed % 4], seed % 2 ? 'one' : 'two');
         if (!built) { result.bad.push(size + ' ' + seed + ': not built'); continue; }
         const found = d.auditLayout().concat(d.auditProgression());

@@ -521,7 +521,7 @@ Every pull request gets both: `.github/workflows/ci.yml` builds the page as it s
 node tools/measure-memory.js tools/locked-doors-test.js
 ```
 
-runs one suite as always and then says how much memory its browser took at the most, and which check came just before that. A suite can pass and still be a problem: while a check plays minutes of the game inside one step, the browser gets no time to clear anything away, and what waits can come to gigabytes. The 520 chases through doorways once held 9.7 GB that way, on machines with 16. A check that long now hands the page back to the browser now and then (`letTheBrowserCatchUp`, explained in `tools/browser-harness.js`), and that suite peaks at 1.2 to 1.4 GB. No suite takes more than about 2.5 GB; measure one after adding a long check to it.
+runs one suite as always and then says how much memory its browser took at the most, and which check came just before that. A suite can pass and still be a problem: while a check plays minutes of the game inside one step, the browser gets no time to clear anything away, and what waits can come to gigabytes. The 520 chases through doorways once held 9.7 GB that way, on machines with 16. A check that long now hands the page back to the browser now and then (`letTheBrowserCatchUp`, explained in `tools/browser-harness.js`), and that suite peaks at 1.2 to 1.4 GB. The suites that build stations by the dozen do the same before each station. Every suite now stays under 2 GB; measure one after adding a long check to it.
 
 ```bash
 npm run dev

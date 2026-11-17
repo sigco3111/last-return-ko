@@ -63,12 +63,15 @@ function check(description, condition, detail) {
   check('every quest is described completely: a kind, what it holds up, its sentences, and lines Dispatch really has', described.quests.length >= 7 && described.wrong.length === 0, described);
 
   // --- which stations get which quests ---
-  const survey = await inGame(() => {
+  // This check and seven more below build stations by the dozen in one go. Before each station the browser
+  // gets a moment to clear the last one away (browser-harness.js says why).
+  const survey = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, result = { bad: [], sizes: {}, seen: {}, numbersUsedTwice: [] };
     const layouts = ['tight', 'mixed', 'sprawling', 'sparse'];
     for (const size of ['small', 'medium', 'large', 'massive']) {
       const errands = [], all = [];
       for (let seed = 1; seed <= 16; seed++) {
+        await window.letTheBrowserCatchUp();
         if (!lab.fresh('generated', seed, size, layouts[seed % 4], seed % 2 ? 'one' : 'two')) { result.bad.push(size + ' ' + seed + ': not built'); continue; }
         const found = d.auditLayout().concat(d.auditProgression());
         if (found.length > 0) result.bad.push(size + ' ' + seed + ': ' + found.slice(0, 3).join('; '));
@@ -170,7 +173,7 @@ function check(description, condition, detail) {
     added.notRefused.length === 0 && added.notDone.length === 0 && added.goneAgain, added);
 
   // --- salvage: a 'haul' quest. It asks for a sum's worth of what the station has lying about, sealed into bays ---
-  const salvagePlaces = await inGame(() => {
+  const salvagePlaces = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, result = { stations: 0, withIt: 0, wrong: [], moved: [], bays: {}, targets: [], alsoTheSame: { otherQuestsToTheTile: 0, hatches: 0, noisyFloor: 0, looseThings: 0 } };
     const definition = d.quests.filter((quest) => quest.key === 'haul')[0], place = d.quests.indexOf(definition);
     // What the quest must leave alone: every door but those of its own bays (and so every room), and which
@@ -185,6 +188,7 @@ function check(description, condition, detail) {
     for (const size of ['small', 'large']) {
       const allowed = d.sizePresets[size].salvageBays;
       for (let seed = 1; seed <= 14; seed++) {
+        await window.letTheBrowserCatchUp();
         const station = ['generated', seed, size, ['mixed', 'tight', 'sparse'][seed % 3], seed % 2 ? 'one' : 'two'], name = size + ' ' + seed;
         lab.fresh.apply(null, station);
         result.stations++;
@@ -232,9 +236,10 @@ function check(description, condition, detail) {
     salvagePlaces.withIt >= 6 && salvagePlaces.withIt <= salvagePlaces.stations - 6 && salvagePlaces.wrong.length === 0, salvagePlaces);
   check('salvage: a station with it has the same rooms, the same other doors and the same other quests as the same station without it', salvagePlaces.moved.length === 0, [salvagePlaces.moved, salvagePlaces.alsoTheSame]);
 
-  const salvage = await inGame(() => {
+  const salvage = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, result = {};
     for (let seed = 1; seed < 300 && !result.seed; seed++) {
+      await window.letTheBrowserCatchUp();
       lab.fresh('generated', seed, 'medium', 'mixed', 'one');
       if (d.findQuest('haul') && d.haulState.bays.length >= 2 && d.level.quests.every((quest) => ['spools', 'haul', 'generators', 'fuel'].indexOf(quest.key) >= 0)) result.seed = seed;
     }
@@ -370,9 +375,10 @@ function check(description, condition, detail) {
     liftDoor.backInTheCar.door > 0.95 && liftDoor.backInTheCar.mode === 'playing' && liftDoor.outForGood.door === 0, liftDoor);
 
   // --- crew badges: a 'collect' quest ---
-  const badges = await inGame(() => {
+  const badges = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, result = {};
     for (let seed = 1; seed < 300 && !result.seed; seed++) {
+      await window.letTheBrowserCatchUp();
       lab.fresh('generated', seed, 'large', 'mixed', 'one');
       if (d.findQuest('badges') && d.level.quests.every((quest) => ['spools', 'badges', 'generators', 'fuel'].indexOf(quest.key) >= 0)) result.seed = seed;
     }
@@ -405,9 +411,10 @@ function check(description, condition, detail) {
     badges.afterAll.objective === 'Return to the lift lobby and upload the spools at the terminal.' && badges.accepted, badges);
 
   // --- isolation valves: an 'activate' quest that needs the mains, is loud, and is not spoken of until Dispatch has ---
-  const valves = await inGame(() => {
+  const valves = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, result = {};
     for (let seed = 1; seed < 300 && !result.seed; seed++) {
+      await window.letTheBrowserCatchUp();
       lab.fresh('generated', seed, 'large', 'mixed', 'one');
       if (d.findQuest('valves') && d.level.quests.every((quest) => ['spools', 'valves', 'generators', 'fuel'].indexOf(quest.key) >= 0)) result.seed = seed;
     }
@@ -456,12 +463,13 @@ function check(description, condition, detail) {
     valves.afterAll.objective === 'Return to the lift lobby and upload the spools at the terminal.' && valves.accepted, [valves.refused, valves.afterAll, valves.accepted]);
 
   // --- the survey spools are a quest too, and their number can vary ---
-  const spoolCounts = await inGame(() => {
+  const spoolCounts = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, result = { sizes: {}, bad: [] };
     const layouts = ['tight', 'mixed', 'sprawling', 'sparse'];
     for (const size of ['small', 'medium', 'large', 'massive']) {
       const counts = [];
       for (let seed = 1; seed <= 16; seed++) {
+        await window.letTheBrowserCatchUp();
         lab.fresh('generated', seed, size, layouts[seed % 4], seed % 2 ? 'one' : 'two');
         const quest = d.findQuest('spools');
         counts.push(d.level.spoolCount);
@@ -480,9 +488,10 @@ function check(description, condition, detail) {
     Object.keys(spoolCounts.sizes).every((size) => spoolCounts.sizes[size].fewest === spoolCounts.sizes[size].allowed[0] && spoolCounts.sizes[size].most === spoolCounts.sizes[size].allowed[1]), spoolCounts);
 
   // A station with four spools and little else in the way.
-  const fourFound = await inGame(() => {
+  const fourFound = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab;
     for (let seed = 1; seed < 300; seed++) {
+      await window.letTheBrowserCatchUp();
       lab.fresh('generated', seed, 'large', 'mixed', 'one');
       if (d.level.spoolCount === 4 && d.level.quests.every((quest) => ['spools', 'generators', 'fuel'].indexOf(quest.key) >= 0)) return { seed: seed, loose: d.findQuest('spools').objects.filter((object) => !object.isFixed).map((object) => object.objectId) };
     }
@@ -568,9 +577,10 @@ function check(description, condition, detail) {
     /Crew 2 logged two more: one in the calibration store, one at the shaft\./.test(three.first) && /That is two\. Do not stay in that room\./.test(three.store) && three.granted === 3, three);
 
   // --- Dispatch's line about fuel is one line for every generator, said once a descent ---
-  const fuelLine = await inGame(() => {
+  const fuelLine = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, result = {};
     for (let seed = 1; seed < 300 && !result.seed; seed++) {
+      await window.letTheBrowserCatchUp();
       lab.fresh('generated', seed, 'large', 'mixed', 'one');
       const generators = d.findQuest('generators');
       if (!d.findQuest('fuel') && generators && generators.objects.filter((object) => object.needsItem).length >= 1) result.seed = seed;

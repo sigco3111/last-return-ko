@@ -297,10 +297,13 @@ function check(description, condition, detail) {
     result.hatchFar = count('hatchBurst') - burstBefore - result.hatchNear;
     d.shutHollowHatches();
     // The station's own sounds each have theirs. They come by chance, so the clock is run until all four have.
+    // That is usually within three minutes, but water drips are rare: only one drip in five falls near enough
+    // to be put into words. Tried forty times, the wait was over eleven minutes five times and over fifteen
+    // once, which is what the limit used to be. So the limit is an hour: chance gets the time it needs.
     d.teleport(d.shaft.x + 3, d.shaft.z, 0);
     const ambientBefore = ['ambientDrips', 'ambientPipe', 'ambientMetal', 'ambientKnocks'].map(count);
     let ambientSeconds = 0;
-    for (; ambientSeconds < 900; ambientSeconds += 5) {
+    for (; ambientSeconds < 3600; ambientSeconds += 5) {
       d.simulate(5);
       if (['ambientDrips', 'ambientPipe', 'ambientMetal', 'ambientKnocks'].every((key, index) => count(key) > ambientBefore[index])) break;
     }

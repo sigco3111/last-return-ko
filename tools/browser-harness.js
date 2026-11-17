@@ -17,20 +17,38 @@ const { chromium } = require('playwright');
 // So a long check hands the page back to the browser now and then. Inside the page, in a function marked
 // `async`:
 //     await window.letTheBrowserCatchUp();
-// With one of those after every door, the chases stay at 1.2 to 1.4 GB.
+// With one of those after every door, the chases stay at 1.1 to 1.4 GB. quests-test.js and generators-test.js
+// take one before every station they build, 286 and 64 of them: 2.6 and 2.3 GB came down to 1.1 to 1.6.
 //
-// Two things to know before putting one in:
-//   - The game may run a frame of its own in such a pause, as it may between any two steps of a test. So
-//     pause where nothing is going on: between two chases, never in the middle of one.
-//   - A pause takes time, more on a machine that draws slowly. Thirteen cost nothing to speak of. Tried
-//     before every station that quests-test.js and generators-test.js build (they hold 2.4 GB at the most,
-//     stations waiting to be cleared away), a few hundred pauses took a gigabyte off and added up to a
-//     minute, which is why those two have none.
+// The game draws nothing in such a pause, and does not move on in it. Left alone it would: a frame of its own
+// comes up in nearly every pause, and drawing one is slow in these tests. With those frames drawn, the pauses
+// added a minute to quests-test.js on a fast machine and nine minutes on the one GitHub runs the tests on.
+// So a frame that comes up during a pause is kept waiting and asked for again afterwards; it is drawn once
+// the check has finished. A pause then takes about a twentieth of a second, and both suites finish sooner
+// than they did with no pauses at all.
 // To see what a suite holds at the most: `node tools/measure-memory.js tools/<suite>-test.js`.
 // Every page `openGame` opens has the function, also after the page is loaded again.
 function installLetTheBrowserCatchUp() {
+  // The game asks for each of its frames through this, so that one that comes up during a pause can be kept waiting.
+  const askBrowserForFrame = window.requestAnimationFrame.bind(window);
+  const framesKeptWaiting = [];
+  let isCatchingUp = false;
+  window.requestAnimationFrame = function (drawFrame) {
+    return askBrowserForFrame(function (timestamp) {
+      if (isCatchingUp) framesKeptWaiting.push(drawFrame);
+      else drawFrame(timestamp);
+    });
+  };
   window.letTheBrowserCatchUp = function () {
-    return new Promise(function (resolve) { window.setTimeout(resolve, 0); });
+    isCatchingUp = true;
+    return new Promise(function (resolve) {
+      window.setTimeout(function () {
+        isCatchingUp = false;
+        // What was kept waiting is asked for again, and is drawn once the check has finished.
+        for (const drawFrame of framesKeptWaiting.splice(0)) window.requestAnimationFrame(drawFrame);
+        resolve();
+      }, 0);
+    });
   };
 }
 
