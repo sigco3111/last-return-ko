@@ -13,7 +13,11 @@
 }
 .workshop-header { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--panel-edge); color: var(--instrument); letter-spacing: 0.16em; }
 .workshop-header .button-quiet { padding: 4px 6px; font-size: 11px; }
-.workshop-tabs { display: flex; gap: 4px; margin-left: auto; }
+/* The tools have a row of their own under the title, so "Leave" stays on screen however many there are. */
+.workshop-header { flex-wrap: wrap; }
+.workshop-tabs { order: 1; flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 4px; }
+.workshop-tabs .button-quiet { flex: 1 1 auto; }
+#workshop-leave { margin-left: auto; }
 .workshop-tabs .is-current { background: var(--instrument); border-color: var(--instrument); color: var(--void); }
 .workshop-body { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 10px 12px 28px; display: flex; flex-direction: column; gap: 6px; }
 .workshop-body > * { flex: none; }

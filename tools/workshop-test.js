@@ -1,4 +1,4 @@
-// Checks the workshop (`npm run dev`): the room tool, the creature tool, saving into src/ and reloading
+// Checks the workshop (`npm run dev`): the room tool, the creature tool, the object tool, saving into src/ and reloading
 // when the source changes. It works on a copy of src/ in a temporary folder, so nothing here touches the project.
 const fs = require('fs');
 const os = require('os');
@@ -40,6 +40,9 @@ function checkSourcePatching() {
   const parsed = JSON.parse(text);
   check('a room file is valid JSON without the key, one item per line',
     parsed.key === undefined && parsed.items.length === 2 && parsed.tiers.length === 2 && text.split('\n').filter((line) => line.includes('"type"')).length === 2, text);
+  const objectText = formatRoomFile({ key: 'x', label: 'x', mass: 2, parts: [{ shape: 'box', center: [0, 0, 0], half: [0.1, 0.1, 0.1] }, { shape: 'ball', center: [0, 0.2, 0], radius: 0.05 }] });
+  check('an object file is laid out the same way, one part per line',
+    JSON.parse(objectText).parts[1].radius === 0.05 && objectText.split('\n').filter((line) => line.includes('"shape"')).length === 2, objectText);
 }
 
 (async () => {
@@ -49,9 +52,11 @@ function checkSourcePatching() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'last-return-workshop-'));
   fs.cpSync(path.join(projectRoot, 'src'), path.join(root, 'src'), { recursive: true });
   fs.rmSync(path.join(root, 'src', 'rooms'), { recursive: true, force: true }); // start without workshop rooms
+  fs.rmSync(path.join(root, 'src', 'objects'), { recursive: true, force: true }); // and without workshop objects
   fs.mkdirSync(path.join(root, 'assets'));
   const figuresPath = path.join(root, 'src', 'js', '04-figures.js');
   const roomPath = path.join(root, 'src', 'rooms', 'testRoom.json');
+  const objectPath = path.join(root, 'src', 'objects', 'testThing.json');
 
   const server = await startDevServer({ root: root, port: 0, quiet: true });
   const browser = await chromium.launch({
@@ -65,7 +70,7 @@ function checkSourcePatching() {
   page.on('dialog', (dialog) => dialog.accept());
   const inPage = (callback, argument) => page.evaluate(callback, argument);
   // Headless Chromium only draws (and so only runs the game loop) when asked.
-  const frames = async (count) => { for (let index = 0; index < (count || 3); index++) await page.screenshot({ type: 'jpeg', quality: 5 }); };
+  const frames = async (count) => { for (let index = 0; index < (count || 3); index++) await page.screenshot({ type: 'jpeg', quality: 5, timeout: 120000 }); }; // a slow machine takes a while to draw a frame (as in browser-harness.js)
   const workshopIsReady = () => page.waitForFunction(() => Boolean(window.lastReturnDebug && window.lastReturnDebug.roomWorkshop));
   const waitForReload = async (action) => {
     await inPage(() => { window.pageMarker = true; });
@@ -311,6 +316,175 @@ function checkSourcePatching() {
     const thighIn = (figureName, value) => new RegExp('FIGURE_PROPORTIONS_' + figureName + ' = \\{[^}]*thigh: ' + String(value).replace('.', '\\.') + ',').test(figuresSource);
     check('"Write to file" puts the number into FIGURE_PROPORTIONS_HOLLOW and nowhere else', thighIn('HOLLOW', longThigh) && thighIn('DUMMY', dummyThigh));
     check('after that the body is the same as the file', written.thigh === longThigh && written.fileThigh === longThigh && written.changes === 0, written);
+
+    // --- the object tool: a kind written as code to look at, then a new object put together from basic forms ---
+    await page.click('#workshop-tab-objects');
+    await frames();
+    // The creature tool's scanner view left the lights off. With them off the scanner fires every frame and its
+    // points stay, close to the camera, more of them with every frame: without a graphics card that takes many
+    // seconds a frame, and more as it goes on. The object checks need no scanner, so the lights go back on.
+    await page.keyboard.press('KeyL');
+    await frames();
+    check('L puts the lights back on', await inPage(() => window.lastReturnDebug.workshop.isLit));
+    const objectState = () => inPage(() => {
+      const state = window.lastReturnDebug.objectWorkshop, body = state.body;
+      return {
+        key: state.key, savedKey: state.savedKey, isDirty: state.isDirty, selected: state.selectedIndex, isTrying: state.isTrying,
+        label: state.object ? state.object.label : null, parts: state.object ? state.object.parts : null,
+        // Where the object's own origin hangs: wherever its parts are moved to, that stays over the bench.
+        origin: [body.x - body.prepared.centreX, body.y - body.prepared.centreY, body.z - body.prepared.centreZ].map((value) => Math.round(value * 1000) / 1000),
+        y: body.y, isAtRest: body.isAsleep
+      };
+    });
+    const objectOpened = await objectState();
+    check('the object tool opens on a kind written as code, hanging at rest over the bench',
+      objectOpened.key === 'canister' && objectOpened.parts === null && objectOpened.isAtRest && objectOpened.origin.join() === '43.5,1.1,43.5', objectOpened);
+
+    await page.click('#workshop-new-object');
+    await page.selectOption('#workshop-add-shape', 'capsule');
+    await page.click('#workshop-add-part');
+    await frames();
+    const withRod = await objectState();
+    check('a new object is a box, and a capsule is added on top of it and selected',
+      withRod.parts.length === 2 && withRod.parts[0].shape === 'box' && withRod.parts[1].shape === 'capsule' && withRod.selected === 1 &&
+      withRod.parts[1].from[1] === withRod.parts[0].half[1] && withRod.isDirty, withRod);
+
+    await page.keyboard.press('Escape');
+    await page.mouse.click(middleX, middleY); // the bench is in the middle of the view, and the box is on it
+    check('clicking the box selects it', (await objectState()).selected === 0);
+    await page.mouse.move(middleX, middleY);
+    await page.mouse.down();
+    await page.mouse.move(middleX + 40, middleY + 5, { steps: 4 });
+    await page.mouse.move(middleX + 110, middleY - 30, { steps: 6 });
+    await page.mouse.up();
+    await frames();
+    const draggedPart = await objectState();
+    check('dragging moves the part (to the right and up here), and the object still hangs by its own origin',
+      draggedPart.parts[0].center[0] > 0.03 && draggedPart.parts[0].center[1] > 0.01 && draggedPart.parts[1].from.join() === withRod.parts[1].from.join() &&
+      draggedPart.origin.join() === '43.5,1.1,43.5', draggedPart);
+
+    await page.keyboard.press('KeyR');
+    const turnedPart = (await objectState()).parts[0];
+    check('R turns the box a quarter turn: its width and depth change places',
+      turnedPart.half[0] === withRod.parts[0].half[2] && turnedPart.half[2] === withRod.parts[0].half[0], turnedPart);
+    await page.keyboard.press('Control+z');
+    check('Ctrl+Z takes the turn back', (await objectState()).parts[0].half.join() === withRod.parts[0].half.join());
+    await setNumber('workshop-part-size1', 0.3);
+    check('a size typed in is the size of the box', (await objectState()).parts[0].half[1] === 0.15);
+
+    // --- trying it: let go of, it falls by the game's own steps ---
+    await page.click('#workshop-drop-object');
+    await frames(6);
+    const falling = await objectState();
+    check('"Drop it" lets go of it, and it falls', falling.isTrying && falling.y < draggedPart.y - 0.1 && falling.y > 0, { before: draggedPart.y, after: falling.y });
+    await page.click('#workshop-bench-object');
+    await frames(1);
+    check('"Back on the bench" hangs it up again', (await objectState()).origin.join() === '43.5,1.1,43.5' && (await objectState()).isAtRest);
+
+    // --- what a knock costs: the readout prices it, and trying the object does it to the thing itself ---
+    const knockState = () => inPage(() => {
+      const d = window.lastReturnDebug, state = d.objectWorkshop, body = state.body;
+      const readout = state.readoutElement ? state.readoutElement.textContent : '';
+      const priced = function (title) { const found = new RegExp(title + ' +(shatters|worth (\\d+))').exec(readout); return found ? (found[2] ? Number(found[2]) : 'shatters') : null; };
+      return { whole: priced('whole'), intoAWall: priced('into a wall'), letGoOf: priced('let go of'), thrownHard: priced('thrown hard'), saysShattered: /shattered: gone/.test(readout), saysBroken: /broken apart: gone/.test(readout),
+        isGone: body.isRemoved === true, worth: body.isRemoved ? 0 : d.getLooseObjectValue(body), y: Math.round(body.y * 100) / 100, isTrying: state.isTrying,
+        glass: d.noisyFloorPatches.filter((patch) => patch.isFromPlay).length, problems: state.problems.filter((problem) => /shatter/.test(problem)), kindShattersAt: body.kind.shattersAt === undefined ? null : body.kind.shattersAt };
+    });
+    // Lets go of it and draws frames until `isDone` says so (or for long enough that it should have), and a few
+    // more for whatever follows the landing. It hangs 1.1 m up and lies at about 0.2: under 0.45 it has landed.
+    const hasLanded = (state) => state.y < 0.45 || state.isGone;
+    const dropUntil = async (isDone) => {
+      await page.click('#workshop-drop-object');
+      let state = await knockState();
+      for (let round = 0; round < 40 && !isDone(state); round++) { await frames(3); state = await knockState(); }
+      await frames(4);
+      return knockState();
+    };
+    await setNumber('workshop-object-value', 100);
+    await setNumber('workshop-object-fragile', 1);
+    await frames(8);
+    const pricedWhole = await knockState();
+    check('the readout says what a knock would cost it: nothing whole, more let go of than walked into a wall, most thrown hard',
+      pricedWhole.whole === 100 && pricedWhole.intoAWall <= 100 && pricedWhole.letGoOf < pricedWhole.intoAWall && pricedWhole.thrownHard < pricedWhole.letGoOf && pricedWhole.thrownHard >= 10, pricedWhole);
+    const dropped = await dropUntil((state) => state.worth < 100 || state.isGone);
+    check('dropped from the bench it lands worth less than it was, and not gone', hasLanded(dropped) && !dropped.isGone && dropped.worth < 100 && dropped.worth >= 10 && dropped.glass === 0, dropped);
+    await setNumber('workshop-object-fragile', 0);
+    const droppedTough = await dropUntil(hasLanded);
+    check('with "fragile" at 0 the same drop costs it nothing', hasLanded(droppedTough) && !droppedTough.isGone && droppedTough.worth === 100, droppedTough);
+    await setNumber('workshop-object-shattersAt', 3);
+    await frames(8);
+    const notGlass = await knockState();
+    const droppedNotGlass = await dropUntil((state) => state.isGone);
+    check('set to shatter, anything does, not only glass: of metal it breaks apart when dropped, is gone, and leaves no glass',
+      notGlass.problems.length === 0 && notGlass.kindShattersAt === 3 && notGlass.letGoOf === 'shatters' && droppedNotGlass.isGone && droppedNotGlass.glass === 0 && droppedNotGlass.saysBroken, [notGlass, droppedNotGlass]);
+    await page.click('#workshop-bench-object');
+    await frames(2);
+    await page.selectOption('#workshop-object-material', 'glass');
+    await frames(8);
+    const glass = await knockState();
+    const droppedGlass = await dropUntil((state) => state.isGone);
+    await frames(4); // the readout is brought up to date five times a second
+    const afterShatter = await knockState();
+    check('made of glass it shatters when dropped: it is gone, broken glass lies where it hit, and the readout says so',
+      glass.problems.length === 0 && glass.kindShattersAt === 3 && glass.letGoOf === 'shatters' && glass.thrownHard === 'shatters' && glass.intoAWall === 100 &&
+      droppedGlass.isGone && afterShatter.glass === 1 && afterShatter.saysShattered, [glass, droppedGlass, afterShatter]);
+    await page.click('#workshop-bench-object');
+    await frames(2);
+    const wholeAgain = await knockState();
+    check('"Back on the bench" has it whole again and the glass swept up', !wholeAgain.isGone && wholeAgain.worth === 100 && wholeAgain.glass === 0 && !wholeAgain.isTrying, wholeAgain);
+    // As it is saved below: a dull thing again, that a knock costs something.
+    await page.selectOption('#workshop-object-material', 'case');
+    await setNumber('workshop-object-shattersAt', 0);
+    await setNumber('workshop-object-fragile', 0.6);
+
+    // --- saving: a file appears, the page reloads into the saved object, and it is a kind like any other ---
+    await page.fill('#workshop-object-key', 'testThing');
+    await page.locator('#workshop-object-key').blur();
+    await page.fill('#workshop-object-label', 'test thing');
+    await setNumber('workshop-object-mass', 3);
+    await setNumber('workshop-object-onTheFloor', 10);
+    await waitForReload(() => page.click('#workshop-save-object'));
+    await frames();
+    const savedObject = fs.existsSync(objectPath) ? JSON.parse(fs.readFileSync(objectPath, 'utf8')) : null;
+    check('saving writes src/objects/testThing.json with both parts in it',
+      savedObject !== null && savedObject.label === 'test thing' && savedObject.mass === 3 && savedObject.onTheFloor === 10 &&
+      savedObject.value === 100 && savedObject.fragile === 0.6 && savedObject.shattersAt === 0 && savedObject.material === 'case' &&
+      savedObject.parts.length === 2 && savedObject.parts[0].half[1] === 0.15 && savedObject.key === undefined, savedObject);
+    const afterObjectSave = await objectState();
+    afterObjectSave.kind = await inPage(() => { const kind = window.lastReturnDebug.looseObjectKinds.testThing; return kind ? { label: kind.label, mass: kind.mass, parts: kind.parts.length, fragile: kind.fragile, shatters: kind.shattersAt !== undefined } : null; });
+    check('after the reload the workshop is open on the saved object, with nothing unsaved, and the game knows the kind',
+      afterObjectSave.key === 'testThing' && afterObjectSave.savedKey === 'testThing' && !afterObjectSave.isDirty &&
+      afterObjectSave.kind !== null && afterObjectSave.kind.label === 'test thing' && afterObjectSave.kind.mass === 3 && afterObjectSave.kind.parts === 2 &&
+      afterObjectSave.kind.fragile === 0.6 && afterObjectSave.kind.shatters === false, afterObjectSave);
+
+    // --- the saved object lies about in generated stations, where it should, and those can still be finished ---
+    const objectGamePage = await context.newPage();
+    objectGamePage.on('pageerror', (error) => problems.push('page error (game): ' + error.message));
+    await objectGamePage.goto(server.address + 'game');
+    await objectGamePage.waitForFunction(() => Boolean(window.lastReturnDebug));
+    const objectInStations = await objectGamePage.evaluate(() => {
+      const debug = window.lastReturnDebug;
+      const result = { lying: 0, badPlaces: [], audits: 0 };
+      for (let seed = 1; seed <= 4; seed++) {
+        if (!debug.loadStation('generated', seed, 'large', 'mixed', 'two')) continue;
+        result.lying += debug.stationLooseObjects.filter((entry) => entry.kindKey === 'testThing').length;
+        result.badPlaces = result.badPlaces.concat(debug.auditStationLooseObjects());
+        result.audits += debug.auditProgression().length;
+      }
+      return result;
+    });
+    await objectGamePage.close();
+    check('generated stations have the object lying about, in good places, and can still be finished',
+      objectInStations.lying > 0 && objectInStations.badPlaces.length === 0 && objectInStations.audits === 0, objectInStations);
+
+    // --- an unsaved change to an object survives a reload ---
+    await page.fill('#workshop-object-label', 'changed thing');
+    await waitForStoredWork('the renamed object is written to the browser\'s storage as unsaved work',
+      (storedWork) => Boolean(storedWork.objects && storedWork.objects.draft) && storedWork.objects.draft.label === 'changed thing');
+    await waitForReload(() => page.reload());
+    await frames();
+    const objectAfterReload = await objectState();
+    check('a reload keeps the tool and the unsaved object', objectAfterReload.key === 'testThing' && objectAfterReload.isDirty && objectAfterReload.label === 'changed thing', objectAfterReload);
 
     // --- leaving ---
     await waitForReload(() => page.click('#workshop-leave'));

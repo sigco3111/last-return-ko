@@ -5,8 +5,8 @@
 // ---------------------------------------------------------------------------
 
 // The whole map, in one-metre tiles. The classic station uses the top-left 76 x 64; generated stations may use it all.
-const GRID_WIDTH = 1024;
-const GRID_DEPTH = 1024;
+const GRID_WIDTH = 512;
+const GRID_DEPTH = 512;
 const TILE_COUNT = GRID_WIDTH * GRID_DEPTH;
 
 const tileIsOpen = new Uint8Array(TILE_COUNT);
@@ -927,7 +927,7 @@ const navigationQueue = new Int32Array(TILE_COUNT);
 const NAVIGATION_UNREACHABLE = 32000;
 
 // A working array with one number for every tile of the map, for a function to use while it runs.
-// The map is 1024 by 1024 tiles, so a fresh one is two megabytes. Building and checking a station used to make
+// The map is 512 by 512 tiles, so a fresh one is under 1 megabyte. Building and checking a station used to make
 // dozens of them and throw them away, faster than a browser clears up after itself; this hands out the same
 // one again instead. Each caller asks for its own by name, so no two functions ever share one. Whoever
 // borrows one must not keep it after returning and must not expect anything of what is in it

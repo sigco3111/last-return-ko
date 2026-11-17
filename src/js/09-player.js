@@ -70,7 +70,8 @@ const settings = {
   stationLevels: 'two',     // a key of GENERATED_LEVEL_PRESETS
   seedText: '',             // what is typed in the seed box; empty means a new random station each descent
   hud: 'quiet',             // 'quiet' shows instruments only while they matter; 'full' shows everything all the time
-  captions: 'tells'         // the lines in square brackets: 'off', 'tells' (what the Hollow has just done) or 'all' (every sound, with where it comes from)
+  captions: 'tells',        // the lines in square brackets: 'off', 'tells' (what the Hollow has just done) or 'all' (every sound, with where it comes from)
+  hasPickedSomethingUp: false // the line that says how to pick a thing up is a tutorial: shown until you have done it once, and never again
 };
 
 // The game was called No Return before it was Last Return. Whatever a browser kept under the old name (the
@@ -109,6 +110,7 @@ function loadSettings() {
       if (typeof stored.seedText === 'string') settings.seedText = stored.seedText.slice(0, 24);
       if (stored.hud === 'quiet' || stored.hud === 'full') settings.hud = stored.hud;
       if (stored.captions === 'off' || stored.captions === 'tells' || stored.captions === 'all') settings.captions = stored.captions;
+      if (stored.hasPickedSomethingUp === true) settings.hasPickedSomethingUp = true;
     }
   } catch (error) { /* storage is optional */ }
 }

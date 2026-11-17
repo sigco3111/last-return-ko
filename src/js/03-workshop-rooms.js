@@ -165,6 +165,25 @@ function normalizeDesignedNumber(value, fallback, minimum, maximum) {
   return clampNumber(number, minimum, maximum);
 }
 
+// Copies the `fields` of `source` into `target`, each present, in range and of the right kind.
+function normalizeDesignedFields(target, source, fields) {
+  for (const field of fields) {
+    const value = source[field.key];
+    if (field.kind === 'number') {
+      target[field.key] = normalizeDesignedNumber(value, field.defaultValue, field.minimum, field.maximum);
+      if (field.step === 1) target[field.key] = Math.round(target[field.key]);
+    } else if (field.kind === 'boolean') {
+      target[field.key] = value === undefined ? field.defaultValue : value === true;
+    } else if (field.kind === 'choice') {
+      const isKnown = field.choices.some(function (choice) { return choice[0] === value; });
+      target[field.key] = isKnown ? value : field.defaultValue;
+    } else {
+      target[field.key] = typeof value === 'string' ? value.slice(0, 60) : field.defaultValue;
+    }
+  }
+  return target;
+}
+
 // Returns a clean copy of one item, or null if it is not something the catalogue above knows.
 function normalizeDesignedItem(source, room) {
   if (!source || !ROOM_ITEM_TYPES[source.type]) return null;
@@ -181,21 +200,7 @@ function normalizeDesignedItem(source, room) {
     item.x = Math.floor(normalizeDesignedNumber(source.x, 0, 0, room.width - 1));
     item.z = Math.floor(normalizeDesignedNumber(source.z, 0, 0, room.depth - 1));
   }
-  for (const field of type.fields) {
-    const value = source[field.key];
-    if (field.kind === 'number') {
-      item[field.key] = normalizeDesignedNumber(value, field.defaultValue, field.minimum, field.maximum);
-      if (field.step === 1) item[field.key] = Math.round(item[field.key]);
-    } else if (field.kind === 'boolean') {
-      item[field.key] = value === undefined ? field.defaultValue : value === true;
-    } else if (field.kind === 'choice') {
-      const isKnown = field.choices.some(function (choice) { return choice[0] === value; });
-      item[field.key] = isKnown ? value : field.defaultValue;
-    } else {
-      item[field.key] = typeof value === 'string' ? value.slice(0, 60) : field.defaultValue;
-    }
-  }
-  return item;
+  return normalizeDesignedFields(item, source, type.fields);
 }
 
 // Returns a clean copy of a room file: everything present, in range, and of the right kind.

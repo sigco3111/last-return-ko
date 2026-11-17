@@ -10,6 +10,7 @@
 //   21-workshop-rooms.js      the room tool
 //   22-workshop-creatures.js  the creature tool
 //   23-workshop-sounds.js     the sound board
+//   24-workshop-objects.js    the object tool
 //
 // The workshop runs as its own game mode ('workshop', see runFrame in 11-game.js). To get back to the
 // game the page is simply loaded again, so nothing here has to tidy up after itself.
@@ -611,7 +612,7 @@ function initializeWorkshop() {
   const openButton = createDebugElement('button', 'button-quiet', 'Workshop');
   openButton.type = 'button';
   openButton.id = 'button-workshop';
-  openButton.title = 'Room and creature tools and the sound board (only in the `npm run dev` build)';
+  openButton.title = 'Room, creature and object tools and the sound board (only in the `npm run dev` build)';
   openButton.addEventListener('click', openWorkshop);
   document.getElementById('button-begin').insertAdjacentElement('afterend', openButton);
 
@@ -658,7 +659,7 @@ function initializeWorkshop() {
   connectToWorkshopServer();
   window.lastReturnDebug.workshop = workshop;
   window.lastReturnDebug.openWorkshop = openWorkshop;
-  // An address ending in #sounds, #creatures or #rooms opens that tool. The ending is then dropped, so a
+  // An address ending in #sounds, #creatures, #objects or #rooms opens that tool. The ending is then dropped, so a
   // reload comes back to whichever tool is open by then.
   const toolFromAddress = window.location.hash.slice(1);
   if (Object.keys(workshop.tools).includes(toolFromAddress)) {

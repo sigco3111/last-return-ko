@@ -168,6 +168,10 @@ const TUNING = {
   looseRestSpin: 0.35,              // ... and turning slower than this (radians per second) ...
   looseRestSeconds: 0.4,            // ... for this long, while touching something: it is at rest, and left alone until something touches it
   looseImprintSeconds: 0.7,         // how long points scanned onto a moving or carried object stay. (On one at rest they stay for good.)
+  looseMarkerSeconds: 4,            // what a thing is worth floats at it for this long after a pulse last landed on it, once the scanner has read it. Scan it again and it shows again.
+  looseMarkerFadeSeconds: 1,        // ... fading out over the last of those
+  looseMarkerMetres: 7,             // ... and from no further off than this
+  looseMarkersAtOnce: 6,            // no more than this many of them on screen: those nearest to where you look
   // Carrying.
   looseBeamReach: 2.6,              // how far away the scanner's beam can take hold of one
   looseHoldDistance: 0.7,           // how far out from the scanner's lens it hangs, on top of its own size (a crate is 0.4 from middle to corner). The lens is 0.55 in front of your eyes.
@@ -586,6 +590,8 @@ const CAPTIONS = {
   hollowFling: { text: '[something is thrown, hard, out of the dark]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'hollowFeet', rank: 2 },
   ownObjectShatter: { text: '[glass shatters at your feet]', level: 'sound', withinMetres: 0, seconds: 3, slot: 'ownHands', rank: 2 },
   objectShatter: { text: '[glass shatters]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
+  ownObjectBreak: { text: '[something breaks apart at your feet]', level: 'sound', withinMetres: 0, seconds: 3, slot: 'ownHands', rank: 2 },
+  objectBreak: { text: '[something breaks apart]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
   ownObjectKicked: { text: '[something skitters away from your feet]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
   scanGrenade: { text: '[a rising whine, and a crack of light]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
   hollowStunned: { text: '[it stands frozen in the light]', level: 'tell', withinMetres: 0, seconds: 3.2 },

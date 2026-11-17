@@ -3,8 +3,8 @@
 //   - builds the game with the workshop added (build.js --dev) and serves it
 //   - rebuilds whenever something in src/ or assets/ changes and tells the open page to reload,
 //     so a number changed in the source shows up in the workshop a moment later
-//   - lets the workshop save: a room becomes src/rooms/<key>.json, and creature proportions are
-//     written into the FIGURE_PROPORTIONS_... blocks of src/js/04-figures.js
+//   - lets the workshop save: a room becomes src/rooms/<key>.json, a loose object src/objects/<key>.json,
+//     and creature proportions are written into the FIGURE_PROPORTIONS_... blocks of src/js/04-figures.js
 //
 // Node built-ins only. It listens on this machine only (127.0.0.1), and only the workshop page it
 // serves itself can ask it to write anything.
@@ -68,6 +68,7 @@ function patchObjectNumbers(source, constantName, values) {
 }
 
 // A room file is ordinary JSON, laid out with one door and one item per line so changes read well in a diff.
+// An object file is laid out the same way: one part per line.
 function formatRoomFile(room) {
   const oneLine = function (value) {
     return '{ ' + Object.keys(value).map((key) => JSON.stringify(key) + ': ' + JSON.stringify(value[key])).join(', ') + ' }';
@@ -87,21 +88,22 @@ function formatRoomFile(room) {
   return '{\n' + lines.join(',\n') + '\n}\n';
 }
 
-function saveRoom(root, key, room) {
-  if (!ROOM_KEY_PATTERN.test(key)) throw new Error('A room key starts with a small letter and has only letters and digits: "' + key + '" will not do.');
-  if (!room || typeof room !== 'object' || Array.isArray(room)) throw new Error('That is not a room.');
-  const roomDirectory = path.join(root, 'src', 'rooms');
-  fs.mkdirSync(roomDirectory, { recursive: true });
-  fs.writeFileSync(path.join(roomDirectory, key + '.json'), formatRoomFile(room));
-  return 'src/rooms/' + key + '.json';
+// `folder` is 'rooms' or 'objects': what the workshop makes is one file per thing in src/<folder>/.
+function saveDesignedFile(root, folder, key, content) {
+  if (!ROOM_KEY_PATTERN.test(key)) throw new Error('A file name starts with a small letter and has only letters and digits: "' + key + '" will not do.');
+  if (!content || typeof content !== 'object' || Array.isArray(content)) throw new Error('That is not something to save.');
+  const directory = path.join(root, 'src', folder);
+  fs.mkdirSync(directory, { recursive: true });
+  fs.writeFileSync(path.join(directory, key + '.json'), formatRoomFile(content));
+  return 'src/' + folder + '/' + key + '.json';
 }
 
-function deleteRoom(root, key) {
-  if (!ROOM_KEY_PATTERN.test(key)) throw new Error('Not a room key: "' + key + '".');
-  const filePath = path.join(root, 'src', 'rooms', key + '.json');
-  if (!fs.existsSync(filePath)) throw new Error('There is no src/rooms/' + key + '.json.');
+function deleteDesignedFile(root, folder, key) {
+  if (!ROOM_KEY_PATTERN.test(key)) throw new Error('Not a file name: "' + key + '".');
+  const filePath = path.join(root, 'src', folder, key + '.json');
+  if (!fs.existsSync(filePath)) throw new Error('There is no src/' + folder + '/' + key + '.json.');
   fs.unlinkSync(filePath);
-  return 'src/rooms/' + key + '.json';
+  return 'src/' + folder + '/' + key + '.json';
 }
 
 function saveProportions(root, figureName, values) {
@@ -219,8 +221,10 @@ function startDevServer(options) {
   };
 
   const actions = {
-    '/dev/save-room': function (body) { return { file: saveRoom(root, String(body.key), body.room) }; },
-    '/dev/delete-room': function (body) { return { file: deleteRoom(root, String(body.key)) }; },
+    '/dev/save-room': function (body) { return { file: saveDesignedFile(root, 'rooms', String(body.key), body.room) }; },
+    '/dev/delete-room': function (body) { return { file: deleteDesignedFile(root, 'rooms', String(body.key)) }; },
+    '/dev/save-object': function (body) { return { file: saveDesignedFile(root, 'objects', String(body.key), body.object) }; },
+    '/dev/delete-object': function (body) { return { file: deleteDesignedFile(root, 'objects', String(body.key)) }; },
     '/dev/save-proportions': function (body) { return saveProportions(root, String(body.figure), body.values || {}); }
   };
 

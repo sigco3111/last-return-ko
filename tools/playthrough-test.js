@@ -405,8 +405,13 @@ function check(description, condition, detail) {
   check('with menace full, the Hollow is not called off in the middle of a chase', breather.duringChase.phase === 0 && breather.duringChase.state === 2, breather.duringChase);
   check('once the chase is over it gets a real breather: sent to a far room, with no pretending to leave',
     breather.started.phase === 1 && breather.started.targetSteps >= 30 && breather.started.feint === 0, breather.started);
-  check('during the breather it stays away from a player who keeps quiet',
-    breather.away.phase === 1 && breather.away.mode === 'playing' && breather.away.nearestSteps >= breather.away.stepsAtStart - 2 && breather.away.farthestSteps >= 30, breather.away);
+  // It must get 30 steps away, which is as near as a breather's room may be. But it has arrived at a room once it
+  // is within a metre and a half of its middle, which can be two steps short: sent to a room exactly 30 steps
+  // off, it gets to 28 and then sets out for the next one. So for a room nearer than 32 steps, what is asked is
+  // that room less those two steps. (A room 75 steps off it does not reach in twenty seconds, and need not.)
+  check('during the breather it stays away from a player who keeps quiet, and gets as far off as a breather asks',
+    breather.away.phase === 1 && breather.away.mode === 'playing' && breather.away.nearestSteps >= breather.away.stepsAtStart - 2 &&
+    breather.away.farthestSteps >= Math.min(30, breather.started.targetSteps - 2), [breather.started, breather.away]);
   check('noise during a breather still brings it', breather.afterNoise.state === 1 || breather.afterNoise.state === 2, breather.afterNoise);
   check('the breather ends by itself, after at least 25 seconds, and the closing-in starts again',
     breather.ended.phase === 0 && breather.ended.seconds >= 25 && breather.ended.seconds < 90 && breather.ended.mode === 'playing', breather.ended);

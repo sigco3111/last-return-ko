@@ -190,7 +190,8 @@ function installLab() {
       const kind = d.looseObjectKinds[kindKey];
       if (!kind.label || !(kind.mass > 0) || ['metal', 'glass', 'case', 'tin', 'card'].indexOf(kind.material) < 0 || typeof kind.bulky !== 'boolean' ||
           !(kind.value >= 0) || !(kind.loud > 0) || ['upright', 'onItsSide', 'either'].indexOf(kind.lies) < 0 ||
-          !(kind.bounce >= 0 && kind.bounce < 1) || !(kind.grip >= 0 && kind.grip <= 1) || !kind.parts || kind.parts.length === 0) wrong.push(kindKey + ': incomplete');
+          !(kind.bounce >= 0 && kind.bounce < 1) || !(kind.grip >= 0 && kind.grip <= 1) || !kind.parts || kind.parts.length === 0 ||
+          (kind.fragile !== undefined && !(kind.fragile >= 0 && kind.fragile <= 1)) || (kind.shattersAt !== undefined && !(kind.shattersAt > 0))) wrong.push(kindKey + ': incomplete');
       const object = d.createLooseObject(kindKey, 0, 0, 0, 0);
       const prepared = object.prepared, shell = prepared.shell;
       counts[kindKey] = prepared.shellCount;
@@ -1486,7 +1487,7 @@ function installLab() {
       const object = lab.carry(kindKey);
       // Set down: you look down at the floor over a second and a half, so that it is lowered and not slammed.
       if (how === 'set down') { for (let step = 0; step < 45; step++) { p.pitch -= 1.1 / 45; d.simulate(1 / 30); } d.simulate(0.8); } else p.pitch = how === 'thrown' ? 0.1 : 0;
-      d.captionCounts.ownObjectShatter = 0;
+      d.captionCounts.ownObjectShatter = 0; d.captionCounts.ownObjectBreak = 0;
       d.clearMessages();
       lab.noises.length = 0;
       const shatteredBefore = d.looseState.statistics.shattered;
@@ -1494,7 +1495,7 @@ function installLab() {
       for (let step = 0; step < 300 && !object.isAsleep && !object.isRemoved; step++) d.simulate(1 / 30);
       d.input.keysDown.clear();
       return { whole: object.kind.value, worth: object.isRemoved ? 0 : d.getLooseObjectValue(object), gone: object.isRemoved, shattered: d.looseState.statistics.shattered - shatteredBefore,
-        said: lab.messages(), caption: d.captionCounts.ownObjectShatter, loudest: lab.round(Math.max.apply(null, [0].concat(lab.noises.map((noise) => noise.radius)))),
+        said: lab.messages(), caption: d.captionCounts.ownObjectShatter, captionBreak: d.captionCounts.ownObjectBreak, loudest: lab.round(Math.max.apply(null, [0].concat(lab.noises.map((noise) => noise.radius)))),
         at: [lab.round(object.x), lab.round(object.z)] };
     };
     result.toolCase = { setDown: fares('toolCase', 'set down'), dropped: fares('toolCase', 'dropped'), thrown: fares('toolCase', 'thrown') };
@@ -1533,6 +1534,13 @@ function installLab() {
     const glass = d.noisyFloorPatches.filter((patch) => patch.isFromPlay);
     result.glass = { patches: d.noisyFloorPatches.length - patchesBefore, kind: glass.length ? glass[0].kind : '', metresFromWhereItBroke: glass.length ? lab.round(Math.hypot(glass[0].x - result.jar.dropped.at[0], glass[0].z - result.jar.dropped.at[1])) : 99,
       pieces: glass.length ? glass[0].props.length : 0, markedLoud: glass.length ? d.findNoisyFloorPatchAt(glass[0].x, glass[0].z) === glass[0] : false };
+    // Anything set to shatter does, not only glass: a crate told to break at 3 m/s breaks apart when let go of.
+    // It leaves nothing: no glass on the floor.
+    d.looseObjectKinds.crate.shattersAt = 3;
+    const patchesBeforeTheCrate = d.noisyFloorPatches.length;
+    result.crate = { dropped: fares('crate', 'dropped'), glassLeft: 0 };
+    result.crate.glassLeft = d.noisyFloorPatches.length - patchesBeforeTheCrate;
+    delete d.looseObjectKinds.crate.shattersAt;
     // Walking across what is left of it is as loud as any broken glass.
     if (glass.length) {
       d.clearLooseObjects();
@@ -1562,6 +1570,9 @@ function installLab() {
     !breakage.jar.setDown.gone && breakage.jar.setDown.worth === breakage.jar.setDown.whole && !breakage.jar.walkedIntoAWall.gone && breakage.jar.walkedIntoAWall.held && breakage.jar.walkedIntoAWall.worth <= breakage.jar.walkedIntoAWall.whole &&
     breakage.jar.walkedIntoAWall.worth >= breakage.jar.walkedIntoAWall.whole * 0.85 && breakage.jar.dropped.gone && breakage.jar.dropped.shattered === 1 && breakage.jar.dropped.caption === 1 && breakage.jar.dropped.loudest >= 18 &&
     breakage.jar.dropped.said.some((text) => /The sample jar shatters\..*Mind the glass/.test(text)), breakage.jar);
+  check('anything set to shatter does, not only glass: a crate told to breaks apart when let go of, loudly, says so, and leaves no glass',
+    breakage.crate.dropped.gone && breakage.crate.dropped.shattered === 1 && breakage.crate.dropped.captionBreak === 1 && breakage.crate.dropped.caption === 0 && breakage.crate.dropped.loudest >= 18 &&
+    breakage.crate.glassLeft === 0 && breakage.crate.dropped.said.some((text) => /The crate breaks apart\./.test(text)) && !breakage.crate.dropped.said.some((text) => /glass/.test(text)), breakage.crate);
   check('where it shattered there is broken glass on the floor, as loud to walk over as any other; a new descent sweeps it up and has everything whole again',
     breakage.glass.patches === 1 && breakage.glass.kind === 'glass' && breakage.glass.metresFromWhereItBroke < 0.8 && breakage.glass.pieces >= 3 && breakage.glass.markedLoud && breakage.glass.setOffByWalkingOverIt >= 1 &&
     breakage.newDescent.glassLeft === 0 && breakage.newDescent.patches === 0 && breakage.newDescent.allWhole && breakage.newDescent.lost === 0, [breakage.glass, breakage.newDescent]);
@@ -1570,6 +1581,7 @@ function installLab() {
   await inGame((spot) => {
     const d = window.lastReturnDebug, lab = window.looseLab;
     lab.reset();
+    d.settings.hasPickedSomethingUp = false; // the line that says how to pick a thing up is due
     lab.stand(spot.x, spot.z, Math.PI / 2);
     const object = d.createLooseObject('canister', spot.x + 1, 0.3, spot.z, 0);
     for (let step = 0; step < 150 && !object.isAsleep; step++) d.simulate(1 / 30);
@@ -1577,7 +1589,25 @@ function installLab() {
     d.simulate(0.1);
   }, spot);
   await drawFrames(page, 3);
-  const unread = await inGame(() => { const d = window.lastReturnDebug, object = d.looseObjects[0]; return { prompt: document.getElementById('hud-prompt').textContent, worth: d.getLooseObjectWorth(object), pulses: object.scanHits }; });
+  // What is on screen just now: each marker's text and where it is, as shares of the screen's width and height.
+  // What floats at a thing is there for a few seconds of the game's own clock, and a browser may run that clock
+  // on by itself between two steps of this test. So `before` is done in the same breath as the reading:
+  // 'scan' puts half a second of the beam on what you look at, 'wait' lets a marker's few seconds run out.
+  const readScreen = (before) => inGame((before) => {
+    const d = window.lastReturnDebug, object = d.looseObjects[0], prompt = document.getElementById('hud-prompt');
+    if (before === 'scan') { d.setDebugOption('unlimitedScanner', true); d.setScanHeld(true); d.simulate(0.5); d.setScanHeld(false); d.simulate(0.1); }
+    if (before === 'wait') d.simulate(d.tuning.looseMarkerSeconds + 0.3);
+    d.updateLooseMarkers(1); // which things have a marker is looked at afresh, and each is put where the last drawn frame saw its thing
+    const markers = Array.from(document.querySelectorAll('.loose-marker')).filter((element) => !element.hidden).map((element) => {
+      const box = element.getBoundingClientRect();
+      return { text: element.textContent, across: Math.round((box.left + box.width / 2) / window.innerWidth * 100) / 100, down: Math.round(box.bottom / window.innerHeight * 100) / 100 };
+    });
+    let remembered = false;
+    try { remembered = JSON.parse(window.localStorage.getItem('last-return-settings') || '{}').hasPickedSomethingUp === true; } catch (error) { /* no storage */ }
+    return { prompt: prompt.hidden ? '' : prompt.textContent, markers: markers, inReach: d.player.focusedLooseObject === object, remembered: remembered,
+      worth: object ? d.getLooseObjectWorth(object) : 0, pulses: object ? object.scanHits : 0, chip: document.getElementById('chip-carrying').hidden ? '' : document.getElementById('chip-carrying').textContent };
+  }, before);
+  const unread = await readScreen();
   // Scanned where it lies, from where you stand: a second and a half of the ordinary beam.
   const read = await inGame(() => {
     const d = window.lastReturnDebug, object = d.looseObjects[0];
@@ -1587,15 +1617,54 @@ function installLab() {
     d.setScanHeld(true); d.simulate(1.5); d.setScanHeld(false); d.simulate(0.1);
     return { worth: d.getLooseObjectWorth(object), really: object.kind.value, pulses: object.scanHits, needed: d.tuning.looseAppraiseHits, messages: window.looseLab.messages() };
   });
-  await drawFrames(page, 3);
-  const readPrompt = await inGame(() => document.getElementById('hud-prompt').textContent);
+  await drawFrames(page, 4);
+  const readOnScreen = await readScreen('scan');
+  // Only for a few seconds after the scan: then the number is gone, though the thing and its points are still there.
+  const aWhileLater = await readScreen('wait');
+  // Scanned again, it shows again.
+  const rescanned = await readScreen('scan');
+  // Picked up: it has no marker while the beam has it, and the status line says what it is worth.
   await inGame(() => { const d = window.lastReturnDebug; d.pickUpLooseObject(d.looseObjects[0], false); d.simulate(0.3); });
-  await drawFrames(page, 3);
-  const readChip = await inGame(() => { const d = window.lastReturnDebug, chip = document.getElementById('chip-carrying').textContent; d.releaseHeldLooseObject(0); return chip; });
-  check('what a thing is worth is not on screen until the scanner has read it: enough pulses on it, and then the prompt and the status line say it',
-    /Pick up the gas canister$/.test(unread.prompt) && unread.worth === 0 && read.pulses >= read.needed && read.worth === read.really && read.really > 0 &&
-    read.messages.some((text) => /The scanner has read what that is: gas canister, worth 25/.test(text)) && /Pick up the gas canister \(worth 25\)$/.test(readPrompt) && readChip === 'CARRYING: GAS CANISTER · 25',
-    { unread: unread, read: read, prompt: readPrompt, chip: readChip });
+  await drawFrames(page, 4);
+  const carried = await readScreen();
+  // Set down and looked at again. You have picked something up now, so the screen no longer says how, and
+  // nothing floats at the thing for being in reach. Scanned again, its worth shows again, as for any other.
+  const lookAtIt = () => inGame(() => {
+    const d = window.lastReturnDebug, p = d.player, object = d.looseObjects[0];
+    p.yaw = Math.atan2(object.x - p.x, -(object.z - p.z));
+    p.pitch = Math.atan2(object.y - d.getPlayerEyeY(), Math.hypot(object.x - p.x, object.z - p.z));
+    d.simulate(0.2);
+  });
+  await inGame(() => {
+    const d = window.lastReturnDebug, p = d.player, object = d.looseObjects[0];
+    d.input.keysDown.add('KeyC'); d.simulate(0.8);
+    for (let step = 0; step < 45; step++) { p.pitch -= 1.0 / 45; d.simulate(1 / 30); }
+    d.releaseHeldLooseObject(0);
+    for (let step = 0; step < 240 && !object.isAsleep; step++) d.simulate(1 / 30);
+    d.input.keysDown.clear(); d.simulate(0.6);
+  });
+  await lookAtIt();
+  await drawFrames(page, 4);
+  const setDown = await readScreen('wait'); // its last scan is long enough ago
+  const scannedAgain = await readScreen('scan');
+  // Looked away from: nothing floats where nothing is in view.
+  await inGame(() => { const d = window.lastReturnDebug; d.player.yaw += Math.PI; d.player.pitch = 0; d.simulate(0.3); });
+  await drawFrames(page, 4);
+  const lookedAway = await readScreen();
+  await inGame(() => { window.lastReturnDebug.settings.hasPickedSomethingUp = false; });
+  check('what floats at a thing is there for a few seconds after a scan and then gone; scanned again, it is there again',
+    aWhileLater.markers.length === 0 && aWhileLater.worth === 25 && rescanned.markers.length === 1 && rescanned.markers[0].text === '25', { aWhileLater: aWhileLater, rescanned: rescanned });
+  check('what a thing is worth is not on screen until the scanner has read it; then it floats at the thing, as a number, and the line that says how to pick it up does not mention it',
+    /Pick up the gas canister$/.test(unread.prompt) && unread.worth === 0 && unread.markers.length === 0 && read.pulses >= read.needed && read.worth === read.really && read.really > 0 &&
+    read.messages.some((text) => /The scanner has read what that is: gas canister, worth 25/.test(text)) && /Pick up the gas canister$/.test(readOnScreen.prompt) &&
+    readOnScreen.markers.length === 1 && readOnScreen.markers[0].text === '25' &&
+    Math.abs(readOnScreen.markers[0].across - 0.5) < 0.08 && readOnScreen.markers[0].down > 0.25 && readOnScreen.markers[0].down < 0.55,
+    { unread: unread, read: read, onScreen: readOnScreen });
+  check('in the beam a thing has no marker, and the status line says what it is worth', carried.markers.length === 0 && carried.chip === 'CARRYING: GAS CANISTER · 25', carried);
+  check('how to pick a thing up is a tutorial: once you have done it the screen never says it again, and nothing floats at a thing for being in reach; its worth shows when it is scanned, as before',
+    setDown.prompt === '' && setDown.markers.length === 0 && setDown.inReach && setDown.remembered &&
+    scannedAgain.prompt === '' && scannedAgain.markers.length === 1 && scannedAgain.markers[0].text === '25' && lookedAway.markers.length === 0,
+    { setDown: setDown, scannedAgain: scannedAgain, lookedAway: lookedAway });
 
   // --- what it costs ---
   const cost = await inGame((spot) => {
@@ -1648,6 +1717,7 @@ function installLab() {
     d.simulate(0.1);
     // The hint about the keys is given once a descent, and this descent has had it. Make it due again.
     d.looseState.hasShownCarryHint = false;
+    d.settings.hasPickedSomethingUp = false; // and so is the line that says how to pick a thing up
     d.clearMessages();
   }, spot);
   await drawFrames(page, 3);

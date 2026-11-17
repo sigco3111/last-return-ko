@@ -4,7 +4,7 @@
 //
 // `node build.js --dev` (or `npm run dev`, which also serves it and rebuilds on every change) builds a third:
 //   build/workshop.html               the game plus everything in src/dev/: debug mode, and the workshop
-//                                     with its room and creature editors
+//                                     with its room, object and creature editors
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -35,20 +35,21 @@ function readBuildStamp(root) {
   return stamp;
 }
 
-// Reads every .json file in src/rooms/. These are rooms made in the workshop; the file name is the room's key.
-function readDesignedRooms(roomDirectory) {
-  const rooms = {};
-  if (!fs.existsSync(roomDirectory)) return rooms;
-  for (const fileName of fs.readdirSync(roomDirectory).sort()) {
+// Reads every .json file in src/rooms/ or src/objects/. These are rooms and loose objects made in the workshop;
+// the file name is the key.
+function readDesignedFiles(sourceDirectory, folder) {
+  const designed = {};
+  const directory = path.join(sourceDirectory, folder);
+  if (!fs.existsSync(directory)) return designed;
+  for (const fileName of fs.readdirSync(directory).sort()) {
     if (path.extname(fileName).toLowerCase() !== '.json') continue;
-    const filePath = path.join(roomDirectory, fileName);
     try {
-      rooms[path.basename(fileName, path.extname(fileName))] = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+      designed[path.basename(fileName, path.extname(fileName))] = JSON.parse(fs.readFileSync(path.join(directory, fileName), 'utf8'));
     } catch (error) {
-      throw new Error('src/rooms/' + fileName + ' is not valid JSON: ' + error.message);
+      throw new Error('src/' + folder + '/' + fileName + ' is not valid JSON: ' + error.message);
     }
   }
-  return rooms;
+  return designed;
 }
 
 // `options.root` is the project folder (this one unless a test says otherwise); `options.dev` adds debug mode
@@ -89,9 +90,12 @@ function build(options) {
     'const EMBEDDED_VOICE_LINES = {\n' + voiceEntries.join(',\n') + '\n};\n';
 
   // Rooms made in the workshop are packed the same way. 03-workshop-rooms.js turns them into catalogue rooms.
-  const designedRooms = readDesignedRooms(path.join(sourceDirectory, 'rooms'));
-  const roomScript = '// ===== rooms from src/rooms (packed by build.js) =====\n' +
-    'const DESIGNED_ROOMS = ' + JSON.stringify(designedRooms, null, 1) + ';\n';
+  // So are loose objects made there: 08-workshop-objects.js turns them into kinds of loose object.
+  const designedRooms = readDesignedFiles(sourceDirectory, 'rooms');
+  const designedObjects = readDesignedFiles(sourceDirectory, 'objects');
+  const roomScript = '// ===== rooms from src/rooms and objects from src/objects (packed by build.js) =====\n' +
+    'const DESIGNED_ROOMS = ' + JSON.stringify(designedRooms, null, 1) + ';\n' +
+    'const DESIGNED_OBJECTS = ' + JSON.stringify(designedObjects, null, 1) + ';\n';
 
   const buildStamp = readBuildStamp(settings.root);
   const wrapScript = function (scripts, isDevBuild) {
@@ -147,6 +151,8 @@ function build(options) {
     : 'Packed ' + voiceEntries.length + ' voice recording(s), ' + (voiceBytes / 1024).toFixed(0) + ' KB.');
   const roomCount = Object.keys(designedRooms).length;
   if (roomCount > 0) messages.push('Packed ' + roomCount + ' room(s) from src/rooms.');
+  const objectCount = Object.keys(designedObjects).length;
+  if (objectCount > 0) messages.push('Packed ' + objectCount + ' object(s) from src/objects.');
   messages.push('Built index.html (' + (standalonePage.length / 1024).toFixed(0) + ' KB) from ' + gameScripts.length + ' scripts.');
   messages.push('Stamped as version ' + (buildStamp.version || 'unknown') + ', build ' + (buildStamp.number || 'unknown') +
     ', commit ' + (buildStamp.commit || 'unknown') + '.');

@@ -17,6 +17,7 @@
 // does the touching, which is what lets a box land on a corner and tip over.
 //
 // To add a kind of object: add an entry to LOOSE_OBJECT_KINDS. Nothing else needs to change.
+// Or make one in the workshop's object tool: that is a file in src/objects/ (see 08-workshop-objects.js).
 // ---------------------------------------------------------------------------
 
 // TWEAK: the objects.
@@ -25,7 +26,8 @@
 //   value      what it is worth, in the station's own credits, while it is whole. Everything loose is worth something, however little.
 //   fragile    how much of what it is worth a ruinous knock takes off it: 0 nothing (a can), 1 all of it down to scrap
 //              (see "What a knock costs" further down). Left out: 0.
-//   shattersAt hit harder than this (m/s) it is destroyed outright: only glass. Left out: it never is.
+//   shattersAt hit harder than this (m/s) it is destroyed outright. Left out: it never is. Glass leaves broken
+//              glass on the floor; anything else breaks apart with its own sound and leaves nothing.
 //   material   what it sounds like when it hits something: 'metal', 'glass', 'case' (a dull box with things in it), 'tin' (a can) or 'card' (cardboard)
 //   loud       how far its knocks carry for its weight: 1 is ordinary, an empty can is more, a cardboard box less
 //   lies       how it is put out in a station: 'upright' as its parts are given, 'onItsSide' (a quarter turn over),
@@ -257,6 +259,7 @@ function prepareLooseObjectKind(kindKey) {
     }
   }
   kind.prepared = {
+    centreX: centreX, centreY: centreY, centreZ: centreZ, // where the centre of mass is, in the coordinates the parts were given in
     partsRadius: partsRadius,
     shell: shell, shellCount: balls.length, parts: parts,
     inverseMass: 1 / kind.mass,
@@ -466,12 +469,37 @@ function noteLooseObjectScanned(object) {
     object.isAppraised = true;
     if (!looseState.hasShownAppraisalHint && getLooseObjectValue(object) > 0 && game.mode === 'playing') {
       looseState.hasShownAppraisalHint = true;
-      showMessage('The scanner has read what that is: ' + object.kind.label + ', worth ' + getLooseObjectValue(object) + '. Scan a thing well and the screen says what it is worth.', 7, 'info');
+      showMessage('The scanner has read what that is: ' + object.kind.label + ', worth ' + getLooseObjectValue(object) + '. Scan a thing well and what it is worth shows at it for a few seconds, each time you scan it.', 7, 'info');
     }
   }
 }
 
-// What the screen adds to a thing's name once the scanner has read it: ' (worth 25)', or nothing.
+// How long ago a pulse last landed on it, in seconds. What a thing is worth floats at it for a few seconds after
+// that, and no longer: scan it again and it shows again (10-interface.js).
+function getSecondsSinceLooseObjectScanned(object) {
+  return game.time - object.lastScannedTime;
+}
+
+// How high the top of it is, turned as it is: what floats at it floats just above that.
+function getLooseObjectTopY(object) {
+  const matrix = object.matrix, parts = object.prepared.parts;
+  let reachUp = 0;
+  for (let partIndex = 0; partIndex < parts.length; partIndex++) {
+    const part = parts[partIndex];
+    if (part.shape === 'box') {
+      reachUp = Math.max(reachUp, matrix[3] * part.centerX + matrix[4] * part.centerY + matrix[5] * part.centerZ +
+        Math.abs(matrix[3]) * part.halfX + Math.abs(matrix[4]) * part.halfY + Math.abs(matrix[5]) * part.halfZ);
+    } else if (part.shape === 'ball') {
+      reachUp = Math.max(reachUp, matrix[3] * part.centerX + matrix[4] * part.centerY + matrix[5] * part.centerZ + part.radius);
+    } else {
+      reachUp = Math.max(reachUp, matrix[3] * part.fromX + matrix[4] * part.fromY + matrix[5] * part.fromZ + part.radius,
+        matrix[3] * part.toX + matrix[4] * part.toY + matrix[5] * part.toZ + part.radius);
+    }
+  }
+  return object.y + reachUp;
+}
+
+// What the scanner has read a thing to be worth: nothing until it has.
 function getLooseObjectWorth(object) {
   return object.isAppraised ? getLooseObjectValue(object) : 0;
 }
@@ -567,7 +595,9 @@ function intersectRayWithLooseBox(part, ray) {
   return near;
 }
 
-// Distance along a ray (in the world) to the nearest part of one object, or -1.
+// Distance along a ray (in the world) to the nearest part of one object, or -1. Which part that was is left in
+// `looseRayPartIndex` (the workshop's object tool asks).
+let looseRayPartIndex = -1;
 function intersectRayWithLooseObject(object, originX, originY, originZ, directionX, directionY, directionZ, nearerThan) {
   const toCentreX = object.x - originX, toCentreY = object.y - originY, toCentreZ = object.z - originZ;
   const projection = toCentreX * directionX + toCentreY * directionY + toCentreZ * directionZ;
@@ -599,7 +629,7 @@ function intersectRayWithLooseObject(object, originX, originY, originZ, directio
       capsule[3] = part.toX; capsule[4] = part.toY; capsule[5] = part.toZ; capsule[6] = part.radius;
       distance = intersectRayWithCapsule(capsule, 0, ray.originX, ray.originY, ray.originZ, ray.directionX, ray.directionY, ray.directionZ);
     }
-    if (distance > 0.03 && distance < nearerThan && (best < 0 || distance < best)) best = distance;
+    if (distance > 0.03 && distance < nearerThan && (best < 0 || distance < best)) { best = distance; looseRayPartIndex = partIndex; }
   }
   return best;
 }
@@ -1310,11 +1340,17 @@ function reportLooseObjectKnock(object) {
 // ---------------------------------------------------------------------------
 
 // Returns true if the thing was destroyed.
+// (getLooseDamageShare says how much of its present worth one knock takes; the workshop's object tool asks it too.)
+function getLooseDamageShare(kind, speed) {
+  if (!kind.fragile || speed <= TUNING.looseDamageFromSpeed) return 0;
+  return kind.fragile * clampNumber((speed - TUNING.looseDamageFromSpeed) / (TUNING.looseDamageRuinSpeed - TUNING.looseDamageFromSpeed), 0, 1);
+}
+
 function damageLooseObject(object, speed) {
   const kind = object.kind;
   if (kind.shattersAt && speed >= kind.shattersAt) { shatterLooseObject(object); return true; }
-  if (!kind.fragile || speed <= TUNING.looseDamageFromSpeed || kind.value <= 0) return false;
-  const share = kind.fragile * clampNumber((speed - TUNING.looseDamageFromSpeed) / (TUNING.looseDamageRuinSpeed - TUNING.looseDamageFromSpeed), 0, 1);
+  const share = getLooseDamageShare(kind, speed);
+  if (share <= 0 || kind.value <= 0) return false;
   const before = getLooseObjectValue(object);
   object.worth = Math.max(kind.value * TUNING.looseWorthLeastShare, object.worth * (1 - share));
   const after = getLooseObjectValue(object);
@@ -1330,22 +1366,31 @@ function damageLooseObject(object, speed) {
 
 function shatterLooseObject(object) {
   const x = object.x, y = object.y, z = object.z, wasOwn = object.knockIsOwn, wasWorth = getLooseObjectValue(object), wasAppraised = object.isAppraised;
+  const kind = object.kind, isGlass = kind.material === 'glass';
   const isOfTheHollowsOwnMaking = !wasOwn && (game.time - object.kickedByHollowTime < 3 || object.isIgnoredByHollow);
   removeLooseObject(object);
   looseState.statistics.shattered++;
   looseState.statistics.worthLost += wasWorth;
   looseState.statistics.knocksHeard++;
-  playLooseObjectKnock('glass', 1, 0.7, x, y, z);
-  playNoisyFloorSound('glass', 1.6, { x: x, z: z });
+  if (isGlass) {
+    // Glass: the crash, and what is left of it lies there as broken glass, loud to walk over.
+    playLooseObjectKnock('glass', 1, 0.7, x, y, z);
+    playNoisyFloorSound('glass', 1.6, { x: x, z: z });
+    addBrokenGlassAt(x, z);
+  } else {
+    // Anything else set to break: its own sound, as hard as that gets, and nothing left of it.
+    playLooseObjectKnock(kind.material, 1, clampNumber(0.55 + kind.mass / 14, 0.6, 1.5) * (kind.loud || 1), x, y, z);
+  }
   if (!isOfTheHollowsOwnMaking) emitNoise(x, z, TUNING.noiseRadiusShatter);
   const lastKnock = looseState.lastKnock;
-  lastKnock.x = x; lastKnock.z = z; lastKnock.speed = object.kind.shattersAt; lastKnock.carries = TUNING.noiseRadiusShatter; lastKnock.isOwn = wasOwn; lastKnock.time = game.time;
-  addBrokenGlassAt(x, z);
+  lastKnock.x = x; lastKnock.z = z; lastKnock.speed = kind.shattersAt; lastKnock.carries = TUNING.noiseRadiusShatter; lastKnock.isOwn = wasOwn; lastKnock.time = game.time;
   if (wasOwn) {
-    showCaption('ownObjectShatter');
-    if (game.mode === 'playing') showMessage('The ' + object.kind.label + ' shatters.' + (wasAppraised ? ' That was worth ' + wasWorth + '.' : '') + ' Mind the glass.', 5, 'warning');
+    showCaption(isGlass ? 'ownObjectShatter' : 'ownObjectBreak');
+    if (game.mode === 'playing') {
+      showMessage('The ' + kind.label + (isGlass ? ' shatters.' : ' breaks apart.') + (wasAppraised ? ' That was worth ' + wasWorth + '.' : '') + (isGlass ? ' Mind the glass.' : ''), 5, 'warning');
+    }
   } else {
-    showCaption('objectShatter', { x: x, z: z });
+    showCaption(isGlass ? 'objectShatter' : 'objectBreak', { x: x, z: z });
   }
 }
 
@@ -1394,6 +1439,8 @@ function pickUpLooseObject(object, isByButton) {
   object.lastHandledTime = game.time;
   object.wasHandled = true; object.isIgnoredByHollow = false;
   looseState.held = object;
+  // The line that says how to pick a thing up has done its work: it is not shown again, in this descent or any other.
+  if (!settings.hasPickedSomethingUp) { settings.hasPickedSomethingUp = true; saveSettings(); }
   looseState.holdLength = TUNING.looseHoldDistance;
   gripLooseObject(object); // as it lies: the beam does not straighten it
   looseState.isHeldByButton = Boolean(isByButton);
