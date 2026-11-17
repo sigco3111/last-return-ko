@@ -799,11 +799,24 @@ function writeViewmodelMatrix(out, x, y, z, yaw, pitch) {
 }
 
 // Where the scanner in the player's hand sits in front of the eye this frame.
+// `viewmodelDriftRight` and `viewmodelDriftBack` are how far your steps have left it behind, and
+// `viewmodelTurn` is how it is turned away from where you look (computeHeldScannerInView), about your eye.
 function writeViewmodelPlacementMatrix(out, aspectRatio, frameState) {
   const narrowScreenShift = aspectRatio < 1 ? (1 - aspectRatio) * 0.16 : 0;
-  return writeViewmodelMatrix(out,
-    0.27 - narrowScreenShift + frameState.viewmodelSwayX, -0.215 + frameState.viewmodelSwayY, -0.55 + frameState.viewmodelKick,
+  writeViewmodelMatrix(out,
+    0.27 - narrowScreenShift + frameState.viewmodelSwayX + frameState.viewmodelDriftRight, -0.215 + frameState.viewmodelSwayY,
+    -0.55 + frameState.viewmodelKick + frameState.viewmodelDriftBack,
     0.1, 0.06 + frameState.viewmodelSwayY * 0.6);
+  const turn = frameState.viewmodelTurn;
+  if (turn) {
+    for (let column = 0; column < 16; column += 4) {
+      const x = out[column], y = out[column + 1], z = out[column + 2];
+      out[column] = turn[0] * x + turn[3] * y + turn[6] * z;
+      out[column + 1] = turn[1] * x + turn[4] * y + turn[7] * z;
+      out[column + 2] = turn[2] * x + turn[5] * y + turn[8] * z;
+    }
+  }
+  return out;
 }
 
 // Moves the near end of every laser line to the place in the station that is drawn exactly behind the lens of
@@ -829,9 +842,11 @@ function computeLensInView(placement, fieldOfViewDegrees) {
 
 // The same, for the game to ask: where the lens is when the scanner is held still (no sway from your steps).
 // The scanner's pulses are worked out from here when something you carry may be in their way.
-const STEADY_VIEWMODEL = { viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0 };
+const STEADY_VIEWMODEL = { viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0, viewmodelDriftRight: 0, viewmodelDriftBack: 0, viewmodelTurn: null };
 const steadyViewmodelMatrix = new Float32Array(16);
-function getSteadyLensInView(fieldOfViewDegrees) {
+// `driftRight` and `driftBack`: how far your steps have left it behind (leave them out for none).
+function getSteadyLensInView(fieldOfViewDegrees, driftRight, driftBack) {
+  STEADY_VIEWMODEL.viewmodelDriftRight = driftRight || 0; STEADY_VIEWMODEL.viewmodelDriftBack = driftBack || 0;
   const aspectRatio = renderer.height > 0 ? renderer.width / renderer.height : 16 / 9;
   return computeLensInView(writeViewmodelPlacementMatrix(steadyViewmodelMatrix, aspectRatio, STEADY_VIEWMODEL), fieldOfViewDegrees);
 }

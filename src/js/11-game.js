@@ -51,7 +51,7 @@ const ATTRACT_CAMERA = level.attractCamera; // set by whichever lift lobby is lo
 const renderCamera = { x: 0, y: 1.6, z: 0, yaw: 0, pitch: 0, fieldOfViewDegrees: 72 };
 const frameState = {
   time: 0, realTime: 0, interference: 0, danger: 0, fade: 1, powerOn: false, hasKeycard: false, keycardLevel: 0, palette: 0,
-  showViewmodel: false, viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0, scannerActivity: 0, scannerHeat: 0,
+  showViewmodel: false, viewmodelSwayX: 0, viewmodelSwayY: 0, viewmodelKick: 0, viewmodelDriftRight: 0, viewmodelDriftBack: 0, viewmodelTurn: null, scannerActivity: 0, scannerHeat: 0,
   debug: null
 };
 let lastFrameTimestamp = 0;
@@ -539,6 +539,7 @@ function retryFromCheckpoint() {
   if (!game.difficulty.checkpointsEnabled) return; // one life: the only way on is to start over
   player.x = game.checkpoint.x; player.z = game.checkpoint.z; player.yaw = game.checkpoint.yaw;
   player.pitch = 0; player.velocityX = 0; player.velocityZ = 0;
+  steadyHeldScanner();
   player.heat = 0; player.isOverheated = false; player.stamina = 1; player.isStaminaLocked = false;
   player.sweepTimeRemaining = 0;
   input.keysDown.clear();
@@ -666,6 +667,7 @@ function updatePlaying(dt) {
   game.time += dt;
   currentPointTime = game.time;
   updatePlayerMovement(dt);
+  updateHeldScannerLag(dt); // before what you carry and before the scanner: both go where it points
   const bobHeight = Math.sin(player.bobPhase) * 0.028;
   const eyeY = getPlayerEyeY() + bobHeight;
   updateLooseObjects(dt, player.x, getPlayerEyeY(), player.z); // before the scanner: what you carry is in its way
@@ -793,6 +795,9 @@ function runFrame(timestamp) {
     frameState.viewmodelSwayX = Math.cos(player.bobPhase * 0.5) * 0.006;
     frameState.viewmodelSwayY = Math.sin(player.bobPhase) * 0.005 - (player.isSprinting ? 0.03 : 0);
     frameState.viewmodelKick = isScanning && game.mode === 'playing' ? (Math.random() - 0.5) * 0.004 : 0;
+    frameState.viewmodelDriftRight = player.scannerDriftRight;
+    frameState.viewmodelDriftBack = player.scannerDriftBack;
+    frameState.viewmodelTurn = computeHeldScannerInView();
   }
 
   // Belt and braces: whenever the game arrives at a screen that is not play, by whatever route, the sounds of
@@ -974,7 +979,7 @@ function startApplication() {
 
     pickUpLooseObject: pickUpLooseObject, releaseHeldLooseObject: releaseHeldLooseObject, getHeldLooseObject: getHeldLooseObject,
     wakeLooseObject: wakeLooseObject, setLooseObjectYaw: setLooseObjectYaw, getCarrySpeedFactor: getCarrySpeedFactor,
-    fireScanPulse: fireScanPulse, fireScanPulseBeyond: fireScanPulseBeyond, scanEmitter: scanEmitter, updateScanEmitterAtLens: updateScanEmitterAtLens, updateScanEmitterAtEye: updateScanEmitterAtEye, castScannerPulse: castScannerPulse, castRayAgainstThings: castRayAgainstThings,
+    fireScanPulse: fireScanPulse, fireScanPulseBeyond: fireScanPulseBeyond, scanEmitter: scanEmitter, updateScanEmitterAtLens: updateScanEmitterAtLens, updateHeldScannerLag: updateHeldScannerLag, steadyHeldScanner: steadyHeldScanner, computeHeldScannerBasis: computeHeldScannerBasis, computeHeldScannerInView: computeHeldScannerInView, updateScanEmitterAtEye: updateScanEmitterAtEye, castScannerPulse: castScannerPulse, castRayAgainstThings: castRayAgainstThings,
     getPlayFieldOfViewDegrees: getPlayFieldOfViewDegrees, beginLettingGo: beginLettingGo,
     castScannerRay: castScannerRay, rayHit: rayHit, scannerBasis: scannerBasis, computeScannerBasis: computeScannerBasis,
     setScanHeld: function (isHeld) { input.isScanHeld = isHeld; },

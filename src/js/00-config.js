@@ -115,6 +115,13 @@ const TUNING = {
   scannerSpreadMinimumDegrees: 3,   // narrowest beam (mouse wheel down). Half-angle of the cone.
   scannerSpreadMaximumDegrees: 26,  // widest beam (mouse wheel up)
   scannerSpreadDefaultDegrees: 11,
+  // The scanner is a thing in your hand and trails a little behind where you look (issue #55). Its dots, the
+  // aiming ring, its lens and what it carries all go with it.
+  scannerFollowRate: 22,            // how eagerly it comes round to where you look, per second. Lower trails further. 0 switches the trailing off.
+  scannerLagMaximumDegrees: 9,      // it never trails further behind your view than this, however fast you turn
+  scannerStrafeLagSeconds: 0.016,   // sidestepping leaves it behind by your sideways speed times this (4 cm at a walk)
+  scannerStrafeLagMaximumMetres: 0.07,
+  scannerRunLagSeconds: 0.005,      // going forward brings it toward you by your forward speed times this (about 2 cm at a run)
   scannerClearanceMetres: 0.08,     // the scanner is held back this far from a wall your face is against, so that it is never inside it
   // Heat runs from 0 (cold) to 1 (overheated). The HUD bar shows it.
   heatPerSecondWhilePainting: 0.1,  // 0.1 = ten seconds of continuous painting from cold to overheated

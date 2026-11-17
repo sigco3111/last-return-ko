@@ -693,6 +693,11 @@ function updateHud(realDt) {
   ring.style.width = ringDiameter.toFixed(0) + 'px';
   ring.style.height = ringDiameter.toFixed(0) + 'px';
   ring.classList.toggle('is-active', player.isPainting);
+  // The ring is where the scanner points, and that trails a little behind the middle of what you see.
+  const scannerInView = computeHeldScannerInView();
+  const pixelsPerTangent = (viewHeight / 2) / Math.tan(fieldOfView / 2);
+  ring.parentElement.style.transform = 'translate(' + (-scannerInView[6] / scannerInView[8] * pixelsPerTangent).toFixed(1) + 'px, ' +
+    (scannerInView[7] / scannerInView[8] * pixelsPerTangent).toFixed(1) + 'px)';
   ring.classList.toggle('is-overheated', player.isOverheated);
 
   interfaceState.textRefreshTimer -= realDt;

@@ -28,6 +28,8 @@ const input = {
 const player = {
   x: PLAYER_START.x, z: PLAYER_START.z,
   yaw: PLAYER_START.yaw, pitch: 0,
+  scannerYaw: PLAYER_START.yaw, scannerPitch: 0, // where the scanner in your hand points: it trails a little behind where you look
+  scannerDriftRight: 0, scannerDriftBack: 0,     // how far it has been left behind by your steps, in metres: to your right, and toward you
   eyeHeight: TUNING.eyeHeightStanding, // eyes above the floor you stand on
   floorY: 0,                           // height of that floor: 0 on the lift's level, negative further down
   velocityX: 0, velocityZ: 0,
@@ -124,6 +126,7 @@ function resetPlayerToStart() {
   player.x = PLAYER_START.x; player.z = PLAYER_START.z;
   player.yaw = PLAYER_START.yaw; player.pitch = 0;
   player.velocityX = 0; player.velocityZ = 0;
+  steadyHeldScanner();
   player.stamina = 1; player.isStaminaLocked = false;
   player.heat = 0; player.isOverheated = false;
   player.sweepTimeRemaining = 0;
@@ -506,6 +509,65 @@ function computeScannerBasis(yaw, pitch) {
   scannerBasis.upX = -sineYaw * sinePitch; scannerBasis.upY = cosinePitch; scannerBasis.upZ = cosineYaw * sinePitch;
 }
 
+// The scanner is a thing you carry, so it does not turn at the very moment your head does: it comes round a
+// little later, and it is left a little behind when you step sideways. Everything it does goes with it: its
+// pulses, the aiming ring, the lens the light leaves and whatever its beam is carrying. Call once a step,
+// after you have moved and before anything asks where the scanner points.
+function updateHeldScannerLag(dt) {
+  const follow = TUNING.scannerFollowRate > 0 ? 1 - Math.exp(-TUNING.scannerFollowRate * dt) : 1;
+  const maximumLag = TUNING.scannerLagMaximumDegrees * DEGREES_TO_RADIANS;
+  let yawBehind = wrapAngleToPi(player.yaw - player.scannerYaw), pitchBehind = player.pitch - player.scannerPitch;
+  yawBehind -= yawBehind * follow; pitchBehind -= pitchBehind * follow;
+  // However fast you turn it is never further behind than this (which is also what brings it back at once
+  // when you are put somewhere else, facing another way).
+  const behind = Math.sqrt(yawBehind * yawBehind + pitchBehind * pitchBehind);
+  if (behind > maximumLag) { yawBehind *= maximumLag / behind; pitchBehind *= maximumLag / behind; }
+  player.scannerYaw = player.yaw - yawBehind;
+  player.scannerPitch = player.pitch - pitchBehind;
+
+  const cosineYaw = Math.cos(player.yaw), sineYaw = Math.sin(player.yaw);
+  const sidewaysSpeed = player.velocityX * cosineYaw + player.velocityZ * sineYaw;
+  const forwardSpeed = player.velocityX * sineYaw - player.velocityZ * cosineYaw;
+  const wantedDriftRight = TUNING.scannerFollowRate > 0
+    ? clampNumber(-sidewaysSpeed * TUNING.scannerStrafeLagSeconds, -TUNING.scannerStrafeLagMaximumMetres, TUNING.scannerStrafeLagMaximumMetres) : 0;
+  const wantedDriftBack = TUNING.scannerFollowRate > 0 ? Math.max(0, forwardSpeed) * TUNING.scannerRunLagSeconds : 0;
+  player.scannerDriftRight += (wantedDriftRight - player.scannerDriftRight) * follow;
+  player.scannerDriftBack += (wantedDriftBack - player.scannerDriftBack) * follow;
+}
+
+// Puts the scanner straight in front of you, with nothing left of its trailing: for the start of a descent.
+function steadyHeldScanner() {
+  player.scannerYaw = player.yaw; player.scannerPitch = player.pitch;
+  player.scannerDriftRight = 0; player.scannerDriftBack = 0;
+}
+
+// `scannerBasis` for the scanner in your hand: the way it points now, which trails where you look.
+function computeHeldScannerBasis() {
+  computeScannerBasis(player.scannerYaw, player.scannerPitch);
+}
+
+// How the scanner in your hand is turned, as your eyes see it: three columns (its right, its up and its back)
+// measured along your own right, up and back. With the scanner straight ahead it is 1 0 0, 0 1 0, 0 0 1.
+const heldScannerInView = new Float32Array([1, 0, 0, 0, 1, 0, 0, 0, 1]);
+function computeHeldScannerInView() {
+  const out = heldScannerInView, basis = scannerBasis;
+  computeHeldScannerBasis();
+  const heldRightX = basis.rightX, heldRightY = basis.rightY, heldRightZ = basis.rightZ;
+  const heldUpX = basis.upX, heldUpY = basis.upY, heldUpZ = basis.upZ;
+  const heldForwardX = basis.forwardX, heldForwardY = basis.forwardY, heldForwardZ = basis.forwardZ;
+  computeScannerBasis(player.yaw, player.pitch); // and `scannerBasis` is left as your eyes have it
+  out[0] = heldRightX * basis.rightX + heldRightY * basis.rightY + heldRightZ * basis.rightZ;
+  out[1] = heldRightX * basis.upX + heldRightY * basis.upY + heldRightZ * basis.upZ;
+  out[2] = -(heldRightX * basis.forwardX + heldRightY * basis.forwardY + heldRightZ * basis.forwardZ);
+  out[3] = heldUpX * basis.rightX + heldUpY * basis.rightY + heldUpZ * basis.rightZ;
+  out[4] = heldUpX * basis.upX + heldUpY * basis.upY + heldUpZ * basis.upZ;
+  out[5] = -(heldUpX * basis.forwardX + heldUpY * basis.forwardY + heldUpZ * basis.forwardZ);
+  out[6] = -(heldForwardX * basis.rightX + heldForwardY * basis.rightY + heldForwardZ * basis.rightZ);
+  out[7] = -(heldForwardX * basis.upX + heldForwardY * basis.upY + heldForwardZ * basis.upZ);
+  out[8] = heldForwardX * basis.forwardX + heldForwardY * basis.forwardY + heldForwardZ * basis.forwardZ;
+  return out;
+}
+
 function markInteractableDiscovered(objectId) {
   const interactable = findInteractableByObjectId(objectId);
   if (interactable && !interactable.isDiscovered) interactable.isDiscovered = true;
@@ -579,7 +641,7 @@ function updateScanEmitterAtEye(eyeX, eyeY, eyeZ) {
 
 // For the player: the light leaves the scanner's lens. Call computeScannerBasis first.
 function updateScanEmitterAtLens(eyeX, eyeY, eyeZ) {
-  const basis = scannerBasis, lens = getSteadyLensInView(getPlayFieldOfViewDegrees());
+  const basis = scannerBasis, lens = getSteadyLensInView(getPlayFieldOfViewDegrees(), player.scannerDriftRight, player.scannerDriftBack);
   let offsetX = basis.rightX * lens.x + basis.upX * lens.y - basis.forwardX * lens.z;
   let offsetY = basis.rightY * lens.x + basis.upY * lens.y - basis.forwardY * lens.z;
   let offsetZ = basis.rightZ * lens.x + basis.upZ * lens.y - basis.forwardZ * lens.z;
@@ -642,7 +704,7 @@ function fireScannerPulse(horizontalTangent, verticalTangent, drawBeam) {
 
 function updateScanner(dt, eyeX, eyeY, eyeZ) {
   const quality = QUALITY_PRESETS[settings.quality];
-  computeScannerBasis(player.yaw, player.pitch);
+  computeHeldScannerBasis(); // the way the scanner points, which trails where you look: the pulses go with it
   const basis = scannerBasis;
   updateScanEmitterAtLens(eyeX, eyeY, eyeZ); // the light leaves the lens: what is between it and the wall is in the way
   // Roughly where the scanner is held. While the scanner is on screen the renderer moves the start of the
@@ -720,7 +782,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
   setScannerSound(wantsPaint ? 1 : (isSweeping ? 0.7 : 0));
   player.scannerActivity = approachValue(player.scannerActivity, wantsPaint || isSweeping ? 1 : 0, dt * 9);
 
-  // The range readout always measures straight ahead, even when not scanning.
+  // The range readout always measures straight out from the scanner, even when not scanning.
   if (castScannerPulse(0, 0)) {
     player.centerRange = rayHit.distance;
   } else {
@@ -729,6 +791,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
 }
 
 function updateInteractionFocus(eyeX, eyeY, eyeZ) {
+  computeScannerBasis(player.yaw, player.pitch); // what you can use is what you look at, not what the scanner has come round to
   const basis = scannerBasis;
   let best = null, bestScore = 0.86;
   for (const interactable of interactables) {

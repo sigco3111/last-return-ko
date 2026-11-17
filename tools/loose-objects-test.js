@@ -467,6 +467,62 @@ function installLab() {
   check('a pulse can be fired from anywhere, not only from the scanner: one fired straight down in mid-room leaves a point on the floor under it',
     light.fromAnywhere.landed && light.fromAnywhere.onTheFloor && light.fromAnywhere.pointsAdded === 1, light.fromAnywhere);
 
+  // --- the scanner trails a little behind where you look (issue #55) ---
+  const trailing = await inGame((bare) => {
+    const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, tuning = d.tuning, result = {};
+    const degrees = 180 / Math.PI;
+    d.clearLooseObjects();
+    lab.stand(bare.x + bare.stepX * (bare.wall - 3), bare.z + bare.stepZ * (bare.wall - 3), bare.yaw);
+    result.atRestDegrees = Math.abs(p.yaw - p.scannerYaw) * degrees + Math.abs(p.pitch - p.scannerPitch) * degrees;
+    const ringAtRest = d.computeHeldScannerInView();
+    result.ringAtRest = Math.hypot(ringAtRest[6], ringAtRest[7]);
+    // A small turn to the right: the scanner is behind it, to the left, and its pulses with it.
+    p.yaw += 5 / degrees;
+    d.updateHeldScannerLag(1 / 60);
+    result.behindAfterOneStepDegrees = (p.yaw - p.scannerYaw) * degrees;
+    const ring = d.computeHeldScannerInView();
+    result.ringIsToTheLeft = -ring[6] / ring[8] < -0.01;
+    d.computeHeldScannerBasis();
+    d.updateScanEmitterAtLens(p.x, d.getPlayerEyeY(), p.z);
+    const lit = d.castScannerPulse(0, 0) ? { x: d.rayHit.x, y: d.rayHit.y, z: d.rayHit.z } : null;
+    // Where your eye sees the middle of the ring: along the scanner's own direction, from the eye.
+    const seen = d.castScannerRay(p.x, d.getPlayerEyeY(), p.z, Math.sin(p.scannerYaw) * Math.cos(p.scannerPitch), Math.sin(p.scannerPitch), -Math.cos(p.scannerYaw) * Math.cos(p.scannerPitch), 60)
+      ? { x: d.rayHit.x, y: d.rayHit.y, z: d.rayHit.z } : null;
+    result.pulseOffTheRing = lit && seen ? Math.hypot(lit.x - seen.x, lit.y - seen.y, lit.z - seen.z) : 99;
+    for (let step = 0; step < 60; step++) d.updateHeldScannerLag(1 / 60);
+    result.behindAfterASecondDegrees = Math.abs(p.yaw - p.scannerYaw) * degrees;
+    // Spun right round and looking up at once: it is never further behind than the limit.
+    p.yaw += 2.5; p.pitch = 0.6;
+    d.updateHeldScannerLag(1 / 60);
+    result.behindAfterASpinDegrees = Math.hypot(Math.atan2(Math.sin(p.yaw - p.scannerYaw), Math.cos(p.yaw - p.scannerYaw)), p.pitch - p.scannerPitch) * degrees;
+    result.limitDegrees = tuning.scannerLagMaximumDegrees;
+    p.pitch = 0; d.steadyHeldScanner();
+    // Stepping to the right leaves it to the left; running forward brings it a little toward you.
+    p.velocityX = Math.cos(p.yaw) * tuning.walkSpeed; p.velocityZ = Math.sin(p.yaw) * tuning.walkSpeed;
+    for (let step = 0; step < 60; step++) d.updateHeldScannerLag(1 / 60);
+    result.driftRightWhileSteppingRight = p.scannerDriftRight;
+    p.velocityX = Math.sin(p.yaw) * tuning.sprintSpeed; p.velocityZ = -Math.cos(p.yaw) * tuning.sprintSpeed;
+    for (let step = 0; step < 60; step++) d.updateHeldScannerLag(1 / 60);
+    result.driftBackWhileRunning = p.scannerDriftBack;
+    result.driftRightWhileRunning = p.scannerDriftRight;
+    p.velocityX = 0; p.velocityZ = 0;
+    for (let step = 0; step < 60; step++) d.updateHeldScannerLag(1 / 60);
+    result.driftLeftStandingStill = Math.abs(p.scannerDriftRight) + Math.abs(p.scannerDriftBack);
+    d.steadyHeldScanner();
+    return result;
+  }, bareWallForScanner);
+  check('standing still the scanner points where you look and the ring is in the middle of the view',
+    trailing.atRestDegrees < 0.01 && trailing.ringAtRest < 1e-4, trailing);
+  check('the scanner trails a turn: a step after turning it is behind, the ring is on the side you turned from, and a second later it has caught up',
+    trailing.behindAfterOneStepDegrees > 1 && trailing.behindAfterOneStepDegrees < 5 && trailing.ringIsToTheLeft && trailing.behindAfterASecondDegrees < 0.01, trailing);
+  check('the pulses go with the scanner: the middle one lands exactly where your eye sees the middle of the ring',
+    trailing.pulseOffTheRing < 1e-6, trailing.pulseOffTheRing);
+  check('however fast you turn, the scanner is never further behind than its limit',
+    trailing.behindAfterASpinDegrees <= trailing.limitDegrees + 1e-6 && trailing.behindAfterASpinDegrees > trailing.limitDegrees - 0.5, trailing);
+  check('a step to the side leaves the scanner a few centimetres behind, running brings it a little toward you, and standing still it comes back',
+    trailing.driftRightWhileSteppingRight < -0.02 && trailing.driftRightWhileSteppingRight > -0.08 && trailing.driftBackWhileRunning > 0.01 && trailing.driftBackWhileRunning < 0.04 &&
+    Math.abs(trailing.driftRightWhileRunning) < 0.002 && trailing.driftLeftStandingStill < 0.001, trailing);
+
   // --- knocks ---
   const bareWall = await inGame(() => { window.looseLab.reset(); return window.looseLab.findBareWall(); });
   check('Kessel-9 has a bare wall with a clear run up to it and no door near', bareWall !== null, bareWall);
