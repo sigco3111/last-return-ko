@@ -14,9 +14,17 @@ function check(description, condition, detail) {
 function installLab() {
   const d = window.lastReturnDebug, p = d.player;
   const round = (value) => Math.round(value * 1000) / 1000;
+  // Most of these checks are about how things move, and were written when nothing could break. So in this
+  // suite nothing does, unless a check asks for it: the checks under "what a knock costs" switch it on.
+  const whole = { from: d.tuning.looseDamageFromSpeed, shattersAt: {} };
+  for (const kindKey of Object.keys(d.looseObjectKinds)) whole.shattersAt[kindKey] = d.looseObjectKinds[kindKey].shattersAt;
   const lab = window.looseLab = {
     round: round,
     noises: [],
+    setBreakable: function (isBreakable) {
+      d.tuning.looseDamageFromSpeed = isBreakable ? whole.from : 1000;
+      for (const kindKey of Object.keys(d.looseObjectKinds)) d.looseObjectKinds[kindKey].shattersAt = isBreakable ? whole.shattersAt[kindKey] : undefined;
+    },
     // Starts over: Kessel-9, nothing loose, creatures held still, every noise written down.
     reset: function () {
       d.loadStation('classic', 0);
@@ -173,6 +181,7 @@ function installLab() {
   const inGame = (callback, argument) => page.evaluate(callback, argument);
   await startGame(page, false);
   await inGame(installLab);
+  await inGame(() => window.looseLab.setBreakable(false));
 
   // --- how they are described ---
   const described = await inGame(() => {
@@ -1306,6 +1315,100 @@ function installLab() {
     !thrownBack.can.afterPickingItUp.ignored && thrownBack.can.afterPickingItUp.ofInterest, thrownBack.can);
   check('a gas canister is too heavy for that: it goes after it and does not throw it', thrownBack.canister.kicked && thrownBack.canister.flungAfterSeconds < 0 && !thrownBack.canister.ignored, thrownBack.canister);
 
+  // --- what a knock costs ---
+  const breakage = await inGame((spot) => {
+    const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = {};
+    lab.reset();
+    lab.setBreakable(true);
+    const wall = lab.rockAhead(spot.x, spot.z);
+    // How a thing of this kind fares: set down from a crouch, let go of standing up, or thrown as hard as you can.
+    const fares = function (kindKey, how) {
+      d.clearLooseObjects();
+      lab.stand(spot.x, spot.z, Math.PI / 2);
+      if (how === 'set down') { d.input.keysDown.add('KeyC'); d.simulate(0.8); }
+      const object = lab.carry(kindKey);
+      // Set down: you look down at the floor over a second and a half, so that it is lowered and not slammed.
+      if (how === 'set down') { for (let step = 0; step < 45; step++) { p.pitch -= 1.1 / 45; d.simulate(1 / 30); } d.simulate(0.8); } else p.pitch = how === 'thrown' ? 0.1 : 0;
+      d.captionCounts.ownObjectShatter = 0;
+      d.clearMessages();
+      lab.noises.length = 0;
+      const shatteredBefore = d.looseState.statistics.shattered;
+      d.releaseHeldLooseObject(how === 'thrown' ? 1 : 0);
+      for (let step = 0; step < 300 && !object.isAsleep && !object.isRemoved; step++) d.simulate(1 / 30);
+      d.input.keysDown.clear();
+      return { whole: object.kind.value, worth: object.isRemoved ? 0 : d.getLooseObjectValue(object), gone: object.isRemoved, shattered: d.looseState.statistics.shattered - shatteredBefore,
+        said: lab.messages(), caption: d.captionCounts.ownObjectShatter, loudest: lab.round(Math.max.apply(null, [0].concat(lab.noises.map((noise) => noise.radius)))),
+        at: [lab.round(object.x), lab.round(object.z)] };
+    };
+    result.toolCase = { setDown: fares('toolCase', 'set down'), dropped: fares('toolCase', 'dropped'), thrown: fares('toolCase', 'thrown') };
+    result.can = { thrown: fares('can', 'thrown') };
+    // Thrown again and again, it is never worth less than a tenth of what it was.
+    d.clearLooseObjects();
+    lab.stand(spot.x, spot.z, Math.PI / 2);
+    const battered = lab.carry('toolCase');
+    for (let again = 0; again < 14; again++) {
+      p.pitch = 0.1;
+      d.releaseHeldLooseObject(1);
+      for (let step = 0; step < 240 && !battered.isAsleep; step++) d.simulate(1 / 30);
+      lab.stand(battered.x - 1.2, battered.z, Math.PI / 2);
+      p.pitch = Math.atan2(battered.y - d.getPlayerEyeY(), 1.2);
+      d.simulate(0.1);
+      d.pickUpLooseObject(battered, false);
+      d.simulate(1.2);
+      lab.stand(spot.x, spot.z, Math.PI / 2);
+      d.simulate(0.8);
+    }
+    result.battered = { worth: d.getLooseObjectValue(battered), whole: battered.kind.value, least: battered.kind.value * d.tuning.looseWorthLeastShare, lostInAll: d.looseState.statistics.worthLost };
+    d.releaseHeldLooseObject(0);
+
+    // A sample jar: set down it is whole; carried into a wall at a walk it lives, and is worth a little less;
+    // let go of standing up it shatters.
+    result.jar = { setDown: fares('jar', 'set down') };
+    d.clearLooseObjects();
+    lab.stand(spot.x + wall - 2.6, spot.z, Math.PI / 2);
+    const bumped = lab.carry('jar');
+    d.input.keysDown.add('KeyW');
+    d.simulate(2.5);
+    d.input.keysDown.clear();
+    result.jar.walkedIntoAWall = { gone: bumped.isRemoved, worth: bumped.isRemoved ? 0 : d.getLooseObjectValue(bumped), whole: bumped.kind.value, held: d.getHeldLooseObject() === bumped };
+    const patchesBefore = d.noisyFloorPatches.length;
+    result.jar.dropped = fares('jar', 'dropped');
+    const glass = d.noisyFloorPatches.filter((patch) => patch.isFromPlay);
+    result.glass = { patches: d.noisyFloorPatches.length - patchesBefore, kind: glass.length ? glass[0].kind : '', metresFromWhereItBroke: glass.length ? lab.round(Math.hypot(glass[0].x - result.jar.dropped.at[0], glass[0].z - result.jar.dropped.at[1])) : 99,
+      pieces: glass.length ? glass[0].props.length : 0, markedLoud: glass.length ? d.findNoisyFloorPatchAt(glass[0].x, glass[0].z) === glass[0] : false };
+    // Walking across what is left of it is as loud as any broken glass.
+    if (glass.length) {
+      d.clearLooseObjects();
+      d.noisyFloorCounts.byPlayer = 0;
+      lab.stand(glass[0].x - 1.6, glass[0].z, Math.PI / 2);
+      d.input.keysDown.add('KeyW');
+      d.simulate(1.6);
+      d.input.keysDown.clear();
+      result.glass.setOffByWalkingOverIt = d.noisyFloorCounts.byPlayer;
+    }
+    // A new descent: the glass is swept up, and what the station has lying about is whole again.
+    d.startOver();
+    d.game.flags.hasLeftLift = true; d.hollow.isActive = false;
+    result.newDescent = { glassLeft: d.noisyFloorPatches.filter((patch) => patch.isFromPlay).length, patches: d.noisyFloorPatches.length - patchesBefore,
+      allWhole: d.looseObjects.length > 10 && d.looseObjects.every((object) => d.getLooseObjectValue(object) === object.kind.value), lost: d.looseState.statistics.worthLost };
+    lab.reset();
+    lab.setBreakable(false);
+    return result;
+  }, spot);
+  check('a knock costs by how hard it is: a tool case set down from a crouch is worth what it was, let go of standing up it is worth less, thrown it is worth less still, and the screen says so',
+    breakage.toolCase.setDown.worth === breakage.toolCase.setDown.whole && breakage.toolCase.dropped.worth < breakage.toolCase.dropped.whole && breakage.toolCase.dropped.worth > breakage.toolCase.dropped.whole * 0.6 &&
+    breakage.toolCase.thrown.worth < breakage.toolCase.dropped.worth && !breakage.toolCase.thrown.gone && breakage.toolCase.dropped.said.some((text) => /The tool case took that badly/.test(text)) &&
+    breakage.toolCase.setDown.said.every((text) => !/took that badly/.test(text)), breakage.toolCase);
+  check('an empty can loses nothing however it is thrown, and a thing thrown again and again is never worth less than a tenth of what it was',
+    breakage.can.thrown.worth === breakage.can.thrown.whole && breakage.battered.worth >= Math.round(breakage.battered.least) && breakage.battered.worth <= breakage.battered.whole * 0.25 && breakage.battered.lostInAll > 0, [breakage.can, breakage.battered]);
+  check('a sample jar set down is whole; carried into a wall at a walk it lives, worth no more than it was; let go of standing up it shatters, loudly, and is gone',
+    !breakage.jar.setDown.gone && breakage.jar.setDown.worth === breakage.jar.setDown.whole && !breakage.jar.walkedIntoAWall.gone && breakage.jar.walkedIntoAWall.held && breakage.jar.walkedIntoAWall.worth <= breakage.jar.walkedIntoAWall.whole &&
+    breakage.jar.walkedIntoAWall.worth >= breakage.jar.walkedIntoAWall.whole * 0.85 && breakage.jar.dropped.gone && breakage.jar.dropped.shattered === 1 && breakage.jar.dropped.caption === 1 && breakage.jar.dropped.loudest >= 18 &&
+    breakage.jar.dropped.said.some((text) => /The sample jar shatters\..*Mind the glass/.test(text)), breakage.jar);
+  check('where it shattered there is broken glass on the floor, as loud to walk over as any other; a new descent sweeps it up and has everything whole again',
+    breakage.glass.patches === 1 && breakage.glass.kind === 'glass' && breakage.glass.metresFromWhereItBroke < 0.8 && breakage.glass.pieces >= 3 && breakage.glass.markedLoud && breakage.glass.setOffByWalkingOverIt >= 1 &&
+    breakage.newDescent.glassLeft === 0 && breakage.newDescent.patches === 0 && breakage.newDescent.allWhole && breakage.newDescent.lost === 0, [breakage.glass, breakage.newDescent]);
+
   // --- what a thing is worth ---
   await inGame((spot) => {
     const d = window.lastReturnDebug, lab = window.looseLab;
@@ -1593,6 +1696,7 @@ function installLab() {
   const phone = await openGame({ dev: true, width: 844, height: 390, isPhone: true });
   await startGame(phone.page, true);
   await phone.page.evaluate(installLab);
+  await phone.page.evaluate(() => window.looseLab.setBreakable(false));
   const phoneHint = await phone.page.evaluate(() => {
     const d = window.lastReturnDebug, lab = window.looseLab, p = d.player;
     lab.reset();

@@ -453,7 +453,7 @@ function buildDebugReadout() {
   lines.push('heard from  ' + (player.audibleRadius * game.difficulty.hearingFactor).toFixed(1) + ' m');
   if (looseObjects.length > 0) {
     let awake = 0, worth = 0, handled = 0;
-    for (const object of looseObjects) { if (!object.isAsleep) awake++; worth += object.kind.value; if (object.wasHandled) handled++; }
+    for (const object of looseObjects) { if (!object.isAsleep) awake++; worth += getLooseObjectValue(object); if (object.wasHandled) handled++; }
     const held = getHeldLooseObject();
     lines.push('objects     ' + looseObjects.length + ' loose, ' + awake + ' moving' + (held ? '   carrying the ' + held.kind.label : ''));
     lines.push('  knocks    ' + looseState.statistics.knocksHeard + ' heard by it, ' + looseState.statistics.knocksQuiet + ' only by you');
@@ -462,7 +462,7 @@ function buildDebugReadout() {
       lines.push('  salvage   ' + salvage.done + ' of ' + salvage.total + '   (' + haulState.withinWalk + ' within walking reach)');
       for (const bay of haulState.bays) lines.push('  bay ' + (bay.index + 1) + '     ' + bay.state + ' at x ' + bay.doorwayX.toFixed(0) + '  z ' + bay.doorwayZ.toFixed(0) + '   ' + (bay.state === 'sealed' ? bay.taken + ' taken' : getHaulBayValue(bay) + ' of ' + bay.quota));
     }
-    lines.push('  worth     ' + worth + ' in all' + (held ? ', ' + held.kind.value + ' in the beam' : '') + '   handled ' + handled + '   thrown back ' + looseState.statistics.flungBack);
+    lines.push('  worth     ' + worth + ' in all' + (held ? ', ' + getLooseObjectValue(held) + ' of ' + held.kind.value + ' in the beam' : '') + '   lost to knocks ' + looseState.statistics.worthLost + '   handled ' + handled + '   thrown back ' + looseState.statistics.flungBack);
   }
   if (hollow.isActive) {
     const distance = distanceBetweenPoints(hollow.figure.x, hollow.figure.z, player.x, player.z);

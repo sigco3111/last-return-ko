@@ -208,6 +208,11 @@ const TUNING = {
   noiseRadiusHaulBayPing: 9,        // how far the Hollow hears that ping
   looseAppraiseHits: 20,            // after this many pulses on a thing the scanner has read it, and the screen says what it is worth
   looseValuablesShareOnSurfaces: 0.5, // this share of those stands on tables, shelves and crates; the rest on the floor, out of the way
+  // What a knock costs (see "What a knock costs" in 08-loose-objects.js).
+  looseDamageFromSpeed: 2.2,        // a knock slower than this (m/s) costs nothing. A thing set down is under it; a full walk into a wall (2.5) is just over.
+  looseDamageRuinSpeed: 9,          // ... and at this speed it takes off the whole of the thing's `fragile` share. A drop from your hands lands at about 4.5, a hard throw at up to 11.
+  looseWorthLeastShare: 0.1,        // nothing is ever worth less than this share of what it was whole
+  noiseRadiusShatter: 24,           // a sample jar shattering: as far as the hardest knock carries
   // Walking into one that lies on the floor.
   looseShoveFreeMass: 2,            // lighter than this (kg) you kick along without it slowing you
   looseShoveBlockMass: 16,          // this heavy or heavier it does not move for your legs and stops you: pick it up. In between it slows you by its share of the way from one to the other.
@@ -571,6 +576,8 @@ const CAPTIONS = {
   ownGlass: { text: '[glass crunches under your boots]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
   ownPlate: { text: '[a floor plate clanks under you]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
   hollowFling: { text: '[something is thrown, hard, out of the dark]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'hollowFeet', rank: 2 },
+  ownObjectShatter: { text: '[glass shatters at your feet]', level: 'sound', withinMetres: 0, seconds: 3, slot: 'ownHands', rank: 2 },
+  objectShatter: { text: '[glass shatters]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
   ownObjectKicked: { text: '[something skitters away from your feet]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
   scanGrenade: { text: '[a rising whine, and a crack of light]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
   hollowStunned: { text: '[it stands frozen in the light]', level: 'tell', withinMetres: 0, seconds: 3.2 },

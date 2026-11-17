@@ -22,7 +22,10 @@
 // TWEAK: the objects.
 //   label      what it is called on screen ("Pick up the gas canister")
 //   mass       kilograms. Heavier swings wider behind the beam, slows you more, throws shorter, knocks louder.
-//   value      what it is worth, in the station's own credits. Everything loose is worth something, however little.
+//   value      what it is worth, in the station's own credits, while it is whole. Everything loose is worth something, however little.
+//   fragile    how much of what it is worth a ruinous knock takes off it: 0 nothing (a can), 1 all of it down to scrap
+//              (see "What a knock costs" further down). Left out: 0.
+//   shattersAt hit harder than this (m/s) it is destroyed outright: only glass. Left out: it never is.
 //   material   what it sounds like when it hits something: 'metal', 'glass', 'case' (a dull box with things in it), 'tin' (a can) or 'card' (cardboard)
 //   loud       how far its knocks carry for its weight: 1 is ordinary, an empty can is more, a cardboard box less
 //   lies       how it is put out in a station: 'upright' as its parts are given, 'onItsSide' (a quarter turn over),
@@ -43,24 +46,24 @@
 // 00-config.js) beyond its own size. How much of the beam it takes follows from how big it is.
 const LOOSE_OBJECT_KINDS = {
   canister: {
-    label: 'gas canister', mass: 3, value: 25, material: 'metal', loud: 1, lies: 'either', bulky: false, bounce: 0.3, grip: 0.5,
+    label: 'gas canister', mass: 3, value: 25, fragile: 0.5, material: 'metal', loud: 1, lies: 'either', bulky: false, bounce: 0.3, grip: 0.5,
     parts: [{ shape: 'capsule', from: [0, -0.13, 0], to: [0, 0.13, 0], radius: 0.07 }]
   },
   jar: {
-    label: 'sample jar', mass: 0.8, value: 60, material: 'glass', loud: 1, lies: 'upright', bulky: false, bounce: 0.2, grip: 0.45,
+    label: 'sample jar', mass: 0.8, value: 60, fragile: 1, shattersAt: 3.4, material: 'glass', loud: 1, lies: 'upright', bulky: false, bounce: 0.2, grip: 0.45,
     parts: [{ shape: 'capsule', from: [0, -0.05, 0], to: [0, 0.05, 0], radius: 0.06 }]
   },
   toolCase: {
-    label: 'tool case', mass: 6, value: 80, material: 'case', loud: 1, lies: 'onItsSide', bulky: false, bounce: 0.15, grip: 0.6,
+    label: 'tool case', mass: 6, value: 80, fragile: 0.7, material: 'case', loud: 1, lies: 'onItsSide', bulky: false, bounce: 0.15, grip: 0.6,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.21, 0.15, 0.08] }]
   },
   // The pipe hangs across the beam, not along it: 1.2 m of it, and a doorway is a metre wide.
   pipe: {
-    label: 'length of pipe', mass: 4, value: 15, material: 'metal', loud: 1, lies: 'upright', bulky: false, bounce: 0.35, grip: 0.4,
+    label: 'length of pipe', mass: 4, value: 15, fragile: 0.3, material: 'metal', loud: 1, lies: 'upright', bulky: false, bounce: 0.35, grip: 0.4,
     parts: [{ shape: 'capsule', from: [-0.6, 0, 0], to: [0.6, 0, 0], radius: 0.03 }]
   },
   crate: {
-    label: 'crate', mass: 12, value: 40, material: 'case', loud: 1, lies: 'upright', bulky: true, bounce: 0.12, grip: 0.7,
+    label: 'crate', mass: 12, value: 40, fragile: 0.6, material: 'case', loud: 1, lies: 'upright', bulky: true, bounce: 0.12, grip: 0.7,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.25, 0.22, 0.22] }]
   },
   // A scan grenade: arm it (Q), throw it, and where it lands it scans the room for you, all round. The light
@@ -88,18 +91,18 @@ const LOOSE_OBJECT_KINDS = {
       { shape: 'ball', center: [0.016, 0.053, -0.016], radius: 0.012 }, { shape: 'ball', center: [-0.016, 0.053, -0.016], radius: 0.012 }]
   },
   carton: {
-    label: 'cardboard box', mass: 0.7, value: 2, material: 'card', loud: 0.6, lies: 'upright', bulky: false, bounce: 0.1, grip: 0.7,
+    label: 'cardboard box', mass: 0.7, value: 2, fragile: 0.5, material: 'card', loud: 0.6, lies: 'upright', bulky: false, bounce: 0.1, grip: 0.7,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.17, 0.11, 0.13] }]
   },
   plate: {
-    label: 'steel plate', mass: 3.5, value: 6, material: 'metal', loud: 1.3, lies: 'upright', bulky: false, bounce: 0.25, grip: 0.5,
+    label: 'steel plate', mass: 3.5, value: 6, fragile: 0.2, material: 'metal', loud: 1.3, lies: 'upright', bulky: false, bounce: 0.25, grip: 0.5,
     // It is thin, but nothing in a station is thinner than a shelf board: steps of a centimetre or so are fine enough
     // for it not to pass through one, and steps as fine as its own thickness would slow everything that moves with it.
     stepRadius: 0.025,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.2, 0.012, 0.15] }]
   },
   pumpMotor: {
-    label: 'pump motor', mass: 18, value: 150, material: 'metal', loud: 1, lies: 'upright', bulky: true, bounce: 0.1, grip: 0.65,
+    label: 'pump motor', mass: 18, value: 150, fragile: 0.6, material: 'metal', loud: 1, lies: 'upright', bulky: true, bounce: 0.1, grip: 0.65,
     parts: [
       { shape: 'capsule', from: [-0.12, 0, 0], to: [0.12, 0, 0], radius: 0.13 },
       { shape: 'capsule', from: [0.12, 0, 0], to: [0.3, 0, 0], radius: 0.035 },
@@ -121,6 +124,7 @@ const looseState = {
   isHeldByButton: false,   // it is carried for as long as the right mouse button is down (and not by a press of E, which stays until E again)
   holdTargetX: 0, holdTargetY: 0, holdTargetZ: 0,
   holdBreakTimer: 0,       // how long the carried object has been too far from where the beam wants it
+  lastDamageSaidTime: -10, // when the screen last said that a knock cost something
   holdLength: 0,           // how far out the beam holds it right now: looseHoldDistance, or less while it is pressed against something ahead
   isLettingGo: false,      // E went down with something in the beam and nothing to use: this press lets go or throws
   lettingGoSeconds: 0,     // ... and has been held this long. A tap lets go, a hold winds up a throw.
@@ -134,7 +138,7 @@ const looseState = {
   shoveBackDepth: 0, shoveBackX: 0, shoveBackZ: 0,
   // How fast you walked this frame before anything on the floor held you back: that is the speed you kick with.
   playerStrideX: 0, playerStrideZ: 0,
-  statistics: { knocksHeard: 0, knocksQuiet: 0, pulledFromHands: 0, lostDownThePit: 0, putBack: 0, grenadesSpent: 0, flungBack: 0 }, // putBack: an object got into the rock and was set back where it last was not. Should stay 0.
+  statistics: { knocksHeard: 0, knocksQuiet: 0, pulledFromHands: 0, lostDownThePit: 0, putBack: 0, grenadesSpent: 0, flungBack: 0, worthLost: 0, shattered: 0 }, // putBack: an object got into the rock and was set back where it last was not. Should stay 0.
   lastKnock: { x: 0, z: 0, speed: 0, carries: 0, isOwn: false, time: -10 }, // the last knock the Hollow could hear: where, how hard, how far it carried
   lastFling: { x: 0, z: 0, targetX: 0, targetZ: 0, time: -100, id: 0 } // the last thing the Hollow threw back, for the tests and the debug readout
 };
@@ -352,6 +356,7 @@ function createLooseObject(kindKey, x, y, z, yaw) {
     // For a kind that does something (`use`): when it was set off, when it starts doing it, and whether it is used up.
     armedTime: -1, goesOffTime: -1, burstSeconds: 0, burstBudget: 0, burstHitsOnHollow: 0, isSpent: false,
     kickedByHollowTime: -100, chasedSince: -100, // when the Hollow last kicked it, and when it last started going after it
+    worth: kind.value,                  // what it is worth now: less than kind.value once it has been knocked about
     scanHits: 0, isAppraised: false,    // how many pulses have landed on it, and whether that was enough for the scanner to read what it is worth
     wasHandled: false,                  // you have had it in the beam (and the Hollow has not flung it back since): only such things interest it
     isIgnoredByHollow: false,           // the Hollow flung it: it knows that noise, and pays it no heed until you handle the thing again
@@ -382,7 +387,9 @@ function resetLooseObjectsForNewRun() {
   looseState.hasShownKnockHint = false;
   looseState.hasShownAppraisalHint = false;
   const statistics = looseState.statistics;
-  statistics.knocksHeard = 0; statistics.knocksQuiet = 0; statistics.pulledFromHands = 0; statistics.lostDownThePit = 0; statistics.putBack = 0; statistics.grenadesSpent = 0; statistics.flungBack = 0;
+  statistics.knocksHeard = 0; statistics.knocksQuiet = 0; statistics.pulledFromHands = 0; statistics.lostDownThePit = 0; statistics.putBack = 0; statistics.grenadesSpent = 0; statistics.flungBack = 0; statistics.worthLost = 0; statistics.shattered = 0;
+  looseState.lastDamageSaidTime = -10;
+  removeBrokenGlassFromPlay(); // what was broken in the last descent is swept up
 }
 
 function removeLooseObject(object) {
@@ -441,16 +448,22 @@ function noteLooseObjectScanned(object) {
   object.scanHits++;
   if (!object.isAppraised && object.scanHits >= TUNING.looseAppraiseHits) {
     object.isAppraised = true;
-    if (!looseState.hasShownAppraisalHint && object.kind.value > 0 && game.mode === 'playing') {
+    if (!looseState.hasShownAppraisalHint && getLooseObjectValue(object) > 0 && game.mode === 'playing') {
       looseState.hasShownAppraisalHint = true;
-      showMessage('The scanner has read what that is: ' + object.kind.label + ', worth ' + object.kind.value + '. Scan a thing well and the screen says what it is worth.', 7, 'info');
+      showMessage('The scanner has read what that is: ' + object.kind.label + ', worth ' + getLooseObjectValue(object) + '. Scan a thing well and the screen says what it is worth.', 7, 'info');
     }
   }
 }
 
 // What the screen adds to a thing's name once the scanner has read it: ' (worth 25)', or nothing.
 function getLooseObjectWorth(object) {
-  return object.isAppraised && object.kind.value > 0 ? object.kind.value : 0;
+  return object.isAppraised ? getLooseObjectValue(object) : 0;
+}
+
+// What a thing is worth now, as a whole number: what Salvage counts, and what the screen says once the
+// scanner has read it. Never nothing, for a thing that was worth something.
+function getLooseObjectValue(object) {
+  return object.kind.value > 0 ? Math.max(1, Math.round(object.worth)) : 0;
 }
 
 
@@ -1211,6 +1224,7 @@ function reportLooseObjectKnock(object) {
   if (speed < TUNING.looseKnockFaintestSpeed) return;
   if (game.time - object.lastKnockTime < TUNING.looseKnockGapSeconds) return;
   object.lastKnockTime = game.time;
+  if (damageLooseObject(object, speed)) return; // it shattered: that made its own noise, and there is nothing left to knock
   // 0 at the speed below which the Hollow hears nothing, 1 at a full-blooded crash.
   const loudness = clampNumber((speed - TUNING.looseKnockQuietSpeed) / (TUNING.looseKnockLoudSpeed - TUNING.looseKnockQuietSpeed), 0, 1);
   const isHeard = speed >= TUNING.looseKnockQuietSpeed;
@@ -1236,6 +1250,57 @@ function reportLooseObjectKnock(object) {
     }
   } else {
     showCaption(loudness > 0.55 ? 'objectCrash' : 'objectKnock', { x: object.knockX, z: object.knockZ });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// What a knock costs
+//
+// Every hard knock takes something off what a thing is worth: nothing below looseDamageFromSpeed (a thing set
+// down, or carried into a wall at a heavy walk), more the harder it is, and at looseDamageRuinSpeed the whole
+// of its `fragile` share. It never goes below a tenth of what it was worth whole: scrap is still scrap.
+// Glass does not wear down for long: hit harder than its `shattersAt`, a sample jar is gone, and what is
+// left of it lies on the floor as broken glass (03-noisy-floor.js), loud to walk on like any other.
+// It makes no difference who did the knocking. The Hollow kicking through a room costs you as well.
+// ---------------------------------------------------------------------------
+
+// Returns true if the thing was destroyed.
+function damageLooseObject(object, speed) {
+  const kind = object.kind;
+  if (kind.shattersAt && speed >= kind.shattersAt) { shatterLooseObject(object); return true; }
+  if (!kind.fragile || speed <= TUNING.looseDamageFromSpeed || kind.value <= 0) return false;
+  const share = kind.fragile * clampNumber((speed - TUNING.looseDamageFromSpeed) / (TUNING.looseDamageRuinSpeed - TUNING.looseDamageFromSpeed), 0, 1);
+  const before = getLooseObjectValue(object);
+  object.worth = Math.max(kind.value * TUNING.looseWorthLeastShare, object.worth * (1 - share));
+  const after = getLooseObjectValue(object);
+  if (after >= before) return false;
+  looseState.statistics.worthLost += before - after;
+  // Said only of what is yours just now (in the beam, or just out of it), and not for every scratch.
+  if (object.knockIsOwn && (object.isHeld || game.time - object.lastHandledTime < 4) && game.time - looseState.lastDamageSaidTime > 1.5 && game.mode === 'playing') {
+    looseState.lastDamageSaidTime = game.time;
+    showMessage(object.isAppraised ? 'The ' + kind.label + ' took that badly: worth ' + after + ' now.' : 'The ' + kind.label + ' took that badly: it is worth less now.', 3.5, 'warning');
+  }
+  return false;
+}
+
+function shatterLooseObject(object) {
+  const x = object.x, y = object.y, z = object.z, wasOwn = object.knockIsOwn, wasWorth = getLooseObjectValue(object), wasAppraised = object.isAppraised;
+  const isOfTheHollowsOwnMaking = !wasOwn && (game.time - object.kickedByHollowTime < 3 || object.isIgnoredByHollow);
+  removeLooseObject(object);
+  looseState.statistics.shattered++;
+  looseState.statistics.worthLost += wasWorth;
+  looseState.statistics.knocksHeard++;
+  playLooseObjectKnock('glass', 1, 0.7, x, y, z);
+  playNoisyFloorSound('glass', 1.6, { x: x, z: z });
+  if (!isOfTheHollowsOwnMaking) emitNoise(x, z, TUNING.noiseRadiusShatter);
+  const lastKnock = looseState.lastKnock;
+  lastKnock.x = x; lastKnock.z = z; lastKnock.speed = object.kind.shattersAt; lastKnock.carries = TUNING.noiseRadiusShatter; lastKnock.isOwn = wasOwn; lastKnock.time = game.time;
+  addBrokenGlassAt(x, z);
+  if (wasOwn) {
+    showCaption('ownObjectShatter');
+    if (game.mode === 'playing') showMessage('The ' + object.kind.label + ' shatters.' + (wasAppraised ? ' That was worth ' + wasWorth + '.' : '') + ' Mind the glass.', 5, 'warning');
+  } else {
+    showCaption('objectShatter', { x: x, z: z });
   }
 }
 
@@ -1747,7 +1812,7 @@ function isLooseObjectInHaulBay(object, bay) {
 // What lies in a bay is worth this much.
 function getHaulBayValue(bay) {
   let value = 0;
-  for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) if (isLooseObjectInHaulBay(looseObjects[objectIndex], bay)) value += looseObjects[objectIndex].kind.value;
+  for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) if (isLooseObjectInHaulBay(looseObjects[objectIndex], bay)) value += getLooseObjectValue(looseObjects[objectIndex]);
   return value;
 }
 
@@ -1757,7 +1822,7 @@ function getHaulBayValue(bay) {
 function getHaulProgress() {
   if (!haulState.isActive) return { done: 0, total: 0 };
   let stillThere = 0;
-  for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) stillThere += looseObjects[objectIndex].kind.value;
+  for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) stillThere += getLooseObjectValue(looseObjects[objectIndex]);
   const open = findOpenHaulBay();
   const total = Math.min(haulState.target, haulState.taken + stillThere);
   return { done: Math.min(haulState.taken + (open ? getHaulBayValue(open) : 0), total), total: total };
@@ -1811,7 +1876,7 @@ function finishSealingHaulBay(bay) {
   for (let objectIndex = looseObjects.length - 1; objectIndex >= 0; objectIndex--) {
     const object = looseObjects[objectIndex];
     if (!isLooseObjectInHaulBay(object, bay)) continue;
-    value += object.kind.value;
+    value += getLooseObjectValue(object);
     removeLooseObject(object);
   }
   bay.state = 'sealed'; bay.taken = value;
@@ -1876,7 +1941,7 @@ function fillHaulBays() {
     bay.state = 'open'; bay.interactable.isDiscovered = true; bay.pulseTimer = TUNING.haulBayPulseSeconds;
     bay.interactable.prompt = 'Salvage bay ' + (bay.index + 1) + ': what it holds';
     const byWorth = looseObjects.filter(function (object) { return !object.isHeld && !isLooseObjectInHaulBay(object, bay); })
-      .sort(function (first, second) { return second.kind.value - first.kind.value || first.id - second.id; });
+      .sort(function (first, second) { return getLooseObjectValue(second) - getLooseObjectValue(first) || first.id - second.id; });
     let placed = 0;
     for (const object of byWorth) {
       progress = getHaulProgress();

@@ -77,6 +77,37 @@ function addNoisyFloorProps(patch, random) {
 
 // ---- putting them out. Done once for each station, after everything else is built. ----
 
+// Broken glass that was not there when the station was built: a sample jar that shattered. It behaves like
+// any other patch of glass from then on, and is swept up again when a new descent begins.
+// Returns the patch, or null where the floor will not take one (a doorway, a vent, water, a patch already).
+function addBrokenGlassAt(x, z) {
+  const tileX = Math.floor(x), tileZ = Math.floor(z);
+  if (!isInsideGrid(tileX, tileZ)) return null;
+  const index = tileIndexAt(tileX, tileZ);
+  if (tileIsWalkable[index] === 0) return null;
+  if (tileFlags[index] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT | TILE_FLAG_WATER | TILE_FLAG_GRATE | TILE_FLAG_HAZARD | TILE_FLAG_DEBRIS)) return null;
+  const zoneName = ZONE_NAMES[tileZone[index]] || '';
+  if (zoneName === 'LIFT CAR' || zoneName.indexOf('SALVAGE BAY') === 0) return null;
+  const patch = { x: tileX + 0.5, z: tileZ + 0.5, index: index, kind: 'glass', isFromPlay: true, props: [] };
+  const firstProp = worldProps.length;
+  addNoisyFloorProps(patch, Math.random);
+  for (let propIndex = firstProp; propIndex < worldProps.length; propIndex++) patch.props.push(worldProps[propIndex]);
+  tileFlags[index] |= TILE_FLAG_DEBRIS;
+  noisyFloorPatches.push(patch);
+  return patch;
+}
+
+// A new descent: what was broken in the last one is gone.
+function removeBrokenGlassFromPlay() {
+  for (let patchIndex = noisyFloorPatches.length - 1; patchIndex >= 0; patchIndex--) {
+    const patch = noisyFloorPatches[patchIndex];
+    if (!patch.isFromPlay) continue;
+    for (const prop of patch.props) prop.isRemoved = true;
+    tileFlags[patch.index] &= ~TILE_FLAG_DEBRIS;
+    noisyFloorPatches.splice(patchIndex, 1);
+  }
+}
+
 function clearNoisyFloor() {
   noisyFloorPatches.length = 0;
   noisyFloorCanHeaps.length = 0;
