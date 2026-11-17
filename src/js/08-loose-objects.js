@@ -121,6 +121,7 @@ const looseState = {
   isHeldByButton: false,   // it is carried for as long as the right mouse button is down (and not by a press of E, which stays until E again)
   holdTargetX: 0, holdTargetY: 0, holdTargetZ: 0,
   holdBreakTimer: 0,       // how long the carried object has been too far from where the beam wants it
+  holdLength: 0,           // how far out the beam holds it right now: looseHoldDistance, or less while it is pressed against something ahead
   isLettingGo: false,      // E went down with something in the beam and nothing to use: this press lets go or throws
   lettingGoSeconds: 0,     // ... and has been held this long. A tap lets go, a hold winds up a throw.
   hasShownCarryHint: false,
@@ -1267,7 +1268,7 @@ function computeLooseHoldTarget(eyeX, eyeY, eyeZ) {
   if (!held) return;
   computeScannerBasis(player.yaw, player.pitch);
   updateScanEmitterAtLens(eyeX, eyeY, eyeZ);
-  const distance = TUNING.looseHoldDistance + held.prepared.partsRadius;
+  const distance = looseState.holdLength + held.prepared.partsRadius;
   looseState.holdTargetX = scanEmitter.x + scannerBasis.forwardX * distance;
   looseState.holdTargetY = scanEmitter.y + scannerBasis.forwardY * distance - held.kind.mass * TUNING.looseHoldSagPerKilogram;
   looseState.holdTargetZ = scanEmitter.z + scannerBasis.forwardZ * distance;
@@ -1283,6 +1284,7 @@ function pickUpLooseObject(object, isByButton) {
   object.lastHandledTime = game.time;
   object.wasHandled = true; object.isIgnoredByHollow = false;
   looseState.held = object;
+  looseState.holdLength = TUNING.looseHoldDistance;
   gripLooseObject(object); // as it lies: the beam does not straighten it
   looseState.isHeldByButton = Boolean(isByButton);
   looseState.holdBreakTimer = 0;
@@ -2094,9 +2096,26 @@ function updateLooseObjects(dt, eyeX, eyeY, eyeZ) {
   }
 
   const held = looseState.held;
-  // What you carry is against something and you are walking on into it: it stops you, as a crate against a
-  // wall would. It can only hold you back so fast, though. At a walk that is enough; at a run you carry on,
-  // and a moment later the beam has lost it.
+  // What you carry is against something straight ahead: the beam gives. It holds the thing nearer to you, by
+  // as much as the thing is short of where the beam wanted it, so you can walk right up to a wall with it.
+  // It lets it out again as soon as there is room. (Only along the beam: a thing caught to one side, or left
+  // behind, is not brought round to you.)
+  if (held) {
+    const shortBy = (looseState.holdTargetX - held.x) * scannerBasis.forwardX + (looseState.holdTargetY - held.y) * scannerBasis.forwardY + (looseState.holdTargetZ - held.z) * scannerBasis.forwardZ;
+    let length = looseState.holdLength;
+    if (held.touchedThisStep && shortBy > TUNING.looseHoldGiveSlack) length = Math.max(TUNING.looseHoldShortestDistance, length - (shortBy - TUNING.looseHoldGiveSlack));
+    // Out again: at once when it touches nothing, and feeling its way (a quarter as fast) while it still does.
+    else length = Math.min(TUNING.looseHoldDistance, length + TUNING.looseHoldLetOutSpeed * (held.touchedThisStep ? 0.25 : 1) * dt);
+    if (length !== looseState.holdLength) {
+      // The hold point moves with it at once, so that what is left of the gap below is only what the beam could not take up.
+      const change = length - looseState.holdLength;
+      looseState.holdLength = length;
+      looseState.holdTargetX += scannerBasis.forwardX * change; looseState.holdTargetY += scannerBasis.forwardY * change; looseState.holdTargetZ += scannerBasis.forwardZ * change;
+    }
+  }
+  // It can come no nearer (or it is caught to one side) and you are walking on into it: it stops you, as a
+  // crate against a wall would. It can only hold you back so fast, though. At a walk that is enough; at a run
+  // you carry on, and a moment later the beam has lost it.
   if (held && held.touchedThisStep) {
     const gapX = looseState.holdTargetX - held.x, gapZ = looseState.holdTargetZ - held.z;
     const gap = Math.sqrt(gapX * gapX + gapZ * gapZ);

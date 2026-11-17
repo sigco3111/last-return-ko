@@ -505,11 +505,75 @@ function installLab() {
     ['canister crouched', 'crate crouched', 'pipe crouched'].every((key) => intoWall[key].knocks.heard === 0 && intoWall[key].knocks.quiet >= 1 && intoWall[key].knocks.quiet <= 2 && intoWall[key].noiseCarries === 0 && !intoWall[key].hollowCameToLook && intoWall[key].saidSo === 0), intoWall);
   check('a heavy crate carries further than a light canister at the same pace', intoWall['crate walking'].noiseCarries > intoWall['canister walking'].noiseCarries,
     [intoWall['canister walking'].noiseCarries, intoWall['crate walking'].noiseCarries]);
-  check('at a walk the object against the wall stops you, and stays in your hands; you are not pushed sideways along the wall',
-    ['canister walking', 'crate walking', 'pipe walking', 'crate crouched'].every((key) => intoWall[key].stillHeld && intoWall[key].knocks.pulled === 0 && intoWall[key].sideways < 0.15) &&
-    intoWall['pipe walking'].fromWall > 1.0 && intoWall['crate walking'].fromWall > 0.7, intoWall);
-  check('run at the wall with a length of pipe and it is torn out of your hands, and clatters',
-    !intoWall['pipe running'].stillHeld && intoWall['pipe running'].knocks.pulled === 1 && intoWall['pipe running'].knocks.heard >= 2, intoWall['pipe running']);
+  // Against something straight ahead the beam gives: the thing comes nearer to you, and you can walk right up.
+  // (The beam is 0.7 m long, and it used to hold you off the wall by that much and the size of the thing.)
+  check('walked into a wall, what you carry comes in close and stays in the beam: with a canister you reach the wall, with a crate you stop where the crate is between you and it; you are not pushed sideways',
+    ['canister walking', 'crate walking', 'pipe walking', 'crate crouched', 'canister running', 'pipe running'].every((key) => intoWall[key].stillHeld && intoWall[key].knocks.pulled === 0 && intoWall[key].sideways < 0.2) &&
+    intoWall['canister walking'].fromWall < 0.5 && intoWall['crate walking'].fromWall > 0.6 && intoWall['crate walking'].fromWall < 1.0 && intoWall['pipe walking'].fromWall < 1.05, intoWall);
+  check('run at the wall with a length of pipe and it clatters, and is still in the beam', intoWall['pipe running'].stillHeld && intoWall['pipe running'].knocks.heard >= 1 && intoWall['pipe running'].fromWall < 0.6, intoWall['pipe running']);
+
+  // The beam shortens, and lets out again when there is room.
+  const beamGives = await inGame((bare) => {
+    const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = {};
+    d.clearLooseObjects();
+    lab.stand(bare.x + bare.stepX * (bare.wall - 2.9), bare.z + bare.stepZ * (bare.wall - 2.9), bare.yaw);
+    const object = lab.carry('toolCase');
+    const fromLens = function () { return lab.round(Math.hypot(object.x - d.scanEmitter.x, object.y - d.scanEmitter.y, object.z - d.scanEmitter.z) - object.prepared.partsRadius); };
+    result.inTheOpen = { length: lab.round(d.looseState.holdLength), fromLens: fromLens() };
+    d.input.keysDown.add('KeyW');
+    d.simulate(3.5);
+    d.input.keysDown.clear();
+    d.simulate(0.5);
+    const along = (p.x - bare.x) * bare.stepX + (p.z - bare.z) * bare.stepZ;
+    result.atTheWall = { length: lab.round(d.looseState.holdLength), fromLens: fromLens(), youFromWall: lab.round(bare.wall - along), held: d.getHeldLooseObject() === object };
+    d.input.keysDown.add('KeyS');
+    d.simulate(1.2);
+    d.input.keysDown.clear();
+    d.simulate(1.2);
+    result.backedAway = { length: lab.round(d.looseState.holdLength), fromLens: fromLens(), held: d.getHeldLooseObject() === object };
+    result.full = d.tuning.looseHoldDistance; result.shortest = d.tuning.looseHoldShortestDistance;
+    return result;
+  }, bareWall);
+  check('against a wall the beam holds the thing nearer, down to its shortest; back away and it lets it out to its full length again',
+    beamGives.inTheOpen.length === beamGives.full && beamGives.atTheWall.held && beamGives.atTheWall.length < beamGives.full - 0.2 && beamGives.atTheWall.length >= beamGives.shortest &&
+    beamGives.atTheWall.fromLens < beamGives.inTheOpen.fromLens - 0.2 && beamGives.backedAway.held && beamGives.backedAway.length === beamGives.full && Math.abs(beamGives.backedAway.fromLens - beamGives.inTheOpen.fromLens) < 0.1, beamGives);
+
+  // What the beam still loses: a thing left behind something. You stand in front of the wall beside a doorway
+  // with a canister in the beam, and are then on the other side of that wall (the test puts you there in one
+  // step, as a corner turned too sharply would): the canister is against the wall, and the beam lets it go.
+  const leftBehind = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = { found: false };
+    lab.reset();
+    d.game.flags.powerOn = true;
+    const isPlain = function (x, z) { const spot = d.findWalkableSpotNear(x, z); return Boolean(spot) && spot.x === x && spot.z === z && Math.abs(d.getFloorHeightAt(x, z)) < 0.01 && d.getTileFlagsAt(x, z) === 0; };
+    // (The door's own frame does not count: it stands proud of the wall by five centimetres and stops nobody.)
+    const clearOfThings = function (x, z) { return d.worldProps.every((prop) => prop.isRemoved || prop.isDynamic || !prop.blocksMovement || prop.minimumY > 2.2 || prop.maximumY < 0.03 || Math.abs(prop.centerX - x) > prop.boundsHalfX + 0.75 || Math.abs(prop.centerZ - z) > prop.boundsHalfZ + 0.75); };
+    for (const door of d.doors) {
+      if (door.kind !== d.doorKinds.automatic || result.found) continue;
+      for (const step of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        // Beside the door, a tile and a bit to one side: floor on both sides of the wall there, two tiles deep, and nothing standing on it.
+        const sideX = -step[1], sideZ = step[0];
+        const spots = [-2, -1, 1, 2].map((along) => [door.centerX + step[0] * along + sideX, door.centerZ + step[1] * along + sideZ]);
+        if (!spots.every((spot) => isPlain(spot[0], spot[1]) && clearOfThings(spot[0], spot[1]))) continue;
+        if (d.isSpaceOpenAt(door.centerX + sideX, 1, door.centerZ + sideZ)) continue; // there must be wall beside the door
+        result.found = true;
+        lab.stand(door.centerX - step[0] * 1.6 + sideX, door.centerZ - step[1] * 1.6 + sideZ, Math.atan2(step[0], -step[1]));
+        const canister = lab.carry('canister');
+        d.simulate(0.5);
+        const before = lab.knocks();
+        result.inFrontOfTheWall = { held: d.getHeldLooseObject() === canister };
+        d.teleport(door.centerX + step[0] * 1.6 + sideX, door.centerZ + step[1] * 1.6 + sideZ);
+        d.simulate(2.5);
+        const side = (canister.x - door.centerX) * step[0] + (canister.z - door.centerZ) * step[1];
+        result.behindIt = { stillHeld: d.getHeldLooseObject() === canister, canisterOnTheFirstSide: side < 0, knocks: lab.since(before), messages: lab.messages() };
+        break;
+      }
+    }
+    return result;
+  });
+  check('with a wall between you and what you carry, the beam loses it, and says so',
+    leftBehind.found && leftBehind.inFrontOfTheWall.held && !leftBehind.behindIt.stillHeld && leftBehind.behindIt.canisterOnTheFirstSide && leftBehind.behindIt.knocks.pulled === 1 &&
+    leftBehind.behindIt.messages.some((text) => /The beam loses the gas canister/.test(text)), leftBehind);
 
   const settingDown = await inGame((spot) => {
     const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = {};
@@ -1039,12 +1103,23 @@ function installLab() {
       d.input.keysDown.add('KeyC');
       d.simulate(0.8);
       const object = lab.carry(kindKey);
+      if (kindKey === 'pipe') {
+        // Taken up squarely across your way: put down, turned across the vent, and taken into the beam again.
+        d.releaseHeldLooseObject(0);
+        d.setLooseObjectYaw(object, mouth.stepX !== 0 ? Math.PI / 2 : 0);
+        object.velocityX = 0; object.velocityY = 0; object.velocityZ = 0; object.spinX = 0; object.spinY = 0; object.spinZ = 0;
+        d.pickUpLooseObject(object, false);
+        d.simulate(0.6);
+      }
       const before = lab.knocks();
+      // Which way its length lies: 1 along the vent, 0 across it. (Its own first axis is its length, for a pipe.)
+      const alongTheVent = function () { return lab.round(Math.abs(object.matrix[0] * mouth.stepX + object.matrix[6] * mouth.stepZ)); };
+      const acrossAtFirst = alongTheVent();
       d.input.keysDown.add('KeyW');
       let objectInVent = false;
       for (let step = 0; step < 150; step++) { d.simulate(1 / 30); if (d.isVentAt(object.x, object.z)) objectInVent = true; }
       result[kindKey] = { playerInVent: d.isVentAt(p.x, p.z), objectInVent: objectInVent, objectInVentAtTheEnd: d.isVentAt(object.x, object.z), stillHeld: d.getHeldLooseObject() === object, knocks: lab.since(before), messages: lab.messages(),
-        metresIn: lab.round((p.x - mouth.x) * mouth.stepX + (p.z - mouth.z) * mouth.stepZ) };
+        metresIn: lab.round((p.x - mouth.x) * mouth.stepX + (p.z - mouth.z) * mouth.stepZ), acrossAtFirst: acrossAtFirst, alongTheVent: alongTheVent() };
       d.input.keysDown.clear();
     }
     return result;
@@ -1052,8 +1127,8 @@ function installLab() {
   // No rule says what may go into a vent: a thing goes where it fits. A vent is a metre wide and 1.15 m high.
   check('a jar, a tool case, a crate and a pump motor each go into a vent ahead of you, still in the beam',
     vent !== null && ['jar', 'toolCase', 'crate', 'pumpMotor'].every((key) => vent[key].playerInVent && vent[key].objectInVent && vent[key].stillHeld), vent);
-  check('a pipe hangs across the beam and is wider than the vent: it jams at the mouth and stops you there, and nothing but the pipe says so',
-    vent !== null && !vent.pipe.playerInVent && vent.pipe.stillHeld && vent.pipe.metresIn < -0.3 &&
+  check('a pipe hangs across the beam and is wider than the vent: it goes in only once pressing it against the mouth has turned it lengthwise, and nothing but the pipe says so',
+    vent !== null && vent.pipe.stillHeld && (!vent.pipe.playerInVent || vent.pipe.alongTheVent > 0.6) && vent.pipe.acrossAtFirst < 0.45 &&
     ['jar', 'toolCase', 'crate', 'pumpMotor', 'pipe'].every((key) => !vent[key].messages.some((text) => /will not go in|no room in here/.test(text))), vent ? vent.pipe : null);
 
   // --- the pit, and a new descent ---
