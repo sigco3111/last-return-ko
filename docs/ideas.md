@@ -19,7 +19,8 @@
 - random 'locations' to go along with work orders (not just Kessel-9 pumping annex)
   - random objectives and rooms tied to location types? pumping annex has shaft 9, others might not. 
 - captions as setting, not for normal play (and then for more things, for accessibility)
-- scan colors customizable
+- scan colors customizable (3 levels, close, medium, far)
+- 
 
 - more random objectives
   - item collection, multi-stage generators, activate and escape
@@ -40,6 +41,7 @@
   - small monster 
     - moves objects (including what you need, chaseable and interruptable to get item back)
     - makes noise to summon other monsters (hits objects, walks in vents, etc.)
+    - throws things at the player when angered (throwing the small monster or hitting it with stuff)
   - other types of blind monsters with different systems for it
   - kidnapping monster that moves a player somewhere else
 
@@ -59,6 +61,7 @@
   - april fools, metal pipe sound effect pipe item
 
 - multiplayer? (mostly for item collection, like extraction looters), more interesting with the opened github issue <https://github.com/StefanKnol/No-Return/issues/14>
+  - joining by lobby code 
   - dev backdoor to mess with people :P (play/direct the monsters, play sounds, control doors, disco mode with random lidar dots coming out of a disco ball and music)
     - only on same server host, not other hosted
     - statistics of players (anonymous, but survival time, playtime and count, etc.)

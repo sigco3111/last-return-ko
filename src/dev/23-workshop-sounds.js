@@ -126,7 +126,12 @@ const SOUND_BOARD_ENTRIES = [
   ...createSoundBoardWaterPair({ group: 'You', key: 'stepWaterSprint', level: 'footstepWater', label: 'Footstep in water, sprinting', seconds: 0.6, play: function () { playFootstepSound(true, false, 1.0); } }),
   ...createSoundBoardMetalPair({ group: 'You', key: 'floorGlass', level: 'floorGlass', label: 'Broken glass underfoot, walking', hint: 'Carries much further than the step itself. Crouched, it makes no noise that carries.', seconds: 0.7, play: function () { playNoisyFloorSound('glass', 0.75, null); } }),
   ...createSoundBoardMetalPair({ group: 'You', key: 'floorPlate', level: 'floorPlate', label: 'A loose floor plate underfoot, walking', seconds: 1.0, play: function () { playNoisyFloorSound('plate', 0.75, null); } }),
-  ...createSoundBoardMetalPair({ group: 'You', key: 'floorCans', level: 'floorCans', label: 'Empty cans kicked over, walking', seconds: 0.9, play: function () { playNoisyFloorSound('cans', 0.75, null); } }),
+  ...createSoundBoardMetalPair({ group: 'You', key: 'looseKnockTin', level: 'looseKnockTin', label: 'An empty can, kicked at a walk', hint: 'Cans lie in heaps of six. Each one you kick carries about as far as broken glass underfoot. Crouched, they stay quiet.', seconds: 0.6, hasPlace: true,
+    play: function () { playLooseObjectKnock('tin', 0.48, 1.02, getSoundBoardListenerX(), 0.05, getSoundBoardSourceZ()); } }),
+  ...createSoundBoardMetalPair({ group: 'You', key: 'looseKnockTinHard', level: 'looseKnockTin', label: 'An empty can, thrown at a wall', seconds: 0.8, hasPlace: true,
+    play: function () { playLooseObjectKnock('tin', 1, 1.02, getSoundBoardListenerX(), 1, getSoundBoardSourceZ()); } }),
+  { group: 'You', key: 'looseKnockCard', level: 'looseKnockCard', label: 'A cardboard box, walked into', hint: 'The quietest thing there is to kick: it carries less far than your own step.', seconds: 0.4, hasPlace: true,
+    play: function () { playLooseObjectKnock('card', 0.48, 0.36, getSoundBoardListenerX(), 0.1, getSoundBoardSourceZ()); } },
   // Loose objects (08-loose-objects.js): what you carry knocking against the station, by what it is made of and how hard.
   ...createSoundBoardMetalPair({ group: 'You', key: 'looseKnockMetalSoft', level: 'looseKnockMetal', label: 'Something of metal that you carry knocks against a wall, at a walk', hint: 'A gas canister. The Hollow hears this from a few metres.', seconds: 0.9, hasPlace: true,
     play: function () { playLooseObjectKnock('metal', 0.45, 0.76, getSoundBoardListenerX(), 1, getSoundBoardSourceZ()); } }),
@@ -208,6 +213,8 @@ const SOUND_BOARD_ENTRIES = [
   { group: 'The Hollow', key: 'hollowStepRoam', level: 'hollowFootstep', label: 'Its footstep, roaming', seconds: 0.5, hasPlace: true, play: function () { playHollowFootstep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.7); } },
   { group: 'The Hollow', key: 'hollowStepHunt', level: 'hollowFootstep', label: 'Its footstep, hunting', seconds: 0.5, hasPlace: true, play: function () { playHollowFootstep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } },
   ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hollowOnGlass', level: 'floorGlass', label: 'It steps on broken glass', hint: 'It sets the loose things on the floor off too. This is how you hear where it is.', seconds: 0.7, hasPlace: true, play: function () { playNoisyFloorSound('glass', 1, { x: getSoundBoardListenerX(), z: getSoundBoardSourceZ() }); } }),
+  { group: 'The Hollow', key: 'looseFling', level: 'looseFling', label: 'It throws something back at you', hint: 'Only things you have handled, and only small ones. What it throws lands by you with all its own noise.', seconds: 0.5, hasPlace: true,
+    play: function () { playLooseObjectFlingSound(getSoundBoardListenerX(), 1.3, getSoundBoardSourceZ()); } },
   { group: 'The Hollow', key: 'hollowVentRoam', level: 'hollowVentStep', label: 'It crawls in a vent, roaming', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 0.8); } },
   ...createSoundBoardMetalPair({ group: 'The Hollow', key: 'hollowVentHunt', level: 'hollowVentStep', label: 'It crawls in a vent, hunting', seconds: 0.8, hasPlace: true, play: function () { playHollowVentStep(getSoundBoardListenerX(), getSoundBoardSourceZ(), 1); } }),
 

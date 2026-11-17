@@ -226,7 +226,7 @@ function initializeInput() {
   canvas.addEventListener('wheel', function (event) {
     if (game.mode !== 'playing') return;
     event.preventDefault();
-    setScannerSpread(player.spreadDegrees + (event.deltaY > 0 ? -2 : 2));
+    setScannerSpread(player.spreadDegrees + (event.deltaY > 0 ? -0.5 : 0.5));
   }, { passive: false });
   canvas.addEventListener('contextmenu', function (event) { event.preventDefault(); });
 
@@ -631,7 +631,7 @@ function castScannerPulse(horizontalTangent, verticalTangent) {
   alongX /= length; alongY /= length; alongZ /= length;
   const distance = intersectRayWithLooseObject(carried, emitter.x, emitter.y, emitter.z, alongX, alongY, alongZ, length);
   if (distance <= 0) return isLanding;
-  fillRayHit(distance, SURFACE_INTERACTIVE, 0.6 + Math.random() * 0.3, 0, emitter.x, emitter.y, emitter.z, alongX, alongY, alongZ);
+  fillRayHit(distance, carried.kind.loud > 1 ? SURFACE_HAZARD : SURFACE_INTERACTIVE, 0.6 + Math.random() * 0.3, 0, emitter.x, emitter.y, emitter.z, alongX, alongY, alongZ);
   rayHit.looseObject = carried;
   return true;
 }

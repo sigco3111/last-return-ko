@@ -1277,6 +1277,9 @@ function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
   placeHollowHatches();
   // And the loose things on the floor that are loud to walk on. After the hatches, so that none lies under one.
   placeNoisyFloor();
+  // And everything that lies loose: the cans, the litter, and the things worth carrying out.
+  planStationLooseObjects();
+  spawnStationLooseObjects();
   return wasBuiltAsAsked;
 }
 

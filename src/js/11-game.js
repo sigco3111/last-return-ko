@@ -250,7 +250,7 @@ function finishIntro() {
   focusGameView();
   showMessage(input.isTouchDevice
     ? 'Hold SCAN and drag to paint the dark with returns.'
-    : 'Hold the left mouse button (or Space) to scan. Everything you see is what the scanner has touched.', 9, 'info');
+    : 'Hold the left mouse button (or Space) to scan.', 9, 'info');
 }
 
 function focusGameView() {
@@ -559,7 +559,7 @@ function retryFromCheckpoint() {
   game.mode = 'playing';
   focusGameView();
   requestPointerLockOnCanvas();
-  showMessage('Scanner restarted from the last checkpoint. Your point cloud was kept.', 5, 'info');
+  showMessage('Scanner restarted from the last checkpoint.', 5, 'info');
 }
 
 // ---------------------------------------------------------------------------
@@ -950,6 +950,8 @@ function startApplication() {
     isSpaceOpenAt: function (x, y, z) { return isLooseSpaceOpenAt(Math.floor(x), Math.floor(z), y); },
     worldProps: worldProps, getTileFlagsAt: getTileFlagsAtPosition, tileFlagPit: TILE_FLAG_PIT, getPlayerEyeY: getPlayerEyeY,
     createLooseObject: createLooseObject, removeLooseObject: removeLooseObject, clearLooseObjects: clearLooseObjects,
+    stationLooseObjects: stationLooseObjects, noisyFloorCanHeaps: noisyFloorCanHeaps, auditStationLooseObjects: auditStationLooseObjects,
+    spawnStationLooseObjects: spawnStationLooseObjects, findStationSurfaces: findStationSurfaces,
     pickUpLooseObject: pickUpLooseObject, releaseHeldLooseObject: releaseHeldLooseObject, getHeldLooseObject: getHeldLooseObject,
     wakeLooseObject: wakeLooseObject, setLooseObjectYaw: setLooseObjectYaw, getCarrySpeedFactor: getCarrySpeedFactor,
     fireScanPulse: fireScanPulse, fireScanPulseBeyond: fireScanPulseBeyond, scanEmitter: scanEmitter, updateScanEmitterAtLens: updateScanEmitterAtLens, updateScanEmitterAtEye: updateScanEmitterAtEye, castScannerPulse: castScannerPulse, castRayAgainstThings: castRayAgainstThings,

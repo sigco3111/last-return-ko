@@ -19,8 +19,14 @@
 const NOISY_FLOOR_KINDS = {
   glass: { label: 'broken glass', share: 4.5, hint: 'Broken glass. That carried. Crouch and you can cross it without a sound.', ownCaption: 'ownGlass', hollowCaption: 'hollowOnGlass' },
   plate: { label: 'a loose floor plate', share: 3, hint: 'A loose floor plate. That carried. Crouch and you can cross it without a sound.', ownCaption: 'ownPlate', hollowCaption: 'hollowOnPlate' },
-  cans: { label: 'empty cans', share: 2.5, hint: 'Empty cans. That carried. Crouch and you can pick your way through without a sound.', ownCaption: 'ownCans', hollowCaption: 'hollowOnCans' }
+  // Cans are not a patch of floor any more: where the draw says "cans", six real cans are put out, loose objects
+  // like any other (08-loose-objects.js), to be kicked or picked up. They keep their place in this table so that
+  // every seed still gives glass and plates where it always did.
+  cans: { label: 'empty cans', share: 2.5, isLooseObjects: true }
 };
+
+// Where the draw put cans: { x, z, index, cans: [{ x, z, isStanding, liesAlongX }] }. One tile each, like a patch.
+const noisyFloorCanHeaps = [];
 
 // The patches of this station: { x, z, index, kind }. `index` is the tile; a patch is one tile.
 const noisyFloorPatches = [];
@@ -57,11 +63,13 @@ function addNoisyFloorProps(patch, random) {
     addCylinderProp(AXIS_Y, patch.x - 0.3 + random() * 0.1, floor + 0.01, patch.z + 0.43, 0.02, 0.01, options);
     addCylinderProp(AXIS_Y, patch.x + 0.36, floor + 0.01, patch.z - 0.4 + random() * 0.1, 0.02, 0.01, options);
   } else {
-    // Cans: most on their sides, one or two still standing.
+    // Cans: most on their sides, one or two still standing. Only where they go is worked out here (with the
+    // same draws as when they were part of the floor); the cans themselves are made as loose objects.
+    patch.cans = [];
     for (let can = 0; can < 6; can++) {
       const x = patch.x + (random() - 0.5) * 0.7, z = patch.z + (random() - 0.5) * 0.7;
-      if (can < 4) addCylinderProp(random() < 0.5 ? AXIS_X : AXIS_Z, x, floor + 0.035, z, 0.035, 0.06, options);
-      else addCylinderProp(AXIS_Y, x, floor + 0.06, z, 0.035, 0.06, options);
+      if (can < 4) patch.cans.push({ x: x, z: z, isStanding: false, liesAlongX: random() < 0.5 });
+      else patch.cans.push({ x: x, z: z, isStanding: true, liesAlongX: false });
     }
   }
   placement.turns = saved.turns; placement.offsetX = saved.offsetX; placement.offsetZ = saved.offsetZ; placement.offsetY = saved.offsetY;
@@ -71,6 +79,7 @@ function addNoisyFloorProps(patch, random) {
 
 function clearNoisyFloor() {
   noisyFloorPatches.length = 0;
+  noisyFloorCanHeaps.length = 0;
   playerNoisyFloorIndex = -1; hollowNoisyFloorIndex = -1;
   playerNoisyFloorLastTime = -1000; hollowNoisyFloorLastTime = -1000;
 }
@@ -129,11 +138,12 @@ function placeNoisyFloor() {
       const index = heap.pop()[1], x = index % GRID_WIDTH + 0.5, z = Math.floor(index / GRID_WIDTH) + 0.5;
       let isTooClose = false;
       for (const patch of noisyFloorPatches) if (distanceBetweenPoints(patch.x, patch.z, x, z) < TUNING.noisyFloorLeastMetresApart) isTooClose = true;
+      for (const heap of noisyFloorCanHeaps) if (distanceBetweenPoints(heap.x, heap.z, x, z) < TUNING.noisyFloorLeastMetresApart) isTooClose = true;
       if (!isTooClose) return index;
     }
     return -1;
   };
-  while (noisyFloorPatches.length < wanted) {
+  while (noisyFloorPatches.length + noisyFloorCanHeaps.length < wanted) {
     // About this share of them go where people have to walk; the rest, anywhere. Whichever heap is asked first,
     // the other is tried if it has nothing left.
     const first = random() < TUNING.noisyFloorShareWhereYouMustWalk ? 2 : 1;
@@ -143,11 +153,12 @@ function placeNoisyFloor() {
     let draw = random() * shareTotal, kind = kindKeys[0];
     for (const key of kindKeys) { draw -= NOISY_FLOOR_KINDS[key].share; if (draw < 0) { kind = key; break; } }
     const patch = { x: index % GRID_WIDTH + 0.5, z: Math.floor(index / GRID_WIDTH) + 0.5, index: index, kind: kind };
-    tileFlags[index] |= TILE_FLAG_DEBRIS;
     addNoisyFloorProps(patch, random);
+    if (NOISY_FLOOR_KINDS[kind].isLooseObjects) { noisyFloorCanHeaps.push(patch); continue; }
+    tileFlags[index] |= TILE_FLAG_DEBRIS;
     noisyFloorPatches.push(patch);
   }
-  level.noisyFloorCount = noisyFloorPatches.length;
+  level.noisyFloorCount = noisyFloorPatches.length + noisyFloorCanHeaps.length;
 }
 
 // ---- stepping on one ----
@@ -231,7 +242,7 @@ function stepHollowOnNoisyFloor(x, z, isHunting) {
 // Checks the patches of the station that is loaded. Returns a list of problems (empty when fine).
 function auditNoisyFloor() {
   const problems = [];
-  if (noisyFloorPatches.length < TUNING.noisyFloorFewest) problems.push('only ' + noisyFloorPatches.length + ' noisy patches of floor, fewer than ' + TUNING.noisyFloorFewest);
+  if (noisyFloorPatches.length + noisyFloorCanHeaps.length < TUNING.noisyFloorFewest) problems.push('only ' + (noisyFloorPatches.length + noisyFloorCanHeaps.length) + ' noisy patches of floor and heaps of cans, fewer than ' + TUNING.noisyFloorFewest);
   for (const patch of noisyFloorPatches) {
     const where = patch.kind + ' at ' + patch.x + ', ' + patch.z;
     if (tileIsWalkable[patch.index] === 0) problems.push(where + ' is on floor that cannot be walked on');

@@ -27,10 +27,12 @@ const SOUND_LEVELS = {
   ventCrawl: 3,           // the sheet metal under you in a vent, on top of a footstep
   floorGlass: 1,          // broken glass underfoot (yours, and the Hollow's from where it is)
   floorPlate: 1,          // a loose floor plate underfoot
-  floorCans: 1,           // empty cans kicked over
   looseKnockMetal: 1,     // a loose object of metal hitting something (a canister, a pipe, a pump motor)
   looseKnockGlass: 1,     // ... of glass (a sample jar)
   looseKnockCase: 1,      // ... a dull box (a tool case, a crate)
+  looseKnockTin: 1,       // ... an empty can
+  looseKnockCard: 1,      // ... a cardboard box
+  looseFling: 1,          // the Hollow throwing something back at you
   looseHandling: 1,       // taking an object in your hands, and the grunt of air as you throw it
   scanGrenade: 1,         // a scan grenade: the click of arming it, and the whine and crack as it goes off
   heartbeat: 4,
@@ -663,9 +665,23 @@ function updateAudioListener(x, y, z, yaw) {
   }
 }
 
+// Every short sound is built from the six functions below, and each asks here first.
+// TWEAK: MAXIMUM_SHORT_SOUNDS is how many pieces of sound may be started within any four seconds. One more
+// than that is not made. A single knock is three to five pieces, so in play this takes well over a hundred
+// things hitting something within four seconds. Like MAXIMUM_PLACED_SOUNDS further down, it is there for
+// when time is made to pass faster than the clock: sounds that cannot end must not be allowed to pile up.
+const MAXIMUM_SHORT_SOUNDS = 600;
+let shortSoundCount = 0;
+function claimShortSound() {
+  if (!isAudioReady() || shortSoundCount >= MAXIMUM_SHORT_SOUNDS) return false;
+  shortSoundCount++;
+  window.setTimeout(function () { shortSoundCount--; }, 4000);
+  return true;
+}
+
 // One filtered burst of noise. `destination` defaults to the dry master output.
 function playNoiseBurst(options) {
-  if (!isAudioReady()) return;
+  if (!claimShortSound()) return;
   const context = audio.context;
   const now = context.currentTime + (options.delay || 0);
   const source = context.createBufferSource();
@@ -692,7 +708,7 @@ function playNoiseBurst(options) {
 }
 
 function playTone(options) {
-  if (!isAudioReady()) return;
+  if (!claimShortSound()) return;
   const context = audio.context;
   const now = context.currentTime + (options.delay || 0);
   const oscillator = context.createOscillator();
@@ -717,7 +733,7 @@ function playTone(options) {
 // sounds like wind across a pipe or a bow on metal instead of a synthesiser. Most tonal sounds use this.
 // `resonance` is how narrow the filters are: 10 is airy, 40 is nearly a pure whistle.
 function playResonantNoise(options) {
-  if (!isAudioReady()) return;
+  if (!claimShortSound()) return;
   const context = audio.context;
   const now = context.currentTime + (options.delay || 0);
   const resonance = options.resonance || 18;
@@ -777,7 +793,7 @@ function createThroatWave(context, roughness) {
 //   formants          one line per resonance: [Hz with the mouth shut, Hz with it open, sharpness, loudness].
 //                     The mouth opens over the first third and closes again. Lower numbers are a larger animal.
 function playThroatVoice(options) {
-  if (!isAudioReady()) return;
+  if (!claimShortSound()) return;
   const context = audio.context;
   const now = context.currentTime + (options.delay || 0);
   const duration = options.duration;
@@ -861,7 +877,7 @@ const METAL_SHAPES = {
 //   damping     how much sooner the high overtones die than the low ones. 0: they all ring on, like a bell. 1: only a hum is left (default 0.7)
 //   bend        how far the pitch sags after the hit, as thin sheet metal does when it buckles. 0.04 is 4 percent (default 0)
 function playMetalStrike(options) {
-  if (!isAudioReady()) return;
+  if (!claimShortSound()) return;
   const context = audio.context;
   const now = context.currentTime + (options.delay || 0);
   const ratios = METAL_SHAPES[options.shape || 'bar'];
@@ -910,7 +926,7 @@ function playMetalStrike(options) {
 //   ring                      how long the lowest one rings, in seconds. Higher ones are shorter (default 0.06)
 //   rise                      how far each note slides up. 0.5 is half as high again: the "bloop" (default 0.5)
 function playWaterBubbles(options) {
-  if (!isAudioReady()) return;
+  if (!claimShortSound()) return;
   const context = audio.context;
   const now = context.currentTime + (options.delay || 0);
   const count = options.count || 1;
@@ -944,10 +960,23 @@ function playWaterBubbles(options) {
   }
 }
 
+// A place in the station for one short sound to come from. It is let go of six seconds later, with everything
+// that was played through it.
+// TWEAK: MAXIMUM_PLACED_SOUNDS is how many of these there can be at one time. One more than that is simply
+// not made: the sound that asked for it stays silent. In play that takes a heap of things crashing down all
+// at once, and nobody misses the sixty-fifth knock. It matters where time is made to pass faster than the
+// clock (the test suites play an hour of chases in a few seconds): there nothing was ever let go of, and
+// thousands of sounds that could not end filled gigabytes of memory.
+const MAXIMUM_PLACED_SOUNDS = 64;
+let placedSoundCount = 0;
 function createTemporaryPanner(x, y, z) {
-  if (!isAudioReady()) return null;
+  if (!isAudioReady() || placedSoundCount >= MAXIMUM_PLACED_SOUNDS) return null;
   const panner = createPannerNode(x, y, z, 2.5, 1.2);
-  window.setTimeout(function () { try { panner.disconnect(); } catch (error) { /* already released */ } }, 6000);
+  placedSoundCount++;
+  window.setTimeout(function () {
+    placedSoundCount--;
+    try { panner.disconnect(); } catch (error) { /* already released */ }
+  }, 6000);
   return panner;
 }
 
@@ -1192,10 +1221,10 @@ function playVentCrawlSound() {
   playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 1700, gain: 0.05 * SOUND_LEVELS.ventCrawl });
 }
 
-// Something loose on the floor being stepped on: broken glass, a loose floor plate, or empty cans.
+// Something loose on the floor being stepped on: broken glass or a loose floor plate.
 // `weight` is how hard (crouched is about 0.2, a sprint 1). `source` is null for your own feet, or { x, z } for
 // something else's, which is then heard from there.
-// TWEAK: each kind has its layers here; how loud each kind is, is SOUND_LEVELS.floorGlass, floorPlate and floorCans.
+// TWEAK: each kind has its layers here; how loud each kind is, is SOUND_LEVELS.floorGlass and floorPlate.
 function playNoisyFloorSound(kind, weight, source) {
   if (!isAudioReady()) return;
   let destination = audio.masterGain;
@@ -1214,7 +1243,7 @@ function playNoisyFloorSound(kind, weight, source) {
     if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: 2900 + Math.random() * 1400, duration: 0.18, hardness: 1, gain: 0.35 * level, delay: 0.09 + Math.random() * 0.06, destination: destination });
     return;
   }
-  if (kind === 'plate') {
+  {
     // The plate rocks down onto its frame and back: two knocks, the second smaller.
     const level = weight * SOUND_LEVELS.floorPlate;
     playNoiseBurst({ duration: 0.1, filterType: 'bandpass', frequency: 520, resonance: 1.3, gain: 3.0 * level, attack: 0.002, destination: destination });
@@ -1223,21 +1252,12 @@ function playNoisyFloorSound(kind, weight, source) {
       if (audio.metalStruck) playMetalStrike({ shape: 'plate', frequency: 190 + Math.random() * 40, duration: 0.9, hardness: 0.7, damping: 0.5, bend: 0.03, gain: 1.1 * size * level, delay: delay, destination: destination });
       else playResonantNoise({ frequency: 310 + Math.random() * 60, resonance: 16, duration: 0.5, gain: 1.8 * size * level, attack: 0.002, delay: delay, destination: destination });
     }
-    return;
-  }
-  // Cans: one kicked, the rest knocked into each other and rolling to a stop.
-  const level = weight * SOUND_LEVELS.floorCans, hits = 4 + Math.floor(Math.random() * 2);
-  for (let hit = 0; hit < hits; hit++) {
-    const delay = hit * (0.07 + Math.random() * 0.07), size = 1 - hit * 0.15;
-    if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: 620 + Math.random() * 700, duration: 0.16 + Math.random() * 0.1, hardness: 0.85, damping: 0.75, gain: 0.8 * size * level, delay: delay, destination: destination });
-    else playResonantNoise({ frequency: 700 + Math.random() * 700, resonance: 14, duration: 0.14, gain: 1.6 * size * level, attack: 0.001, delay: delay, destination: destination });
-    playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 3200, gain: 0.7 * size * level, delay: delay, destination: destination });
   }
 }
 
-// A loose object hits something at (x, y, z). `material` is 'metal', 'glass' or 'case'; `loudness` runs from
+// A loose object hits something at (x, y, z). `material` is 'metal', 'glass', 'case', 'tin' or 'card'; `loudness` runs from
 // about 0.1 (a tap only you hear) to 1 (thrown at a wall); `weight` is lower-pitched and longer for heavy things.
-// TWEAK: each material has its layers here; how loud each is, is SOUND_LEVELS.looseKnockMetal, -Glass and -Case.
+// TWEAK: each material has its layers here; how loud each is, is SOUND_LEVELS.looseKnockMetal, -Glass, -Case, -Tin and -Card.
 function playLooseObjectKnock(material, loudness, weight, x, y, z) {
   if (!isAudioReady()) return;
   const destination = createTemporaryPanner(x, y, z);
@@ -1250,6 +1270,24 @@ function playLooseObjectKnock(material, loudness, weight, x, y, z) {
     if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: (1900 + Math.random() * 700) * size, duration: 0.14 + loudness * 0.12, hardness: 1, damping: 0.6, gain: 1.6 * level, destination: destination });
     else playResonantNoise({ frequency: 2600 * size, resonance: 22, duration: 0.14, gain: 1.0 * level, attack: 0.001, destination: destination });
     playNoiseBurst({ duration: 0.025, filterType: 'bandpass', frequency: 4200, resonance: 1.5, gain: 1.3 * level, attack: 0.001, destination: destination });
+    return;
+  }
+  if (material === 'tin') {
+    // An empty can: thin, bright and short, and when it is hit hard it bounces and is heard again.
+    const level = force * SOUND_LEVELS.looseKnockTin, hits = loudness > 0.5 ? 3 : (loudness > 0.2 ? 2 : 1);
+    for (let hit = 0; hit < hits; hit++) {
+      const delay = hit * (0.07 + Math.random() * 0.07), share = 1 - hit * 0.3;
+      if (audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: 620 + Math.random() * 700, duration: 0.16 + Math.random() * 0.1, hardness: 0.85, damping: 0.75, gain: 1.5 * share * level, delay: delay, destination: destination });
+      else playResonantNoise({ frequency: 700 + Math.random() * 700, resonance: 14, duration: 0.14, gain: 3.0 * share * level, attack: 0.001, delay: delay, destination: destination });
+      playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 3200, gain: 1.3 * share * level, delay: delay, destination: destination });
+    }
+    return;
+  }
+  if (material === 'card') {
+    // Cardboard: a soft, papery thump with nothing ringing in it.
+    const level = force * SOUND_LEVELS.looseKnockCard;
+    playNoiseBurst({ duration: 0.11 + loudness * 0.05, filterType: 'lowpass', frequency: 420, resonance: 0.6, gain: 3.2 * level, attack: 0.004, useBrownNoise: true, destination: destination });
+    playNoiseBurst({ duration: 0.05, filterType: 'bandpass', frequency: 1300, resonance: 0.7, gain: 0.9 * level, attack: 0.003, destination: destination });
     return;
   }
   if (material === 'case') {
@@ -1268,6 +1306,16 @@ function playLooseObjectKnock(material, loudness, weight, x, y, z) {
   playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 2800, resonance: 1.2, gain: 1.4 * level, attack: 0.001, destination: destination });
   playNoiseBurst({ duration: 0.06, filterType: 'bandpass', frequency: 420 * Math.sqrt(size), resonance: 0.9, gain: 2.0 * level, attack: 0.002, destination: destination }); // the weight of it
   if (loudness > 0.6 && audio.metalStruck) playMetalStrike({ shape: 'bar', frequency: frequency * 1.07, duration: 0.3, hardness: 0.6, damping: 0.7, gain: 0.6 * level, delay: 0.08 + Math.random() * 0.05, destination: destination });
+}
+
+// The Hollow throws something from (x, y, z): the rush of an arm through the air, and the grunt of the effort.
+function playLooseObjectFlingSound(x, y, z) {
+  if (!isAudioReady()) return;
+  const destination = createTemporaryPanner(x, y, z);
+  if (!destination) return;
+  const level = SOUND_LEVELS.looseFling;
+  playNoiseBurst({ duration: 0.22, filterType: 'bandpass', frequency: 900, resonance: 0.8, gain: 2.2 * level, attack: 0.06, playbackRate: 1.6, destination: destination });
+  playNoiseBurst({ duration: 0.16, filterType: 'lowpass', frequency: 260, resonance: 0.7, gain: 2.6 * level, attack: 0.03, useBrownNoise: true, destination: destination });
 }
 
 // A scan grenade at (x, y, z). `what` is 'arm' (the pin: a click and a rising tick) or 'burst' (it goes off: a
@@ -1295,7 +1343,7 @@ function playLooseObjectHandlingSound(material, isPickingUp) {
   const level = SOUND_LEVELS.looseHandling;
   if (isPickingUp) {
     playNoiseBurst({ duration: 0.09, filterType: 'bandpass', frequency: 700, resonance: 0.9, gain: 0.5 * level, attack: 0.02, useBrownNoise: true, playbackRate: 2 });
-    if (material === 'metal') playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 2400, resonance: 2, gain: 0.25 * level, attack: 0.002, delay: 0.05 });
+    if (material === 'metal' || material === 'tin') playNoiseBurst({ duration: 0.03, filterType: 'bandpass', frequency: 2400, resonance: 2, gain: 0.25 * level, attack: 0.002, delay: 0.05 });
   } else {
     playNoiseBurst({ duration: 0.22, filterType: 'bandpass', frequency: 500, frequencyEnd: 1500, resonance: 0.8, gain: 0.7 * level, attack: 0.05 });
   }

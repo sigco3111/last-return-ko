@@ -22,7 +22,11 @@
 // TWEAK: the objects.
 //   label      what it is called on screen ("Pick up the gas canister")
 //   mass       kilograms. Heavier swings wider behind the beam, slows you more, throws shorter, knocks louder.
-//   material   what it sounds like when it hits something: 'metal', 'glass' or 'case' (a dull box)
+//   value      what it is worth, in the station's own credits. Everything loose is worth something, however little.
+//   material   what it sounds like when it hits something: 'metal', 'glass', 'case' (a dull box with things in it), 'tin' (a can) or 'card' (cardboard)
+//   loud       how far its knocks carry for its weight: 1 is ordinary, an empty can is more, a cardboard box less
+//   lies       how it is put out in a station: 'upright' as its parts are given, 'onItsSide' (a quarter turn over),
+//              or 'either'
 //   bulky      true for something you cannot run with, or take into a vent
 //   bounce     0 to 1: how much of its speed it keeps when it bounces. A glass jar 0.2, a steel pipe 0.35.
 //   grip       0 to 1: how much it resists sliding. Low slides like a puck, high stops and tips over.
@@ -37,30 +41,30 @@
 // 00-config.js) beyond its own size. How much of the beam it takes follows from how big it is.
 const LOOSE_OBJECT_KINDS = {
   canister: {
-    label: 'gas canister', mass: 3, material: 'metal', bulky: false, bounce: 0.3, grip: 0.5,
+    label: 'gas canister', mass: 3, value: 25, material: 'metal', loud: 1, lies: 'either', bulky: false, bounce: 0.3, grip: 0.5,
     parts: [{ shape: 'capsule', from: [0, -0.13, 0], to: [0, 0.13, 0], radius: 0.07 }]
   },
   jar: {
-    label: 'sample jar', mass: 0.8, material: 'glass', bulky: false, bounce: 0.2, grip: 0.45,
+    label: 'sample jar', mass: 0.8, value: 60, material: 'glass', loud: 1, lies: 'upright', bulky: false, bounce: 0.2, grip: 0.45,
     parts: [{ shape: 'capsule', from: [0, -0.05, 0], to: [0, 0.05, 0], radius: 0.06 }]
   },
   toolCase: {
-    label: 'tool case', mass: 6, material: 'case', bulky: false, bounce: 0.15, grip: 0.6,
+    label: 'tool case', mass: 6, value: 80, material: 'case', loud: 1, lies: 'onItsSide', bulky: false, bounce: 0.15, grip: 0.6,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.21, 0.15, 0.08] }]
   },
   // The pipe hangs across the beam, not along it: 1.2 m of it, and a doorway is a metre wide.
   pipe: {
-    label: 'length of pipe', mass: 4, material: 'metal', bulky: false, bounce: 0.35, grip: 0.4,
+    label: 'length of pipe', mass: 4, value: 15, material: 'metal', loud: 1, lies: 'upright', bulky: false, bounce: 0.35, grip: 0.4,
     parts: [{ shape: 'capsule', from: [-0.6, 0, 0], to: [0.6, 0, 0], radius: 0.03 }]
   },
   crate: {
-    label: 'crate', mass: 12, material: 'case', bulky: true, bounce: 0.12, grip: 0.7,
+    label: 'crate', mass: 12, value: 40, material: 'case', loud: 1, lies: 'upright', bulky: true, bounce: 0.12, grip: 0.7,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.25, 0.22, 0.22] }]
   },
   // A scan grenade: arm it (Q), throw it, and where it lands it scans the room for you, all round. The light
   // stuns the Hollow if enough of it lands on it, and the noise brings it to where the grenade went off.
   scanGrenade: {
-    label: 'scan grenade', mass: 0.6, material: 'metal', bulky: false, bounce: 0.3, grip: 0.6,
+    label: 'scan grenade', mass: 0.6, value: 0, material: 'metal', loud: 1, lies: 'either', bulky: false, bounce: 0.3, grip: 0.6,
     parts: [
       { shape: 'capsule', from: [0, -0.045, 0], to: [0, 0.045, 0], radius: 0.04 },
       { shape: 'box', center: [0.05, 0.02, 0], half: [0.02, 0.05, 0.02] }
@@ -68,8 +72,32 @@ const LOOSE_OBJECT_KINDS = {
     use: { prompt: 'Arm the scan grenade', activate: armScanGrenade },
     update: updateScanGrenade
   },
+  // ---- litter: what lies about a station that nobody has swept in forty years ----
+  // An empty can. Six of them lie wherever the noisy floor's draw says "cans" (03-noisy-floor.js). Kicked at a
+  // walk they carry as far as the patch of cans they replace did; crouched, you can pick your way through.
+  can: {
+    label: 'empty can', mass: 0.06, value: 1, material: 'tin', loud: 1.7, lies: 'either', bulky: false, bounce: 0.35, grip: 0.4,
+    stepRadius: 0.035, // its body is what must not pass through a shelf in one step; the feet are within it
+    // The body, and four small feet at each end so that it can stand: a capsule alone has round ends.
+    parts: [{ shape: 'capsule', from: [0, -0.03, 0], to: [0, 0.03, 0], radius: 0.035 },
+      { shape: 'ball', center: [0.016, -0.053, 0.016], radius: 0.012 }, { shape: 'ball', center: [-0.016, -0.053, 0.016], radius: 0.012 },
+      { shape: 'ball', center: [0.016, -0.053, -0.016], radius: 0.012 }, { shape: 'ball', center: [-0.016, -0.053, -0.016], radius: 0.012 },
+      { shape: 'ball', center: [0.016, 0.053, 0.016], radius: 0.012 }, { shape: 'ball', center: [-0.016, 0.053, 0.016], radius: 0.012 },
+      { shape: 'ball', center: [0.016, 0.053, -0.016], radius: 0.012 }, { shape: 'ball', center: [-0.016, 0.053, -0.016], radius: 0.012 }]
+  },
+  carton: {
+    label: 'cardboard box', mass: 0.7, value: 2, material: 'card', loud: 0.6, lies: 'upright', bulky: false, bounce: 0.1, grip: 0.7,
+    parts: [{ shape: 'box', center: [0, 0, 0], half: [0.17, 0.11, 0.13] }]
+  },
+  plate: {
+    label: 'steel plate', mass: 3.5, value: 6, material: 'metal', loud: 1.3, lies: 'upright', bulky: false, bounce: 0.25, grip: 0.5,
+    // It is thin, but nothing in a station is thinner than a shelf board: steps of a centimetre or so are fine enough
+    // for it not to pass through one, and steps as fine as its own thickness would slow everything that moves with it.
+    stepRadius: 0.025,
+    parts: [{ shape: 'box', center: [0, 0, 0], half: [0.2, 0.012, 0.15] }]
+  },
   pumpMotor: {
-    label: 'pump motor', mass: 18, material: 'metal', bulky: true, bounce: 0.1, grip: 0.65,
+    label: 'pump motor', mass: 18, value: 150, material: 'metal', loud: 1, lies: 'upright', bulky: true, bounce: 0.1, grip: 0.65,
     parts: [
       { shape: 'capsule', from: [-0.12, 0, 0], to: [0.12, 0, 0], radius: 0.13 },
       { shape: 'capsule', from: [0.12, 0, 0], to: [0.3, 0, 0], radius: 0.035 },
@@ -103,8 +131,9 @@ const looseState = {
   shoveBackDepth: 0, shoveBackX: 0, shoveBackZ: 0,
   // How fast you walked this frame before anything on the floor held you back: that is the speed you kick with.
   playerStrideX: 0, playerStrideZ: 0,
-  statistics: { knocksHeard: 0, knocksQuiet: 0, pulledFromHands: 0, lostDownThePit: 0, putBack: 0, grenadesSpent: 0 }, // putBack: an object got into the rock and was set back where it last was not. Should stay 0.
-  lastKnock: { x: 0, z: 0, speed: 0, carries: 0, isOwn: false, time: -10 } // the last knock the Hollow could hear: where, how hard, how far it carried
+  statistics: { knocksHeard: 0, knocksQuiet: 0, pulledFromHands: 0, lostDownThePit: 0, putBack: 0, grenadesSpent: 0, flungBack: 0 }, // putBack: an object got into the rock and was set back where it last was not. Should stay 0.
+  lastKnock: { x: 0, z: 0, speed: 0, carries: 0, isOwn: false, time: -10 }, // the last knock the Hollow could hear: where, how hard, how far it carried
+  lastFling: { x: 0, z: 0, targetX: 0, targetZ: 0, time: -100, id: 0 } // the last thing the Hollow threw back, for the tests and the debug readout
 };
 
 // Scratch space, so that a step allocates nothing.
@@ -209,9 +238,60 @@ function prepareLooseObjectKind(kindKey) {
     shell: shell, shellCount: balls.length, parts: parts,
     inverseMass: 1 / kind.mass,
     inverseInertiaX: 1 / inertiaX, inverseInertiaY: 1 / inertiaY, inverseInertiaZ: 1 / inertiaZ,
-    boundsRadius: boundsRadius, smallestRadius: smallestRadius
+    boundsRadius: boundsRadius, smallestRadius: kind.stepRadius || smallestRadius
   };
   return kind.prepared;
+}
+
+// ---------------------------------------------------------------------------
+// Where they are, tile by tile
+//
+// A station can have hundreds of loose things lying about. A scanner pulse must not have to ask every one of
+// them whether it is in the way, nor a rolling can ask every other object whether they touch. So each object
+// is noted in the floor tiles it is near, the way the furniture is, and a pulse asks only the tiles it crosses.
+// (Measured with 600 objects in a massive station before this: scanning cost fifteen times what it does with none.)
+// ---------------------------------------------------------------------------
+
+const tileLooseLists = new Array(TILE_COUNT).fill(null);
+const LOOSE_TILE_MARGIN = 0.5;   // an object is noted in every tile within this of its outermost part ...
+const LOOSE_TILE_SLACK = 0.2;    // ... and noted afresh once it has moved this far, so the margin never runs out
+const LOOSE_FEW = 6;             // with this few objects in the station it is quicker simply to ask them all
+let looseStampCounter = 1;
+
+function noteLooseObjectInTiles(object) {
+  const reach = Math.max(object.prepared.partsRadius, object.prepared.boundsRadius) + LOOSE_TILE_MARGIN;
+  object.notedX = object.x; object.notedZ = object.z;
+  object.tileFirstX = Math.max(0, Math.floor(object.x - reach)); object.tileLastX = Math.min(GRID_WIDTH - 1, Math.floor(object.x + reach));
+  object.tileFirstZ = Math.max(0, Math.floor(object.z - reach)); object.tileLastZ = Math.min(GRID_DEPTH - 1, Math.floor(object.z + reach));
+  for (let tileZ = object.tileFirstZ; tileZ <= object.tileLastZ; tileZ++) {
+    for (let tileX = object.tileFirstX; tileX <= object.tileLastX; tileX++) {
+      const index = tileZ * GRID_WIDTH + tileX;
+      if (tileLooseLists[index] === null) tileLooseLists[index] = [];
+      tileLooseLists[index].push(object);
+    }
+  }
+  object.isNotedInTiles = true;
+}
+
+function forgetLooseObjectInTiles(object) {
+  if (!object.isNotedInTiles) return;
+  for (let tileZ = object.tileFirstZ; tileZ <= object.tileLastZ; tileZ++) {
+    for (let tileX = object.tileFirstX; tileX <= object.tileLastX; tileX++) {
+      const index = tileZ * GRID_WIDTH + tileX, list = tileLooseLists[index];
+      if (list === null) continue;
+      const at = list.indexOf(object);
+      if (at >= 0) { list[at] = list[list.length - 1]; list.pop(); }
+      if (list.length === 0) tileLooseLists[index] = null;
+    }
+  }
+  object.isNotedInTiles = false;
+}
+
+// Call when an object may have moved. Does nothing until it has moved far enough to matter.
+function refreshLooseObjectTiles(object) {
+  if (object.isNotedInTiles && Math.abs(object.x - object.notedX) < LOOSE_TILE_SLACK && Math.abs(object.z - object.notedZ) < LOOSE_TILE_SLACK) return;
+  forgetLooseObjectInTiles(object);
+  noteLooseObjectInTiles(object);
 }
 
 // ---------------------------------------------------------------------------
@@ -269,14 +349,18 @@ function createLooseObject(kindKey, x, y, z, yaw) {
     // For a kind that does something (`use`): when it was set off, when it starts doing it, and whether it is used up.
     armedTime: -1, goesOffTime: -1, burstSeconds: 0, burstBudget: 0, burstHitsOnHollow: 0, isSpent: false,
     kickedByHollowTime: -100, chasedSince: -100, // when the Hollow last kicked it, and when it last started going after it
+    wasHandled: false,                  // you have had it in the beam (and the Hollow has not flung it back since): only such things interest it
+    isIgnoredByHollow: false,           // the Hollow flung it: it knows that noise, and pays it no heed until you handle the thing again
     isRemoved: false
   };
   setLooseObjectYaw(object, yaw || 0);
   looseObjects.push(object);
+  noteLooseObjectInTiles(object);
   return object;
 }
 
 function clearLooseObjects() {
+  for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) forgetLooseObjectInTiles(looseObjects[objectIndex]);
   looseObjects.length = 0;
   looseState.held = null;
   looseState.accumulator = 0;
@@ -289,11 +373,11 @@ function clearLooseObjects() {
 
 // A new descent: nothing loose is left over from the last one, and the hints are due again.
 function resetLooseObjectsForNewRun() {
-  clearLooseObjects();
+  spawnStationLooseObjects(); // clears whatever was loose, and puts the station's own things back where they lay
   looseState.hasShownCarryHint = false;
   looseState.hasShownKnockHint = false;
   const statistics = looseState.statistics;
-  statistics.knocksHeard = 0; statistics.knocksQuiet = 0; statistics.pulledFromHands = 0; statistics.lostDownThePit = 0; statistics.putBack = 0; statistics.grenadesSpent = 0;
+  statistics.knocksHeard = 0; statistics.knocksQuiet = 0; statistics.pulledFromHands = 0; statistics.lostDownThePit = 0; statistics.putBack = 0; statistics.grenadesSpent = 0; statistics.flungBack = 0;
 }
 
 function removeLooseObject(object) {
@@ -302,6 +386,7 @@ function removeLooseObject(object) {
   if (looseState.held === object) looseState.held = null;
   object.isRemoved = true;
   object.isHeld = false;
+  forgetLooseObjectInTiles(object);
   const index = looseObjects.indexOf(object);
   if (index >= 0) looseObjects.splice(index, 1);
 }
@@ -452,10 +537,43 @@ let looseRaySkipped = null;
 function findLooseObjectOnRay(originX, originY, originZ, directionX, directionY, directionZ, nearerThan) {
   let best = null;
   looseRayDistance = nearerThan;
-  for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) {
-    if (looseObjects[objectIndex] === looseRaySkipped) continue;
-    const distance = intersectRayWithLooseObject(looseObjects[objectIndex], originX, originY, originZ, directionX, directionY, directionZ, looseRayDistance);
-    if (distance > 0) { looseRayDistance = distance; best = looseObjects[objectIndex]; }
+  if (looseObjects.length <= LOOSE_FEW) {
+    for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) {
+      if (looseObjects[objectIndex] === looseRaySkipped) continue;
+      const distance = intersectRayWithLooseObject(looseObjects[objectIndex], originX, originY, originZ, directionX, directionY, directionZ, looseRayDistance);
+      if (distance > 0) { looseRayDistance = distance; best = looseObjects[objectIndex]; }
+    }
+    return best;
+  }
+  // Tile by tile along the ray, on the plan, asking only the objects noted in each tile it crosses. It stops
+  // as soon as the tiles ahead are all further off than the nearest object found (or than `nearerThan`).
+  let tileX = Math.floor(originX), tileZ = Math.floor(originZ);
+  const stamp = ++looseStampCounter;
+  const stepX = directionX > 0 ? 1 : -1, stepZ = directionZ > 0 ? 1 : -1;
+  const deltaX = directionX !== 0 ? Math.abs(1 / directionX) : Infinity;
+  const deltaZ = directionZ !== 0 ? Math.abs(1 / directionZ) : Infinity;
+  let nextCrossingX = directionX > 0 ? (tileX + 1 - originX) / directionX : (directionX < 0 ? (tileX - originX) / directionX : Infinity);
+  let nextCrossingZ = directionZ > 0 ? (tileZ + 1 - originZ) / directionZ : (directionZ < 0 ? (tileZ - originZ) / directionZ : Infinity);
+  for (let iteration = 0; iteration < 200; iteration++) {
+    if (tileX < 0 || tileZ < 0 || tileX >= GRID_WIDTH || tileZ >= GRID_DEPTH) break;
+    const list = tileLooseLists[tileZ * GRID_WIDTH + tileX];
+    if (list !== null) {
+      for (let listIndex = 0; listIndex < list.length; listIndex++) {
+        const object = list[listIndex];
+        if (object.rayStamp === stamp) continue;
+        object.rayStamp = stamp;
+        if (object === looseRaySkipped) continue;
+        const distance = intersectRayWithLooseObject(object, originX, originY, originZ, directionX, directionY, directionZ, looseRayDistance);
+        if (distance > 0) { looseRayDistance = distance; best = object; }
+      }
+    }
+    if (nextCrossingX < nextCrossingZ) {
+      if (nextCrossingX >= looseRayDistance) break;
+      tileX += stepX; nextCrossingX += deltaX;
+    } else {
+      if (nextCrossingZ >= looseRayDistance) break;
+      tileZ += stepZ; nextCrossingZ += deltaZ;
+    }
   }
   return best;
 }
@@ -654,9 +772,11 @@ function collectLooseContacts(object, positionX, positionY, positionZ, radius) {
     }
   }
 
-  // Other loose objects.
-  for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) {
-    const other = looseObjects[objectIndex];
+  // Other loose objects: those noted in the tile this ball is in. (Anything near enough to touch it is noted there.)
+  const ballTileX = Math.floor(positionX), ballTileZ = Math.floor(positionZ);
+  const neighbours = ballTileX >= 0 && ballTileZ >= 0 && ballTileX < GRID_WIDTH && ballTileZ < GRID_DEPTH ? tileLooseLists[ballTileZ * GRID_WIDTH + ballTileX] : null;
+  for (let objectIndex = 0; neighbours !== null && objectIndex < neighbours.length; objectIndex++) {
+    const other = neighbours[objectIndex];
     if (other === object) continue;
     const offsetX = positionX - other.x, offsetY = positionY - other.y, offsetZ = positionZ - other.z;
     const reach = radius + other.prepared.boundsRadius;
@@ -977,6 +1097,7 @@ function stepLooseObjects(stepSeconds) {
       if (object.isHeld) driveHeldLooseObject(object, seconds);
       else object.velocityY -= TUNING.looseGravity * seconds;
       integrateLooseObject(object, seconds);
+      refreshLooseObjectTiles(object);
       object.moveEast = 0; object.moveWest = 0; object.moveUp = 0; object.moveDown = 0; object.moveSouth = 0; object.moveNorth = 0;
     }
     looseTouchCount = 0;
@@ -1074,7 +1195,7 @@ function reportLooseObjectKnock(object) {
   // 0 at the speed below which the Hollow hears nothing, 1 at a full-blooded crash.
   const loudness = clampNumber((speed - TUNING.looseKnockQuietSpeed) / (TUNING.looseKnockLoudSpeed - TUNING.looseKnockQuietSpeed), 0, 1);
   const isHeard = speed >= TUNING.looseKnockQuietSpeed;
-  const weight = clampNumber(0.55 + object.kind.mass / 14, 0.6, 1.5);
+  const weight = clampNumber(0.55 + object.kind.mass / 14, 0.6, 1.5) * (object.kind.loud || 1);
   playLooseObjectKnock(object.kind.material, isHeard ? 0.3 + loudness * 0.7 : 0.12, weight, object.knockX, object.knockY, object.knockZ);
   if (!isHeard) { looseState.statistics.knocksQuiet++; return; }
   looseState.statistics.knocksHeard++;
@@ -1083,13 +1204,16 @@ function reportLooseObjectKnock(object) {
   lastKnock.x = object.knockX; lastKnock.z = object.knockZ; lastKnock.speed = speed; lastKnock.carries = radius; lastKnock.isOwn = object.knockIsOwn; lastKnock.time = game.time;
   // What the Hollow has just kicked makes its noise for you to hear, but does not startle the Hollow: it knows
   // what that was. (It goes after the thing all the same, if the thing is light: see updateHollowAfterKickedObjects.)
-  const isOfTheHollowsOwnMaking = !object.knockIsOwn && game.time - object.kickedByHollowTime < 3;
+  // The same goes for what it has flung back at you, wherever that ends up, until you handle the thing again.
+  const isOfTheHollowsOwnMaking = !object.knockIsOwn && (game.time - object.kickedByHollowTime < 3 || object.isIgnoredByHollow);
   if (!isOfTheHollowsOwnMaking) emitNoise(object.knockX, object.knockZ, radius);
   if (object.knockIsOwn) {
-    showCaption(loudness > 0.55 ? 'ownObjectCrash' : 'ownObjectKnock');
+    // In the beam or just out of it, it is "it". Something you walked into has no name yet.
+    const wasKicked = !object.isHeld && game.time - object.lastHandledTime >= 4 && object.kind.mass <= TUNING.looseShoveFreeMass * 2;
+    showCaption(wasKicked ? 'ownObjectKicked' : (loudness > 0.55 ? 'ownObjectCrash' : 'ownObjectKnock'));
     if (!looseState.hasShownKnockHint && hollow.isActive) {
       looseState.hasShownKnockHint = true;
-      showMessage('That carried. Move slowly with something in the beam and it will not knock.', 6, 'info');
+      showMessage(wasKicked ? 'You kicked something. That carried. Crouch, and what lies on the floor stays quiet.' : 'That carried. Move slowly with something in the beam and it will not knock.', 6, 'warning');
     }
   } else {
     showCaption(loudness > 0.55 ? 'objectCrash' : 'objectKnock', { x: object.knockX, z: object.knockZ });
@@ -1147,6 +1271,7 @@ function pickUpLooseObject(object, isByButton) {
   object.isHeld = true;
   object.restSeconds = 0;
   object.lastHandledTime = game.time;
+  object.wasHandled = true; object.isIgnoredByHollow = false;
   looseState.held = object;
   gripLooseObject(object); // as it lies: the beam does not straighten it
   looseState.isHeldByButton = Boolean(isByButton);
@@ -1249,6 +1374,215 @@ function findLooseObjectInFocus(eyeX, eyeY, eyeZ, betterThan) {
 }
 
 // ---------------------------------------------------------------------------
+// In a station: what lies loose there when you arrive
+//
+// Worked out once when the station is built (`planStationLooseObjects`), from a sequence of random numbers of
+// its own, so that a seed always gives the same things in the same places and nothing else in the station
+// moves because of them. Put out again at the start of every descent (`spawnStationLooseObjects`).
+// Each thing is put down at rest, as it would lie, and left out of the work until something touches it.
+// ---------------------------------------------------------------------------
+
+const stationLooseObjects = []; // { kindKey, x, y, z, orientation: [x, y, z, w], on: 'floor' | 'surface' }
+
+// How a thing of this kind is turned when it lies as `lies` says and faces `yaw`: a quaternion.
+function getLooseRestOrientation(kindKey, yaw, isOnItsSide, alongX) {
+  let turned = { x: 0, y: 0, z: 0, w: 1 };
+  if (isOnItsSide) {
+    // A quarter turn over: about the line across you, or about the line ahead of you.
+    turned = alongX ? { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 } : { x: Math.SQRT1_2, y: 0, z: 0, w: Math.SQRT1_2 };
+  }
+  const product = multiplyLooseTurns(0, Math.sin(-yaw / 2), 0, Math.cos(-yaw / 2), turned.x, turned.y, turned.z, turned.w);
+  return [product.x, product.y, product.z, product.w];
+}
+
+// How far below its centre of mass the lowest point of a thing is, turned like this: put it that far above
+// a surface and it rests on it.
+function getLooseRestHeight(kindKey, orientation) {
+  const prepared = prepareLooseObjectKind(kindKey), shell = prepared.shell;
+  const x = orientation[0], y = orientation[1], z = orientation[2], w = orientation[3];
+  // The middle row of the rotation: what each of the thing's own directions contributes to height.
+  const upX = 2 * (x * y + w * z), upY = 1 - 2 * (x * x + z * z), upZ = 2 * (y * z - w * x);
+  let lowest = Infinity;
+  for (let ballIndex = 0; ballIndex < prepared.shellCount; ballIndex++) {
+    lowest = Math.min(lowest, shell[ballIndex * 4] * upX + shell[ballIndex * 4 + 1] * upY + shell[ballIndex * 4 + 2] * upZ - shell[ballIndex * 4 + 3]);
+  }
+  return -lowest;
+}
+
+function addStationLooseObject(kindKey, x, surfaceY, z, yaw, isOnItsSide, alongX, on) {
+  const orientation = getLooseRestOrientation(kindKey, yaw, isOnItsSide, alongX);
+  stationLooseObjects.push({ kindKey: kindKey, x: x, y: surfaceY + getLooseRestHeight(kindKey, orientation) + 0.001, z: z, orientation: orientation, on: on });
+}
+
+// TWEAK: what the litter is, and what is worth carrying out, with how often each turns up among its sort.
+const STATION_LITTER = [['carton', 5], ['plate', 3], ['can', 2]];
+const STATION_VALUABLES_ON_THE_FLOOR = [['canister', 4], ['crate', 3], ['pipe', 3], ['toolCase', 2], ['pumpMotor', 1]];
+const STATION_VALUABLES_ON_A_SURFACE = [['jar', 5], ['toolCase', 3], ['canister', 2]];
+
+function drawFromLooseTable(table, random) {
+  let total = 0;
+  for (const entry of table) total += entry[1];
+  let draw = random() * total;
+  for (const entry of table) { draw -= entry[1]; if (draw < 0) return entry[0]; }
+  return table[0][0];
+}
+
+// The flat tops in the station that something can be stood on: tables, shelves, crates, benches.
+function findStationSurfaces() {
+  const surfaces = [];
+  for (const prop of worldProps) {
+    if (prop.kind !== PROP_KIND_BOX || prop.isDynamic || prop.isRemoved || prop.objectId !== 0 || prop.surfaceClass === SURFACE_HAZARD) continue;
+    if (prop.halfX < 0.2 || prop.halfZ < 0.2) continue;
+    if (Math.abs(prop.sineYaw) > 0.01 && Math.abs(prop.cosineYaw) > 0.01) continue; // only those that stand square to the walls
+    const floor = getFloorHeightAt(prop.centerX, prop.centerZ), top = prop.maximumY - floor;
+    if (top < 0.35 || top > 1.35) continue;
+    if (!isLooseSpaceOpenAt(Math.floor(prop.centerX), Math.floor(prop.centerZ), prop.maximumY + 0.2)) continue;
+    surfaces.push(prop);
+  }
+  return surfaces;
+}
+
+// Is there room for something `halfWidth` wide and `height` high standing on `surface` at (x, z)?
+function isStationSurfaceClearAt(surface, x, z, halfWidth, height) {
+  const index = tileIndexAt(Math.floor(x), Math.floor(z)), list = tilePropLists[index];
+  if (!list) return true;
+  for (const other of list) {
+    if (other === surface || other.isRemoved) continue;
+    if (other.maximumY <= surface.maximumY + 0.005 || other.minimumY >= surface.maximumY + height) continue;
+    if (Math.abs(other.centerX - x) < other.boundsHalfX + halfWidth && Math.abs(other.centerZ - z) < other.boundsHalfZ + halfWidth) return false;
+  }
+  return true;
+}
+
+// Can you still get round a tile when something too heavy to shove stands in the middle of it? True when the
+// floor next to it (north, east, south, west) is all joined up by the floor round it, without stepping on it.
+function isLooseTileEasyToPass(index) {
+  const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
+  // The eight tiles round it, in a ring: north, north-east, east, ... Each is next to the one before and after.
+  const ringX = [0, 1, 1, 1, 0, -1, -1, -1], ringZ = [-1, -1, 0, 1, 1, 1, 0, -1], isFloor = [];
+  for (let step = 0; step < 8; step++) {
+    const nearX = tileX + ringX[step], nearZ = tileZ + ringZ[step];
+    isFloor.push(isInsideGrid(nearX, nearZ) && tileIsWalkable[tileIndexAt(nearX, nearZ)] !== 0
+      && Math.abs(tileFloorHeight[tileIndexAt(nearX, nearZ)] - tileFloorHeight[index]) < 0.01);
+  }
+  // Count the separate runs of floor in the ring that hold one of the four tiles next to this one.
+  let runs = 0;
+  for (let step = 0; step < 8; step++) {
+    if (!isFloor[step] || isFloor[(step + 7) % 8]) continue; // not the start of a run
+    let holdsNeighbour = false;
+    for (let along = step; isFloor[along % 8] && along < step + 8; along++) if (along % 2 === 0) holdsNeighbour = true;
+    if (holdsNeighbour) runs++;
+  }
+  return runs <= 1;
+}
+
+function planStationLooseObjects() {
+  stationLooseObjects.length = 0;
+  const random = createSeededRandomGenerator(Math.imul(level.seed + 1, 0x9E3779B1) ^ 0x10053e);
+  // The cans, where the noisy floor's draw put them.
+  for (const heap of noisyFloorCanHeaps) {
+    const floor = tileFloorHeight[heap.index];
+    // No two of a heap start inside each other: one that was drawn too near an earlier one is moved off it.
+    const placedCans = [];
+    for (const can of heap.cans) {
+      let x = can.x, z = can.z;
+      for (let round = 0; round < 6; round++) {
+        for (const earlier of placedCans) {
+          const awayX = x - earlier[0], awayZ = z - earlier[1], apart = Math.sqrt(awayX * awayX + awayZ * awayZ);
+          if (apart >= 0.15) continue;
+          if (apart < 0.001) { x += 0.15; continue; }
+          x = earlier[0] + awayX / apart * 0.15; z = earlier[1] + awayZ / apart * 0.15;
+        }
+        x = clampNumber(x, heap.x - 0.4, heap.x + 0.4); z = clampNumber(z, heap.z - 0.4, heap.z + 0.4);
+      }
+      placedCans.push([x, z]);
+      addStationLooseObject('can', x, floor, z, random() * TWO_PI, !can.isStanding, can.liesAlongX, 'floor');
+    }
+  }
+  const rooms = level.roomCount || 19;
+  // Every tile of plain floor that will do, in a drawn order: for the litter, and for what stands on the floor.
+  const tiles = [];
+  for (let tileZ = level.boundsMinimumZ; tileZ < level.boundsMaximumZ; tileZ++) {
+    for (let tileX = level.boundsMinimumX; tileX < level.boundsMaximumX; tileX++) {
+      if (!isInsideGrid(tileX, tileZ)) continue;
+      const index = tileIndexAt(tileX, tileZ);
+      if (rateNoisyFloorTile(index) === 0 || (tileFlags[index] & TILE_FLAG_DEBRIS)) continue;
+      let isTaken = false;
+      for (const heap of noisyFloorCanHeaps) if (heap.index === index) isTaken = true;
+      if (!isTaken) tiles.push([random(), index, rateNoisyFloorTile(index)]);
+    }
+  }
+  tiles.sort(function (first, second) { return first[0] - second[0] || first[1] - second[1]; });
+  let nextTile = 0;
+  const litterWanted = Math.round(rooms * TUNING.looseLitterPerRoom);
+  for (let count = 0; count < litterWanted && nextTile < tiles.length; count++, nextTile++) {
+    const index = tiles[nextTile][1], kindKey = drawFromLooseTable(STATION_LITTER, random);
+    const x = index % GRID_WIDTH + 0.25 + random() * 0.5, z = Math.floor(index / GRID_WIDTH) + 0.25 + random() * 0.5;
+    addStationLooseObject(kindKey, x, tileFloorHeight[index], z, random() * TWO_PI, kindKey === 'can' && random() < 0.7, random() < 0.5, 'floor');
+  }
+  // What is worth carrying out: about half of it on tables and shelves, the rest on the floor, out of the way.
+  const valuablesWanted = Math.round(rooms * TUNING.looseValuablesPerRoom);
+  const surfaces = findStationSurfaces().map(function (surface) { return [random(), surface]; });
+  surfaces.sort(function (first, second) { return first[0] - second[0] || first[1].centerX - second[1].centerX || first[1].centerZ - second[1].centerZ; });
+  let placed = 0;
+  for (let surfaceIndex = 0; surfaceIndex < surfaces.length && placed < Math.round(valuablesWanted * TUNING.looseValuablesShareOnSurfaces); surfaceIndex++) {
+    const surface = surfaces[surfaceIndex][1], kindKey = drawFromLooseTable(STATION_VALUABLES_ON_A_SURFACE, random);
+    const prepared = prepareLooseObjectKind(kindKey);
+    // Three tries at a clear spot on it, away from its edges.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const reachX = Math.max(0, surface.boundsHalfX - prepared.boundsRadius - 0.03), reachZ = Math.max(0, surface.boundsHalfZ - prepared.boundsRadius - 0.03);
+      const x = surface.centerX + (random() * 2 - 1) * reachX, z = surface.centerZ + (random() * 2 - 1) * reachZ;
+      const yaw = random() * TWO_PI;
+      if (prepared.boundsRadius > Math.min(surface.boundsHalfX, surface.boundsHalfZ) + 0.02) continue; // too big for it
+      if (!isLooseSpaceOpenAt(Math.floor(x), Math.floor(z), surface.maximumY + 0.05)) continue;
+      if (!isStationSurfaceClearAt(surface, x, z, prepared.boundsRadius, prepared.boundsRadius * 2 + 0.05)) continue;
+      addStationLooseObject(kindKey, x, surface.maximumY, z, yaw, LOOSE_OBJECT_KINDS[kindKey].lies === 'onItsSide', false, 'surface');
+      placed++;
+      break;
+    }
+  }
+  // The rest on the floor, in the tiles that are not where people have to walk.
+  for (; placed < valuablesWanted && nextTile < tiles.length; nextTile++) {
+    if (tiles[nextTile][2] !== 1) continue;
+    const index = tiles[nextTile][1];
+    let kindKey = drawFromLooseTable(STATION_VALUABLES_ON_THE_FLOOR, random);
+    // What cannot be shoved aside does not go where it would stand in the only way through.
+    if (LOOSE_OBJECT_KINDS[kindKey].mass >= TUNING.looseShoveBlockMass * 0.6 && !isLooseTileEasyToPass(index)) kindKey = 'canister';
+    const lies = LOOSE_OBJECT_KINDS[kindKey].lies;
+    const yaw = random() * TWO_PI, isOnItsSide = lies === 'onItsSide' || (lies === 'either' && random() < 0.5), isTurnedTheOtherWay = random() < 0.5;
+    // Something round lies either way; a tool case lies on its broad side, never on its end.
+    addStationLooseObject(kindKey, index % GRID_WIDTH + 0.5, tileFloorHeight[index], Math.floor(index / GRID_WIDTH) + 0.5, yaw,
+      isOnItsSide, lies === 'onItsSide' ? false : isTurnedTheOtherWay, 'floor');
+    placed++;
+  }
+  level.looseObjectCount = stationLooseObjects.length;
+}
+
+// Puts the station's loose things out, at rest. Whatever was loose before is cleared away first.
+function spawnStationLooseObjects() {
+  clearLooseObjects();
+  for (const entry of stationLooseObjects) {
+    const object = createLooseObject(entry.kindKey, entry.x, entry.y, entry.z, 0);
+    setLooseObjectOrientation(object, entry.orientation[0], entry.orientation[1], entry.orientation[2], entry.orientation[3]);
+    object.isAsleep = true;
+    object.isFromTheStation = true;
+  }
+}
+
+// Checks the station's loose things. Returns a list of problems (empty when fine).
+function auditStationLooseObjects() {
+  const problems = [];
+  for (const entry of stationLooseObjects) {
+    const where = entry.kindKey + ' at ' + entry.x.toFixed(1) + ', ' + entry.z.toFixed(1);
+    if (!isLooseSpaceOpenAt(Math.floor(entry.x), Math.floor(entry.z), entry.y)) problems.push(where + ' is not in open space');
+    if (tileFlags[tileIndexAt(Math.floor(entry.x), Math.floor(entry.z))] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT)) problems.push(where + ' is in a doorway, a vent or the pit');
+    const zoneName = ZONE_NAMES[tileZone[tileIndexAt(Math.floor(entry.x), Math.floor(entry.z))]] || '';
+    if (zoneName === 'LIFT CAR') problems.push(where + ' is in the lift car');
+  }
+  return problems;
+}
+
+// ---------------------------------------------------------------------------
 // The Hollow and what it kicks
 // ---------------------------------------------------------------------------
 
@@ -1259,7 +1593,7 @@ function updateHollowAfterKickedObjects() {
   if (!hollow.isActive) return;
   for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) {
     const object = looseObjects[objectIndex];
-    if (object.isHeld || object.kind.mass > TUNING.hollowChasesKickedMass) continue;
+    if (object.isHeld || !object.wasHandled || object.kind.mass > TUNING.hollowChasesKickedMass) continue;
     if (game.time - object.kickedByHollowTime > 0.5) continue; // not just now
     if (game.time - object.chasedSince > TUNING.hollowChasesAgainAfterSeconds) object.chasedSince = game.time; // a new chase begins
     if (game.time - object.chasedSince > TUNING.hollowChasesKickedSeconds) continue; // it has had enough of this one
@@ -1271,7 +1605,45 @@ function updateHollowAfterKickedObjects() {
     const object = looseObjects[objectIndex];
     if (object.chaseUntil !== undefined && game.time < object.chaseUntil && !object.isHeld && (chased === null || object.kickedByHollowTime > chased.kickedByHollowTime)) chased = object;
   }
-  if (chased !== null) drawHollowTowards(chased.x, chased.z);
+  if (chased === null) return;
+  if (!drawHollowTowards(chased.x, chased.z)) return; // it is hunting you, or held off: no time for this
+  // It has batted the thing about for long enough and has it at its feet again: back to where it came from.
+  if (chased.kind.mass <= TUNING.hollowFlingsMass && game.time - chased.chasedSince >= TUNING.hollowFlingsAfterSeconds
+    && distanceBetweenPoints(hollow.figure.x, hollow.figure.z, chased.x, chased.z) < TUNING.hollowFlingsWithinMetres) flingLooseObjectFromHollow(chased);
+}
+
+// The Hollow picks a small thing up and throws it at you, or near enough. It lands with all the noise such a
+// thing makes, and the Hollow does not come to that noise: it knows what it was.
+function flingLooseObjectFromHollow(object) {
+  const scatter = TUNING.hollowFlingsScatterMetres, angle = Math.random() * TWO_PI, reach = Math.sqrt(Math.random()) * scatter;
+  const targetX = player.x + Math.cos(angle) * reach, targetZ = player.z + Math.sin(angle) * reach, targetY = player.floorY + 0.6;
+  // From where its arm would let go: over its own feet, clear of the floor.
+  const fromY = getFloorHeightAt(hollow.figure.x, hollow.figure.z) + 1.3;
+  if (!isLooseSpaceOpenAt(Math.floor(hollow.figure.x), Math.floor(hollow.figure.z), fromY)) return false;
+  forgetLooseObjectInTiles(object);
+  changePointsOnLooseObject(object, TUNING.looseImprintSeconds); // what you scanned of it where it lay fades
+  wakeLooseObjectsTouching(object);
+  object.x = hollow.figure.x; object.y = fromY; object.z = hollow.figure.z;
+  noteLooseObjectInTiles(object);
+  wakeLooseObject(object);
+  let deltaX = targetX - object.x, deltaZ = targetZ - object.z, across = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+  // It throws only so far: from further off than that, the thing comes down on the way to you.
+  const furthest = TUNING.hollowFlingsSpeed * 1.1;
+  if (across > furthest) { deltaX *= furthest / across; deltaZ *= furthest / across; across = furthest; }
+  // A flat, fast throw: as long in the air as its speed takes to cover the ground, but never a lob.
+  const seconds = clampNumber(across / TUNING.hollowFlingsSpeed, 0.25, 1.1);
+  object.velocityX = deltaX / seconds; object.velocityZ = deltaZ / seconds;
+  object.velocityY = (targetY - object.y) / seconds + 0.5 * TUNING.looseGravity * seconds;
+  object.spinX = (Math.random() - 0.5) * 14; object.spinY = (Math.random() - 0.5) * 14; object.spinZ = (Math.random() - 0.5) * 14;
+  object.lastGoodX = object.x; object.lastGoodY = object.y; object.lastGoodZ = object.z;
+  object.kickedByHollowTime = game.time;
+  object.wasHandled = false; object.isIgnoredByHollow = true;
+  object.chaseUntil = undefined; object.chasedSince = game.time;
+  looseState.statistics.flungBack++;
+  looseState.lastFling.x = hollow.figure.x; looseState.lastFling.z = hollow.figure.z; looseState.lastFling.targetX = targetX; looseState.lastFling.targetZ = targetZ; looseState.lastFling.time = game.time; looseState.lastFling.id = object.id;
+  playLooseObjectFlingSound(hollow.figure.x, fromY, hollow.figure.z);
+  showCaption('hollowFling', { x: hollow.figure.x, z: hollow.figure.z });
+  return true;
 }
 
 // ---------------------------------------------------------------------------

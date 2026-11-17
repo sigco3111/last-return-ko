@@ -20,6 +20,7 @@ function installLab() {
     // Starts over: Kessel-9, nothing loose, creatures held still, every noise written down.
     reset: function () {
       d.loadStation('classic', 0);
+      d.clearLooseObjects(); // the station's own loose things have their own checks, further down
       d.game.flags.hasLeftLift = true;
       d.setDebugOption('freezeCreatures', true); d.setDebugOption('invulnerable', true); d.setDebugOption('unlimitedStamina', true);
       d.hollow.isActive = false;
@@ -27,7 +28,7 @@ function installLab() {
       d.settings.captions = 'all';
       lab.noises.length = 0;
       d.debugHooks.recordNoise = function (x, z, radius) { lab.noises.push({ x: x, z: z, radius: radius }); };
-      for (const key of ['ownObjectKnock', 'ownObjectCrash', 'objectKnock', 'objectCrash']) d.captionCounts[key] = 0;
+      for (const key of ['ownObjectKnock', 'ownObjectCrash', 'ownObjectKicked', 'objectKnock', 'objectCrash', 'hollowFling']) d.captionCounts[key] = 0;
     },
     // The roomiest spot in the station: the place on plain level floor that is furthest from every wall, from
     // everything that stands or hangs lower than 2.2 m, and from any floor that is not plain (the pit, water,
@@ -178,7 +179,8 @@ function installLab() {
     const d = window.lastReturnDebug, wrong = [], counts = {};
     for (const kindKey of Object.keys(d.looseObjectKinds)) {
       const kind = d.looseObjectKinds[kindKey];
-      if (!kind.label || !(kind.mass > 0) || ['metal', 'glass', 'case'].indexOf(kind.material) < 0 || typeof kind.bulky !== 'boolean' ||
+      if (!kind.label || !(kind.mass > 0) || ['metal', 'glass', 'case', 'tin', 'card'].indexOf(kind.material) < 0 || typeof kind.bulky !== 'boolean' ||
+          !(kind.value >= 0) || !(kind.loud > 0) || ['upright', 'onItsSide', 'either'].indexOf(kind.lies) < 0 ||
           !(kind.bounce >= 0 && kind.bounce < 1) || !(kind.grip >= 0 && kind.grip <= 1) || !kind.parts || kind.parts.length === 0) wrong.push(kindKey + ': incomplete');
       const object = d.createLooseObject(kindKey, 0, 0, 0, 0);
       const prepared = object.prepared, shell = prepared.shell;
@@ -190,7 +192,8 @@ function installLab() {
         x += shell[ball * 4] * weight; y += shell[ball * 4 + 1] * weight; z += shell[ball * 4 + 2] * weight; total += weight;
       }
       if (Math.hypot(x, y, z) / total > 1e-6) wrong.push(kindKey + ': centre of mass is off');
-      if (!(prepared.boundsRadius > 0.05 && prepared.boundsRadius < 1) || !(prepared.smallestRadius >= 0.02)) wrong.push(kindKey + ': size');
+      if (!(prepared.boundsRadius > 0.05 && prepared.boundsRadius < 1) || !(prepared.smallestRadius >= 0.01)) wrong.push(kindKey + ': size');
+      if (kindKey !== 'scanGrenade' && !(kind.value > 0)) wrong.push(kindKey + ': is worth nothing');
       d.removeLooseObject(object);
     }
     return { wrong: wrong, counts: counts, kinds: Object.keys(d.looseObjectKinds).length };
@@ -542,7 +545,7 @@ function installLab() {
     d.input.keysDown.add('KeyW');
     d.simulate(1.6);
     d.input.keysDown.clear();
-    result.byYou = { moved: lab.round(object.x - fromX), knocks: lab.since(before), saidAsYours: d.captionCounts.ownObjectKnock + d.captionCounts.ownObjectCrash, playerPassed: p.x > fromX };
+    result.byYou = { moved: lab.round(object.x - fromX), knocks: lab.since(before), saidAsYours: d.captionCounts.ownObjectKnock + d.captionCounts.ownObjectCrash + d.captionCounts.ownObjectKicked, playerPassed: p.x > fromX };
     for (let step = 0; step < 240 && !object.isAsleep; step++) d.simulate(1 / 30);
     // Now the Hollow walks through it, while you stand well back and have not touched it for a while.
     lab.stand(object.x - 6, object.z, Math.PI / 2);
@@ -551,12 +554,12 @@ function installLab() {
     d.spawnHollow(object.x, object.z - 2);
     before = lab.knocks();
     lab.noises.length = 0;
-    for (const key of ['objectKnock', 'objectCrash', 'ownObjectKnock', 'ownObjectCrash']) d.captionCounts[key] = 0;
+    for (const key of ['objectKnock', 'objectCrash', 'ownObjectKnock', 'ownObjectCrash', 'ownObjectKicked']) d.captionCounts[key] = 0;
     const startX = object.x, startZ = object.z;
     for (let step = 0; step < 60; step++) { d.hollow.figure.z += 3.2 / 30; d.simulate(1 / 30); }
     result.byTheHollow = { moved: lab.round(Math.hypot(object.x - startX, object.z - startZ)), knocks: lab.since(before),
       noiseAtTheObject: lab.noises.some((noise) => Math.hypot(noise.x - startX, noise.z - startZ) < 1.5),
-      saidWithADirection: d.captionCounts.objectKnock + d.captionCounts.objectCrash, saidAsYours: d.captionCounts.ownObjectKnock + d.captionCounts.ownObjectCrash };
+      saidWithADirection: d.captionCounts.objectKnock + d.captionCounts.objectCrash, saidAsYours: d.captionCounts.ownObjectKnock + d.captionCounts.ownObjectCrash + d.captionCounts.ownObjectKicked };
     d.hollow.isActive = false;
     return result;
   }, spot);
@@ -698,6 +701,7 @@ function installLab() {
     const storm = await inGame((station) => {
       const d = window.lastReturnDebug, lab = window.looseLab;
       d.loadStation.apply(null, station);
+      d.clearLooseObjects();
       d.game.flags.hasLeftLift = true;
       d.setDebugOption('freezeCreatures', true); d.hollow.isActive = false;
       d.input.keysDown.clear();
@@ -722,7 +726,8 @@ function installLab() {
           object.spinX = (chance() - 0.5) * 30; object.spinY = (chance() - 0.5) * 30; object.spinZ = (chance() - 0.5) * 30;
           thrown.push(object);
         }
-        for (let step = 0; step < 420 && !d.looseObjects.every((object) => object.isAsleep); step++) d.simulate(1 / 30);
+        // Twenty seconds at most: something round that came down on top of something else can take a while to roll off it.
+        for (let step = 0; step < 600 && !d.looseObjects.every((object) => object.isAsleep); step++) d.simulate(1 / 30);
         for (const object of d.looseObjects) {
           count++;
           if (![object.x, object.y, object.z, object.orientationX, object.orientationW, object.velocityX].every(Number.isFinite)) notNumbers++;
@@ -892,9 +897,11 @@ function installLab() {
     const d = window.lastReturnDebug, lab = window.looseLab, result = {};
     lab.reset(); // creatures held still again: the test walks the Hollow by hand
     lab.stand(spot.x - 2.9, spot.z - 2, Math.PI / 2);
-    for (const kindKey of ['canister', 'pumpMotor']) {
+    for (const which of ['canister', 'pumpMotor', 'canister you never touched']) {
+      const kindKey = which.split(' ')[0];
       d.clearLooseObjects();
       const object = d.createLooseObject(kindKey, spot.x, 0.3, spot.z, 0);
+      object.wasHandled = which === kindKey; // as if you had had it in the beam, some time ago
       if (kindKey === 'canister') d.setLooseObjectOrientation(object, 0.7071, 0, 0, 0.7071); // lying on its side, to roll
       for (let step = 0; step < 150 && !object.isAsleep; step++) d.simulate(1 / 30);
       d.spawnHollow(object.x, object.z - 1.5);
@@ -912,15 +919,16 @@ function installLab() {
       object.x -= 1.5; d.wakeLooseObject(object); object.kickedByHollowTime = d.game.time;
       d.simulate(0.2);
       entry.hasHadEnough = Math.hypot(d.hollow.targetX - before.x, d.hollow.targetZ - before.z) < 0.01;
-      result[kindKey] = entry;
+      result[which] = entry;
       d.hollow.isActive = false;
     }
     result.limit = d.tuning.hollowChasesKickedMass;
     return result;
   }, spot);
-  check('the Hollow goes after a canister it has kicked, follows it as it rolls, and has had enough after a few seconds',
+  check('the Hollow goes after a canister it has kicked, if you have handled it: it follows it as it rolls, and has had enough after a few seconds',
     chased.canister.kicked > 0.3 && chased.canister.goingAfterIt && chased.canister.followsIt && chased.canister.hasHadEnough, chased.canister);
   check('it does not go after something too heavy to roll off, like a pump motor', !chased.pumpMotor.goingAfterIt && !chased.pumpMotor.followsIt, chased.pumpMotor);
+  check('and what you have never touched it kicks aside and forgets', chased['canister you never touched'].kicked > 0.3 && !chased['canister you never touched'].goingAfterIt && !chased['canister you never touched'].followsIt, chased['canister you never touched']);
 
   // --- its points, and the floor's ---
   const pointsKept = await inGame((spot) => {
@@ -1003,6 +1011,7 @@ function installLab() {
     let mouth = null;
     for (let seed = 1; seed <= 12 && !mouth; seed++) {
     d.loadStation('generated', seed, 'medium', 'mixed', 'one');
+    d.clearLooseObjects();
     d.game.flags.hasLeftLift = true;
     d.setDebugOption('freezeCreatures', true); d.hollow.isActive = false;
     result.seed = seed;
@@ -1063,12 +1072,160 @@ function installLab() {
     d.createLooseObject('crate', spot.x - 1.5, 0.5, spot.z, 0);
     result.before = { loose: d.looseObjects.length, carrying: d.getHeldLooseObject() !== null };
     d.loadStation('classic', 0);
-    result.after = { loose: d.looseObjects.length, carrying: d.getHeldLooseObject() !== null, speedFactor: d.getCarrySpeedFactor() };
+    result.after = { loose: d.looseObjects.length, ofTheStation: d.stationLooseObjects.length, carrying: d.getHeldLooseObject() !== null, speedFactor: d.getCarrySpeedFactor() };
     return result;
   }, spot);
   check('something dropped down the shaft is gone for good', housekeeping.pit.there ? housekeeping.pit.gone && housekeeping.pit.counted === 1 : true, housekeeping.pit);
-  check('a new descent starts with nothing loose and nothing in the beam',
-    housekeeping.before.loose === 2 && housekeeping.before.carrying && housekeeping.after.loose === 0 && !housekeeping.after.carrying && housekeeping.after.speedFactor === 1, housekeeping);
+  check('a new descent starts with nothing in the beam, and nothing loose but what the station has lying about',
+    housekeeping.before.loose === 2 && housekeeping.before.carrying && housekeeping.after.loose === housekeeping.after.ofTheStation && housekeeping.after.ofTheStation > 10 && !housekeeping.after.carrying && housekeeping.after.speedFactor === 1, housekeeping);
+
+  // --- what a station has lying about ---
+  const lyingAbout = await inGame(() => {
+    const d = window.lastReturnDebug, result = {};
+    for (const station of [['classic', 0], ['generated', 7, 'medium', 'mixed', 'one'], ['generated', 99, 'large', 'mixed', 'one']]) {
+      d.loadStation.apply(null, station);
+      d.setDebugOption('freezeCreatures', true); d.hollow.isActive = false;
+      const entry = { total: d.stationLooseObjects.length, loose: d.looseObjects.length, asleep: d.looseObjects.filter((object) => object.isAsleep).length,
+        counts: {}, value: 0, onSurfaces: 0, lowestSurface: 9, cansInHeaps: d.noisyFloorCanHeaps.length * 6, problems: d.auditStationLooseObjects() };
+      for (const item of d.stationLooseObjects) {
+        entry.counts[item.kindKey] = (entry.counts[item.kindKey] || 0) + 1;
+        entry.value += d.looseObjectKinds[item.kindKey].value;
+        if (item.on === 'surface') { entry.onSurfaces++; entry.lowestSurface = Math.min(entry.lowestSurface, item.y - d.getFloorHeightAt(item.x, item.z)); }
+      }
+      entry.lowestSurface = Math.round(entry.lowestSurface * 100) / 100;
+      const signature = JSON.stringify(d.stationLooseObjects);
+      // Wake every one of them: put down as it would lie, none of them should stir, and none should make a sound.
+      const noises = []; d.debugHooks.recordNoise = function (x, z, radius) { noises.push(radius); };
+      const before = d.looseObjects.map((object) => [object.x, object.y, object.z, object.orientationX, object.orientationY, object.orientationZ, object.orientationW]);
+      for (const object of d.looseObjects) d.wakeLooseObject(object);
+      for (let step = 0; step < 120; step++) d.simulate(1 / 30);
+      entry.stirred = 0;
+      d.looseObjects.forEach((object, index) => {
+        const was = before[index];
+        const turned = 2 * Math.acos(Math.min(1, Math.abs(object.orientationX * was[3] + object.orientationY * was[4] + object.orientationZ * was[5] + object.orientationW * was[6]))) * 180 / Math.PI;
+        if (Math.hypot(object.x - was[0], object.y - was[1], object.z - was[2]) > 0.03 || turned > 5) entry.stirred++;
+      });
+      entry.asleepAgain = d.looseObjects.filter((object) => object.isAsleep).length;
+      entry.noises = noises.length;
+      // Carry one off and kick another away, then come down again: all of it lies where it lay.
+      d.looseObjects[0].x += 0.4; d.looseObjects[0].y += 1; d.wakeLooseObject(d.looseObjects[0]);
+      d.removeLooseObject(d.looseObjects[1]);
+      d.simulate(0.5);
+      d.loadStation.apply(null, station);
+      entry.sameAgain = JSON.stringify(d.stationLooseObjects) === signature && d.looseObjects.length === entry.total &&
+        d.looseObjects.every((object, index) => object.isAsleep && Math.hypot(object.x - before[index][0], object.y - before[index][1], object.z - before[index][2]) < 1e-6);
+      result[station.join(' ')] = entry;
+    }
+    window.looseLab.reset();
+    return result;
+  });
+  for (const stationName of Object.keys(lyingAbout)) {
+    const entry = lyingAbout[stationName];
+    check(stationName + ': the station has things lying about, each at rest, none in rock, a doorway, a vent, the pit or the lift car',
+      entry.total >= 25 && entry.loose === entry.total && entry.asleep === entry.total && entry.problems.length === 0, entry);
+    check(stationName + ': cans where the draw put cans (six to a heap), litter, and things worth carrying out, some of them on tables and shelves',
+      entry.counts.can >= entry.cansInHeaps && entry.cansInHeaps >= 6 && entry.counts.carton >= 3 && entry.counts.plate >= 1 && entry.onSurfaces >= 2 && entry.lowestSurface >= 0.35 && entry.value >= 250, entry);
+    check(stationName + ': woken, none of them stirs or makes a sound, and they are at rest again', entry.stirred === 0 && entry.noises === 0 && entry.asleepAgain === entry.total, entry);
+    check(stationName + ': the same station has the same things in the same places, and a new descent puts them back', entry.sameAgain, entry);
+  }
+
+  // --- cans ---
+  const cans = await inGame((spot) => {
+    const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = {};
+    for (const pace of ['crouched', 'walking', 'running']) {
+      lab.reset();
+      lab.stand(spot.x - 2.2, spot.z, Math.PI / 2);
+      const can = d.createLooseObject('can', spot.x, 0.05, spot.z, 0);
+      d.setLooseObjectOrientation(can, 0.7071, 0, 0, 0.7071); // on its side, across your way
+      for (let step = 0; step < 150 && !can.isAsleep; step++) d.simulate(1 / 30);
+      const before = lab.knocks(), fromX = can.x;
+      lab.noises.length = 0;
+      if (pace === 'crouched') { d.input.keysDown.add('KeyC'); d.simulate(0.8); }
+      if (pace === 'running') d.input.keysDown.add('ShiftLeft');
+      d.input.keysDown.add('KeyW');
+      // How far the loudest knock of the can carried. (Your own steps make noise too: those are not counted.)
+      let carries = 0, knockTime = d.looseState.lastKnock.time;
+      for (let step = 0; step < (pace === 'crouched' ? 90 : 42); step++) {
+        d.simulate(1 / 30);
+        if (d.looseState.lastKnock.time !== knockTime) { knockTime = d.looseState.lastKnock.time; carries = Math.max(carries, d.looseState.lastKnock.carries); }
+      }
+      d.input.keysDown.clear();
+      result[pace] = { layStill: Math.abs(fromX - spot.x) < 0.05, moved: lab.round(can.x - fromX), knocks: lab.since(before), youPassed: p.x > fromX,
+        carries: lab.round(carries), saidKicked: d.captionCounts.ownObjectKicked, saidOtherwise: d.captionCounts.ownObjectKnock + d.captionCounts.ownObjectCrash };
+    }
+    // One left standing stays standing, until something touches it.
+    lab.reset();
+    lab.stand(spot.x - 3, spot.z, Math.PI / 2);
+    const standing = d.createLooseObject('can', spot.x, 0.0665, spot.z, 0.4);
+    for (let step = 0; step < 150 && !standing.isAsleep; step++) d.simulate(1 / 30);
+    result.standing = { atRest: standing.isAsleep, upright: lab.round(standing.matrix[4]), height: lab.round(standing.y) };
+    // In a scan it shows in the warning colour, like broken glass; a jar shows as something to take.
+    const colourOf = function (object) { return d.castScannerRay(object.x - 1, object.y + 0.3, object.z, 0.958, -0.287, 0, 5) && d.rayHit.looseObject === object ? d.rayHit.surfaceClass : -1; };
+    const jar = d.createLooseObject('jar', spot.x, 0.3, spot.z + 1, 0);
+    for (let step = 0; step < 150 && !jar.isAsleep; step++) d.simulate(1 / 30);
+    result.colours = { can: colourOf(standing), jar: colourOf(jar) };
+    return result;
+  }, spot);
+  check('walked into, an empty can is kicked away and heard about as far as broken glass underfoot, and the caption says what you did',
+    cans.walking.layStill && cans.walking.moved > 0.3 && cans.walking.youPassed && cans.walking.carries >= 7 && cans.walking.carries <= 13 && cans.walking.saidKicked >= 1 && cans.walking.saidOtherwise === 0, cans.walking);
+  check('at a run it carries much further; crouched, you nudge it aside and the Hollow hears nothing',
+    cans.running.carries >= 14 && cans.running.carries > cans.walking.carries + 3 && cans.crouched.carries === 0 && cans.crouched.knocks.heard === 0 && cans.crouched.youPassed, { running: cans.running, crouched: cans.crouched });
+  check('a can left standing stays standing', cans.standing.atRest && cans.standing.upright > 0.99 && cans.standing.height > 0.05, cans.standing);
+  check('a can shows in the warning colour in a scan, a jar as something to take', cans.colours.can === 12 && cans.colours.jar === 7, cans.colours);
+
+  // --- thrown back ---
+  const thrownBack = await inGame((spot) => {
+    const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = {};
+    for (const which of ['can', 'canister']) {
+      lab.reset(); // creatures held still: the test walks the Hollow by hand
+      lab.stand(spot.x - 2.9, spot.z - 2, Math.PI / 2);
+      const object = d.createLooseObject(which, spot.x + 2, 0.3, spot.z + 1, 0);
+      d.setLooseObjectOrientation(object, 0.7071, 0, 0, 0.7071);
+      for (let step = 0; step < 150 && !object.isAsleep; step++) d.simulate(1 / 30);
+      object.wasHandled = true; // you threw it there, a while ago
+      d.spawnHollow(object.x, object.z - 1.5);
+      d.hollow.graceTimer = 0; d.hollow.state = 0;
+      for (let step = 0; step < 24; step++) { d.hollow.figure.z += 3 / 30; d.simulate(1 / 30); } // it walks through where the thing lies
+      const entry = { kicked: object.kickedByHollowTime > d.game.time - 2, flungTooSoon: d.looseState.statistics.flungBack };
+      // It stays on the thing's heels for as long as it goes after it.
+      lab.noises.length = 0;
+      const before = lab.knocks();
+      let flungAt = -1;
+      for (let step = 0; step < 150 && flungAt < 0; step++) {
+        d.hollow.figure.x = object.x + 0.6; d.hollow.figure.z = object.z; object.kickedByHollowTime = d.game.time;
+        d.simulate(1 / 30);
+        if (d.looseState.statistics.flungBack > 0) flungAt = step / 30;
+      }
+      entry.flungAfterSeconds = lab.round(flungAt);
+      entry.speed = lab.round(Math.hypot(object.velocityX, object.velocityZ));
+      entry.said = d.captionCounts.hollowFling;
+      // Where it aimed. (Where the thing ends up is another matter: a can bounces and rolls.)
+      entry.aimedMetresFromYou = flungAt >= 0 ? lab.round(Math.hypot(d.looseState.lastFling.targetX - p.x, d.looseState.lastFling.targetZ - p.z)) : -1;
+      entry.scatter = d.tuning.hollowFlingsScatterMetres;
+      const hollowAt = { x: d.hollow.figure.x, z: d.hollow.figure.z };
+      for (let step = 0; step < 240 && !object.isAsleep; step++) d.simulate(1 / 30);
+      entry.landedMetresFromYou = lab.round(Math.hypot(object.x - p.x, object.z - p.z));
+      entry.wasMetresFromYou = lab.round(Math.hypot(hollowAt.x - p.x, hollowAt.z - p.z));
+      entry.knocksOnLanding = lab.since(before);
+      entry.noisesTheHollowHeard = lab.noises.length;
+      entry.hollowStillLooksAtIt = Math.hypot(d.hollow.targetX - object.x, d.hollow.targetZ - object.z) < 1;
+      entry.ignored = object.isIgnoredByHollow; entry.stillOfInterest = object.wasHandled;
+      // In the beam again, it is yours again and its noise counts.
+      d.pickUpLooseObject(object, false);
+      entry.afterPickingItUp = { ignored: object.isIgnoredByHollow, ofInterest: object.wasHandled };
+      d.releaseHeldLooseObject(0);
+      d.hollow.isActive = false;
+      result[which] = entry;
+    }
+    return result;
+  }, spot);
+  check('a can you have handled, the Hollow kicks, goes after for a couple of seconds, and then throws back: aimed at you or just beside you, it comes down on your side of the room, with a caption',
+    thrownBack.can.kicked && thrownBack.can.flungTooSoon === 0 && thrownBack.can.flungAfterSeconds >= 0.5 && thrownBack.can.speed > 3 && thrownBack.can.said >= 1 &&
+    thrownBack.can.aimedMetresFromYou >= 0 && thrownBack.can.aimedMetresFromYou <= thrownBack.can.scatter + 0.01 && thrownBack.can.landedMetresFromYou < thrownBack.can.wasMetresFromYou - 1.5, thrownBack.can);
+  check('what it threw makes its own noise where it lands, and the Hollow does not come to that; picked up again, the thing is yours again',
+    thrownBack.can.knocksOnLanding.heard + thrownBack.can.knocksOnLanding.quiet >= 1 && thrownBack.can.noisesTheHollowHeard === 0 && thrownBack.can.ignored && !thrownBack.can.stillOfInterest &&
+    !thrownBack.can.afterPickingItUp.ignored && thrownBack.can.afterPickingItUp.ofInterest, thrownBack.can);
+  check('a gas canister is too heavy for that: it goes after it and does not throw it', thrownBack.canister.kicked && thrownBack.canister.flungAfterSeconds < 0 && !thrownBack.canister.ignored, thrownBack.canister);
 
   // --- what it costs ---
   const cost = await inGame((spot) => {
@@ -1080,13 +1237,19 @@ function installLab() {
     let started = performance.now();
     d.simulate(2);
     const plain = performance.now() - started;
-    for (let index = 0; index < 12; index++) {
-      const object = d.createLooseObject(kinds[index % kinds.length], spot.x + (index % 4) * 0.7 - 1, 1 + Math.floor(index / 4) * 0.7, spot.z + (index % 3) * 0.7 - 0.7, index);
-      object.spinX = 3; object.velocityZ = (index % 2 ? 1 : -1) * 2;
+    // The same throw three times over, and the quickest of the three counts: the clock on the wall also measures
+    // whatever else the machine is doing, and that can only make a run look slower, never quicker.
+    let tumbling = Infinity;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      d.clearLooseObjects();
+      for (let index = 0; index < 12; index++) {
+        const object = d.createLooseObject(kinds[index % kinds.length], spot.x + (index % 4) * 0.7 - 1, 1 + Math.floor(index / 4) * 0.7, spot.z + (index % 3) * 0.7 - 0.7, index);
+        object.spinX = 3; object.velocityZ = (index % 2 ? 1 : -1) * 2;
+      }
+      started = performance.now();
+      d.simulate(2);
+      tumbling = Math.min(tumbling, performance.now() - started);
     }
-    started = performance.now();
-    d.simulate(2);
-    const tumbling = performance.now() - started;
     for (let step = 0; step < 300; step++) d.simulate(1 / 30);
     const atRest = d.looseObjects.filter((object) => object.isAsleep).length;
     started = performance.now();
@@ -1179,6 +1342,13 @@ function installLab() {
   // The right mouse button: held, it carries; let go, it drops. And it no longer sweeps: the wheel button does.
   // (The pointer is put in place first, while the game is not yet listening to it: once the game takes mouse
   // movement as looking around, moving the pointer there would turn the view away from the object.)
+  //
+  // The test's browser does capture the mouse, and while it does, every press and release that this script
+  // sends arrives with a movement of the pointer that never happened (640 by 360 pixels: the whole way from the
+  // corner of the page). The game would take that for the view being whipped round, and on GitHub, where the
+  // browser draws frames by itself between the steps below, it did so at once: with the button still down, the
+  // thing in the beam was swung and then let go at five metres a second. So for these steps the game is told
+  // to take no mouse movement as looking around; the checks turn the view themselves where they need to.
   await page.mouse.move(640, 360);
   await inGame((spot) => {
     const d = window.lastReturnDebug, lab = window.looseLab, p = d.player;
@@ -1188,9 +1358,23 @@ function installLab() {
     for (let step = 0; step < 150 && !object.isAsleep; step++) d.simulate(1 / 30);
     p.pitch = Math.atan2(object.y - d.getPlayerEyeY(), 1.6);
     d.simulate(0.1);
-    d.input.isPointerLocked = true; // the test's browser does not capture the mouse by itself
+    d.input.isPointerLocked = true; // for where the browser does not capture the mouse by itself
+    d.input.ignoreLookUntil = performance.now() + 600000; // see above; set back below
+    d.input.lookDeltaX = 0; d.input.lookDeltaY = 0;
     d.looseState.hasShownCarryHint = false;
     d.clearMessages();
+    // Everything the browser tells the page about the mouse from here on is written down, so that a failure
+    // of the checks below says what the browser did. (On GitHub the browser draws frames by itself between
+    // the steps of this test, and anything the game is told there it acts on at once.)
+    if (!window.mouseLog) {
+      window.mouseLog = [];
+      for (const type of ['mousemove', 'mousedown', 'mouseup', 'contextmenu', 'blur', 'pointerlockchange', 'visibilitychange']) {
+        window.addEventListener(type, function (event) {
+          window.mouseLog.push(type + (type === 'mousemove' ? ' ' + (event.movementX || 0) + ',' + (event.movementY || 0) : '') + (event.button !== undefined && type !== 'mousemove' ? ' button ' + event.button : '') + ' mode ' + d.game.mode);
+        }, true);
+      }
+    }
+    window.mouseLog.length = 0;
   }, spot);
   await page.mouse.down({ button: 'right' });
   const grabbed = await inGame(() => {
@@ -1202,33 +1386,42 @@ function installLab() {
   await inGame(() => { const d = window.lastReturnDebug; d.player.pitch = 0; d.simulate(1.5); });
   const stillGrabbed = await inGame(() => window.lastReturnDebug.getHeldLooseObject() !== null);
   await page.mouse.up({ button: 'right' });
-  const letGo = await inGame(() => {
-    const d = window.lastReturnDebug;
+  const letGo = await inGame((spot) => {
+    const d = window.lastReturnDebug, p = d.player, object = d.looseObjects[0], round = window.looseLab.round;
+    const atEntry = { carrying: d.getHeldLooseObject() !== null, velocity: [round(object.velocityX), round(object.velocityY), round(object.velocityZ)],
+      yawDegrees: round(p.yaw * 180 / Math.PI), pitchDegrees: round(p.pitch * 180 / Math.PI), movedFromSpot: round(Math.hypot(p.x - spot.x, p.z - spot.z)),
+      objectFromYou: [round(object.x - p.x), round(object.y - d.getPlayerEyeY()), round(object.z - p.z)],
+      pendingLook: [d.input.lookDeltaX, d.input.lookDeltaY], grabHeld: d.input.isGrabHeld, pointerLockFlag: d.input.isPointerLocked, reallyLocked: document.pointerLockElement !== null, mode: d.game.mode };
     d.simulate(0.05);
-    const object = d.looseObjects[0];
-    return { carrying: d.getHeldLooseObject() !== null, speed: Math.hypot(object.velocityX, object.velocityZ) };
-  });
+    return { carrying: d.getHeldLooseObject() !== null, speed: Math.hypot(object.velocityX, object.velocityZ), objects: d.looseObjects.length, atEntry: atEntry, whatTheBrowserSaid: window.mouseLog.slice(-30) };
+  }, spot);
   check('holding the right mouse button on an object within reach takes it into the beam and keeps it there; it does not sweep',
     grabbed.buttonSeen && grabbed.carrying && grabbed.byButton && !grabbed.sweeping && stillGrabbed && grabbed.messages.some((text) => /while you hold the button/.test(text)), grabbed);
-  check('letting the button go drops it where it hangs', !letGo.carrying && letGo.speed < 0.6, letGo);
+  check('letting the button go drops it where it hangs', !letGo.carrying && letGo.speed < 0.6 && Math.abs(letGo.atEntry.yawDegrees - 90) < 0.5, letGo);
 
   // Swung and let go, it flies: there is no other throw with the mouse.
-  const flung = await inGame(() => {
-    const d = window.lastReturnDebug, p = d.player, object = d.looseObjects[0];
+  // (With an object of its own, put where the last one lay: wherever that one ended up is no concern of this check.)
+  const flung = await inGame((spot) => {
+    const d = window.lastReturnDebug, lab = window.looseLab, p = d.player;
+    d.input.isGrabHeld = false; d.input.lookDeltaX = 0; d.input.lookDeltaY = 0;
+    d.clearLooseObjects();
+    lab.stand(spot.x, spot.z, Math.PI / 2);
+    const object = d.createLooseObject('canister', spot.x + 1.6, 0.3, spot.z, 0);
     for (let step = 0; step < 150 && !object.isAsleep; step++) d.simulate(1 / 30);
     p.yaw = Math.atan2(object.x - p.x, -(object.z - p.z));
     p.pitch = Math.atan2(object.y - d.getPlayerEyeY(), Math.hypot(object.x - p.x, object.z - p.z));
     d.simulate(0.1);
     d.input.isGrabHeld = true;
     d.simulate(1.5);
+    const wasCarrying = d.getHeldLooseObject() === object;
     p.pitch = 0.2;
     for (let step = 0; step < 9; step++) { p.yaw += Math.PI / 18; d.simulate(1 / 30); } // a quarter turn in a third of a second
     d.simulate(0.1);
     d.input.isGrabHeld = false;
     d.simulate(1 / 30);
-    return { wasCarrying: true, carrying: d.getHeldLooseObject() !== null, speed: Math.hypot(object.velocityX, object.velocityY, object.velocityZ) };
-  });
-  check('swung round and let go, it keeps the speed of the swing', !flung.carrying && flung.speed > 2.5, flung);
+    return { wasCarrying: wasCarrying, carrying: d.getHeldLooseObject() !== null, speed: Math.hypot(object.velocityX, object.velocityY, object.velocityZ) };
+  }, spot);
+  check('swung round and let go, it keeps the speed of the swing', flung.wasCarrying && !flung.carrying && flung.speed > 2.5, flung);
 
   await inGame(() => { const d = window.lastReturnDebug; d.clearLooseObjects(); d.player.heat = 0; d.simulate(0.2); });
   await page.mouse.down({ button: 'right' });
@@ -1237,7 +1430,7 @@ function installLab() {
   await page.mouse.down({ button: 'middle' });
   const middle = await inGame(() => { const d = window.lastReturnDebug; d.simulate(0.1); return d.player.sweepTimeRemaining > 0; });
   await page.mouse.up({ button: 'middle' });
-  await inGame(() => { const d = window.lastReturnDebug; d.simulate(3); d.input.isPointerLocked = false; });
+  await inGame(() => { const d = window.lastReturnDebug; d.simulate(3); d.input.isPointerLocked = false; d.input.ignoreLookUntil = 0; d.input.lookDeltaX = 0; d.input.lookDeltaY = 0; });
   check('the right mouse button no longer sweeps; the wheel button does (and F still does)', !rightAlone && middle, { rightSweeps: rightAlone, middleSweeps: middle });
 
   // With something to use in front of you, E uses that and you keep what you carry.

@@ -452,11 +452,12 @@ function buildDebugReadout() {
   lines.push('points      ' + formatWithThousandsSeparators(pointCloud.storedCount) + ' of ' + formatWithThousandsSeparators(pointCloud.capacity));
   lines.push('heard from  ' + (player.audibleRadius * game.difficulty.hearingFactor).toFixed(1) + ' m');
   if (looseObjects.length > 0) {
-    let awake = 0;
-    for (const object of looseObjects) if (!object.isAsleep) awake++;
+    let awake = 0, worth = 0, handled = 0;
+    for (const object of looseObjects) { if (!object.isAsleep) awake++; worth += object.kind.value; if (object.wasHandled) handled++; }
     const held = getHeldLooseObject();
     lines.push('objects     ' + looseObjects.length + ' loose, ' + awake + ' moving' + (held ? '   carrying the ' + held.kind.label : ''));
     lines.push('  knocks    ' + looseState.statistics.knocksHeard + ' heard by it, ' + looseState.statistics.knocksQuiet + ' only by you');
+    lines.push('  worth     ' + worth + ' in all' + (held ? ', ' + held.kind.value + ' in the beam' : '') + '   handled ' + handled + '   thrown back ' + looseState.statistics.flungBack);
   }
   if (hollow.isActive) {
     const distance = distanceBetweenPoints(hollow.figure.x, hollow.figure.z, player.x, player.z);

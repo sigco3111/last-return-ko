@@ -368,7 +368,7 @@ function addBoxProp(centerX, centerY, centerZ, halfX, halfY, halfZ, options) {
 function addBoxBetween(minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ, options) {
   return addBoxProp(
     (minimumX + maximumX) / 2, (minimumY + maximumY) / 2, (minimumZ + maximumZ) / 2,
-    (maximumX - minimumX) / 2, (maximumY - minimumY) / 2, (maximumZ - minimumZ) / 2, options);
+    Math.abs(maximumX - minimumX) / 2, Math.abs(maximumY - minimumY) / 2, Math.abs(maximumZ - minimumZ) / 2, options);
 }
 
 function addCylinderProp(axis, centerX, centerY, centerZ, radius, halfLength, options) {
@@ -541,12 +541,12 @@ function addCeilingLamp(x, z, ceilingHeight, runsAlongX) {
   addBoxProp(x, ceilingHeight - 0.05, z, halfX, 0.05, halfZ, CLUTTER);
 }
 
-function addPipeAlongX(startX, endX, y, z, radius) {
-  addCylinderProp(AXIS_X, (startX + endX) / 2, y, z, radius, (endX - startX) / 2, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+function addPipeAlongX(startX, endX, y, z, radius, blocksMovement) {
+  addCylinderProp(AXIS_X, (startX + endX) / 2, y, z, radius, (endX - startX) / 2, { surfaceClass: SURFACE_METAL, blocksMovement: blocksMovement === true });
 }
 
-function addPipeAlongZ(startZ, endZ, y, x, radius) {
-  addCylinderProp(AXIS_Z, x, y, (startZ + endZ) / 2, radius, (endZ - startZ) / 2, { surfaceClass: SURFACE_METAL, blocksMovement: false });
+function addPipeAlongZ(startZ, endZ, y, x, radius, blocksMovement) {
+  addCylinderProp(AXIS_Z, x, y, (startZ + endZ) / 2, radius, (endZ - startZ) / 2, { surfaceClass: SURFACE_METAL, blocksMovement: blocksMovement === true });
 }
 
 function addVerticalPipe(x, z, bottomY, topY, radius, blocksMovement) {

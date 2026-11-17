@@ -1,4 +1,4 @@
-// Checks the noisy things on the floor (broken glass, a loose floor plate, empty cans): where they are put,
+// Checks the noisy things on the floor (broken glass, a loose floor plate, and where the heaps of cans go): where they are put,
 // that walking or running over one carries much further than a footstep, that crouching over one carries
 // nowhere, and that the Hollow sets them off too.
 const { openGame, startGame } = require('./browser-harness.js');
@@ -18,14 +18,17 @@ function check(description, condition, detail) {
   // --- where they are ---
   const placing = await inGame(() => {
     const d = window.lastReturnDebug, tuning = d.tuning, result = {};
-    const describe = function () { return d.noisyFloorPatches.map((patch) => [patch.x, patch.z, patch.kind].join(':')).join(' '); };
+    // Glass and plates are patches of floor. Where the same draw says "cans", six real cans are put out instead
+    // (loose objects: tools/loose-objects-test.js checks those); the place still counts as one of the station's share.
+    const describe = function () { return d.noisyFloorPatches.concat(d.noisyFloorCanHeaps).map((patch) => [patch.x, patch.z, patch.kind].join(':')).join(' '); };
+    const count = function () { return d.noisyFloorPatches.length + d.noisyFloorCanHeaps.length; };
     d.loadStation('classic', 0);
     const classic = describe();
-    result.classic = { count: d.noisyFloorPatches.length, wanted: Math.max(tuning.noisyFloorFewest, Math.round(19 * tuning.noisyFloorPerRoom)),
-      kinds: Array.from(new Set(d.noisyFloorPatches.map((patch) => patch.kind))), problems: d.auditNoisyFloor().concat(d.auditLayout()).concat(d.auditProgression()) };
+    result.classic = { count: count(), heapsOfCans: d.noisyFloorCanHeaps.length, cans: d.looseObjects.filter((object) => object.kindKey === 'can').length, wanted: Math.max(tuning.noisyFloorFewest, Math.round(19 * tuning.noisyFloorPerRoom)),
+      kinds: Array.from(new Set(d.noisyFloorPatches.concat(d.noisyFloorCanHeaps).map((patch) => patch.kind))), problems: d.auditNoisyFloor().concat(d.auditLayout()).concat(d.auditProgression()) };
     d.loadStation('generated', 3, 'large', 'mixed', 'two');
     const generated = describe();
-    result.generated = { count: d.noisyFloorPatches.length, wanted: Math.max(tuning.noisyFloorFewest, Math.round(d.level.roomCount * tuning.noisyFloorPerRoom)),
+    result.generated = { count: count(), heapsOfCans: d.noisyFloorCanHeaps.length, cans: d.looseObjects.filter((object) => object.kindKey === 'can').length, wanted: Math.max(tuning.noisyFloorFewest, Math.round(d.level.roomCount * tuning.noisyFloorPerRoom)),
       problems: d.auditNoisyFloor().concat(d.auditLayout()) };
     d.loadStation('generated', 4, 'large', 'mixed', 'two');
     result.anotherSeedDiffers = describe() !== generated;
@@ -40,6 +43,8 @@ function check(description, condition, detail) {
     placing.classic.count === placing.classic.wanted && placing.classic.kinds.length >= 2 && placing.classic.problems.length === 0, placing.classic);
   check('a generated station has more, in step with its size, none in a bad place',
     placing.generated.count > placing.classic.count && placing.generated.count >= placing.generated.wanted - 3 && placing.generated.problems.length === 0, placing.generated);
+  check('where the draw says cans, six real cans lie loose instead of a patch of floor',
+    placing.classic.heapsOfCans >= 1 && placing.classic.cans >= placing.classic.heapsOfCans * 6 && placing.generated.cans >= placing.generated.heapsOfCans * 6, [placing.classic, placing.generated]);
   check('the same station always gets the same ones, and another seed gets others', placing.classicSame && placing.generatedSame && placing.anotherSeedDiffers,
     [placing.classicSame, placing.generatedSame, placing.anotherSeedDiffers]);
 
@@ -52,6 +57,7 @@ function check(description, condition, detail) {
     for (let seed = 1; seed <= 12; seed++) stations.push(['generated', seed, 'large', 'mixed', 'one']);
     for (const station of stations) {
     d.loadStation.apply(null, station);
+    d.clearLooseObjects(); // nothing to kick on the way: these checks are about the floor itself
     d.game.flags.hasLeftLift = true; d.game.flags.powerOn = true;
     d.setDebugOption('freezeCreatures', true); d.setDebugOption('invulnerable', true); d.setDebugOption('unlimitedStamina', true);
     const isPlain = function (x, z) {
@@ -91,7 +97,7 @@ function check(description, condition, detail) {
       d.game.hasShownNoisyFloorHint = false;
       // With captions on "every sound", your own noise on a patch is put into words. Counted from here.
       d.settings.captions = 'all';
-      for (const key of ['ownGlass', 'ownPlate', 'ownCans']) d.captionCounts[key] = 0;
+      for (const key of ['ownGlass', 'ownPlate']) d.captionCounts[key] = 0;
     }, [lane, listenerMetres]);
     for (const key of keys) await page.keyboard.down(key);
     const result = await inGame(([lane]) => {
@@ -105,7 +111,7 @@ function check(description, condition, detail) {
       const answer = { hollowState: d.hollow.state, wentToLookAt: [d.hollow.targetX, d.hollow.targetZ], nearestToPatch: Math.round(nearestToPatch * 100) / 100,
         setOff: d.noisyFloorCounts.byPlayer, setOffCrouched: d.noisyFloorCounts.byPlayerCrouched, toldWhatItWas: d.game.hasShownNoisyFloorHint,
         crouching: d.player.isCrouching, sprinting: d.player.isSprinting,
-        captionsForYourOwnNoise: d.captionCounts.ownGlass + d.captionCounts.ownPlate + d.captionCounts.ownCans };
+        captionsForYourOwnNoise: d.captionCounts.ownGlass + d.captionCounts.ownPlate };
       d.hollow.isActive = false;
       return answer;
     }, [lane]);
@@ -142,7 +148,7 @@ function check(description, condition, detail) {
       d.noisyFloorCounts.byHollow = 0;
       // What the Hollow does to a patch is put into words too, but only where it could be heard.
       d.settings.captions = 'all';
-      const captionKey = { glass: 'hollowOnGlass', plate: 'hollowOnPlate', cans: 'hollowOnCans' }[patch.kind];
+      const captionKey = { glass: 'hollowOnGlass', plate: 'hollowOnPlate' }[patch.kind];
       d.captionCounts[captionKey] = 0;
       const targetX = patch.x + lane.stepX * 2, targetZ = patch.z + lane.stepZ * 2;
       let nearest = Infinity, furthestPast = -Infinity;

@@ -349,13 +349,14 @@ function furnishPumpHall(random) {
   addPumpUnit(51.5, 48.5);
   addPumpUnit(56.5, 48.5);
   addPumpUnit(61.5, 48.5);
-  addPipeAlongZ(44.0, 48.0, 0.55, 52.0, 0.11);
-  addPipeAlongZ(44.0, 48.0, 0.55, 57.0, 0.11);
-  addPipeAlongZ(44.0, 48.0, 0.55, 62.0, 0.11);
+  addPipeAlongZ(44.0, 48.1, 0.55, 52.0, 0.11, true); // first pump to tank, when looking at tanks, left one
+  addPipeAlongZ(44.0, 48.1, 0.55, 57.0, 0.11, true); // second pump to tank
+  addPipeAlongZ(44.0, 48.1, 0.55, 62.0, 0.11, true); // third pump to tank
   addPipeAlongX(47, 66, 5.5, 48.5, 0.2);
   addPipeAlongX(47, 66, 6.2, 42.5, 0.25);
   addPipeAlongZ(38, 58, 5.9, 59.2, 0.16);
-  addPipeAlongX(47, 66, 0.4, 57.75, 0.12);
+  addPipeAlongX(55, 66, 0.4, 57.75, 0.12, true);
+  addBoxBetween(54, 0, 56, 55, 3, 58, { surfaceClass: SURFACE_METAL, blocksMovement: true });
   addBoxBetween(48.6, 0, 44.6, 49.4, 7, 45.4);
   addBoxBetween(48.6, 0, 54.6, 49.4, 7, 55.4);
   addBoxBetween(63.6, 0, 44.6, 64.4, 7, 45.4);
