@@ -116,6 +116,7 @@ function canPhantomStandOnTile(tileX, tileZ) {
   const index = tileIndexAt(tileX, tileZ);
   if (tileFlags[index] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT)) return false;
   if (ZONE_NAMES[tileZone[index]] === 'LIFT CAR') return false; // nothing ever stands in the lift with you
+  if ((ZONE_NAMES[tileZone[index]] || '').indexOf('SALVAGE BAY') === 0) return false; // nor in a salvage bay
   const floor = tileFloorHeight[index];
   const neighbours = [[1, 0], [-1, 0], [0, 1], [0, -1]];
   for (const step of neighbours) {

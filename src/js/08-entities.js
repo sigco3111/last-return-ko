@@ -138,7 +138,9 @@ function updateDoors(dt) {
     if (door.isBroken) continue; // broken down: it stays as it fell
     let wantsOpen = false;
     let openedByPlayer = false;
-    if (door.forcedState !== null) {
+    if (door.kind === DOOR_KIND_BAY) {
+      wantsOpen = isHaulBayDoorWantedOpen(door); // a salvage bay's door: open while the bay is being filled, and at no other time
+    } else if (door.forcedState !== null) {
       wantsOpen = door.forcedState;
     } else {
       // TWEAK: doors notice you from 1.9 m away.

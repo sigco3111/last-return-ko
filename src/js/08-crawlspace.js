@@ -448,7 +448,10 @@ function isLockingDoorKind(kind) {
 function isHollowGroundTile(index) {
   if (tileIsWalkable[index] === 0) return false;
   if (level.storeZone && tileZone[index] === level.storeZone) return false;
-  return ZONE_NAMES[tileZone[index]] !== 'LIFT CAR';
+  const zoneName = ZONE_NAMES[tileZone[index]] || '';
+  // Nor is a salvage bay part of what it has to be able to get round to: it walks into one that stands open,
+  // but a bay needs no ceiling hatch and is nowhere it must be able to reach.
+  return zoneName !== 'LIFT CAR' && zoneName.indexOf('SALVAGE BAY') !== 0;
 }
 
 // Numbers the parts of the station that are cut off from each other when every locking door is shut.
@@ -456,7 +459,7 @@ function isHollowGroundTile(index) {
 function findHollowParts() {
   tileHollowPart.fill(0);
   const isLockingDoorTile = new Uint8Array(TILE_COUNT);
-  for (const door of doors) if (isLockingDoorKind(door.kind)) isLockingDoorTile[tileIndexAt(door.tileX, door.tileZ)] = 1;
+  for (const door of doors) if (isLockingDoorKind(door.kind) || door.kind === DOOR_KIND_BAY) isLockingDoorTile[tileIndexAt(door.tileX, door.tileZ)] = 1;
   const parts = [null];
   for (let startIndex = 0; startIndex < TILE_COUNT; startIndex++) {
     if (tileHollowPart[startIndex] !== 0 || isLockingDoorTile[startIndex] === 1 || !isHollowGroundTile(startIndex)) continue;
@@ -620,7 +623,7 @@ function auditHollowRoutes() {
   const problems = [];
   // As at the worst moment for it once the mains is on: every keycard door and the lift door shut.
   const savedBlocks = tileBlocksHollow.slice();
-  for (const door of doors) tileBlocksHollow[tileIndexAt(door.tileX, door.tileZ)] = isLockingDoorKind(door.kind) ? 1 : 0;
+  for (const door of doors) tileBlocksHollow[tileIndexAt(door.tileX, door.tileZ)] = isLockingDoorKind(door.kind) || door.kind === DOOR_KIND_BAY ? 1 : 0;
   const hatchesInPart = new Array(hollowPartCount + 1).fill(0);
   for (const hatch of hollowHatches) {
     hatchesInPart[hatch.part]++;

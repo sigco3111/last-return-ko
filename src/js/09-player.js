@@ -438,7 +438,7 @@ function updatePlayerMovement(dt) {
 
   const previousX = player.x, previousZ = player.z;
   const resolved = resolveBodyCollision(player.x + player.velocityX * dt, player.z + player.velocityZ * dt,
-    TUNING.playerRadius, player.isCrouching ? (canCrawlWhileCarrying() ? 1.0 : 1.2) : 1.7, getFloorHeightAt(player.x, player.z));
+    TUNING.playerRadius, player.isCrouching ? 1.0 : 1.7, getFloorHeightAt(player.x, player.z));
   player.x = resolved.x; player.z = resolved.z;
   // Follow the floor. Stairs are taken smoothly; anything bigger (a teleport, a checkpoint) lands at once.
   // TWEAK: 2.5 = how fast the view rises and falls on stairs, in metres per second. Lower feels floatier.
@@ -485,11 +485,6 @@ function updatePlayerMovement(dt) {
       (getTileFlagsAtPosition(player.x + forwardX * 0.9, player.z + forwardZ * 0.9) & TILE_FLAG_VENT) !== 0) {
     game.hasShownVentHint = true;
     showMessage(input.isTouchDevice ? 'A vent. Hold CROUCH to crawl in. It is not quiet in there.' : 'A vent. Hold C to crawl in. It is not quiet in there.', 6, 'info');
-  }
-  // Crouched at a vent with both arms full: say why you are not going in.
-  if (!canCrawlWhileCarrying() && player.isCrouching && hasMoveInput && !isInVent &&
-      (getTileFlagsAtPosition(player.x + forwardX * 0.9, player.z + forwardZ * 0.9) & TILE_FLAG_VENT) !== 0) {
-    showMessage('The ' + getHeldLooseObject().kind.label + ' will not go in there with you.', 3, 'info');
   }
 }
 

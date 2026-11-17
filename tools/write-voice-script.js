@@ -16,6 +16,7 @@ const dispatchDirections = {
   keycardTaken: 'Helpful, brief.',
   generatorNoFuel: 'Reading it off a screen. Mildly annoyed at the station, not at you. Said the first time any generator will not start for want of fuel.',
   generatorsWanted: 'Starts as a routine correction. Slows down on the last sentence: he knows what noise means down there. Only in stations with more generators, a little after Generator 2 starts.',
+  salvageWanted: 'Dry, a little weary: one more department with its hand out. "Then find the next" is flat, as if it were nothing. "The terminal keeps count" is a shrug. Only in stations with the salvage quest, a quarter of a minute after you step out of the lift.',
   badgesWanted: 'Passing on a request he did not want to pass on. Flat. A short pause before "Bring every one you find." Only in stations with the badges quest.',
   valvesWanted: 'Checklist voice. The last two sentences are almost an apology. Only in stations with the valves quest, a little after you take a keycard.',
   coresWanted: 'An afterthought, as if someone has just handed him a note. Only in stations with the core sample job.',

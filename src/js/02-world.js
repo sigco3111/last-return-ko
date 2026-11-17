@@ -766,6 +766,7 @@ const DOOR_KIND_AUTOMATIC = 0;
 const DOOR_KIND_POWERED = 1;
 const DOOR_KIND_KEYCARD = 2;
 const DOOR_KIND_LIFT = 3;
+const DOOR_KIND_BAY = 4; // the door of a salvage bay: it opens when you open the bay and shuts for good when the bay is full (08-loose-objects.js)
 const DOOR_TRAVEL_HEIGHT = 2.28;
 const DOOR_OPENING_HEIGHT = 2.3;
 
@@ -795,6 +796,7 @@ function addDoor(tileX, tileZ, kind, cardLevel) {
   if (kind === DOOR_KIND_POWERED) surfaceClass = SURFACE_DOOR_POWERED;
   if (kind === DOOR_KIND_KEYCARD) surfaceClass = doorCardLevel >= 3 ? SURFACE_DOOR_KEYCARD_3 : (doorCardLevel === 2 ? SURFACE_DOOR_KEYCARD_2 : SURFACE_DOOR_KEYCARD);
   if (kind === DOOR_KIND_LIFT) surfaceClass = SURFACE_DOOR_POWERED;
+  if (kind === DOOR_KIND_BAY) surfaceClass = SURFACE_INTERACTIVE; // amber: something you can use
   const slab = addBoxProp(tileX + 0.5, 1.15, tileZ + 0.5,
     passageRunsAlongX ? 0.07 : 0.5, 1.15, passageRunsAlongX ? 0.5 : 0.07,
     { surfaceClass: surfaceClass, isDynamic: true });

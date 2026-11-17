@@ -7,12 +7,17 @@
 // this file does the rest (which stations get it, placing, the rules, the objective line, the status chip,
 // the marks on the map, the lift terminal's refusal, Dispatch, and the check that it can be finished).
 //
-// There are three kinds (the spools, which every descent has, are a 'collect' quest like the rest):
+// There are four kinds (the spools, which every descent has, are a 'collect' quest like the rest):
 //   'collect'   Things lie about the station. Take them all.            (core samples, crew badges)
 //   'activate'  Machines stand about the station. Switch every one on.  (small generators, valves, the breaker)
 //               A machine may need the mains, may need something brought to it first, and may be loud.
 //   'supply'    One machine that is already part of every descent will not work until you bring it
 //               something.                                                (fuel for Generator 2)
+//
+//   'haul'      Nothing of its own lies anywhere. It asks for a sum's worth of the loose things a station
+//               has lying about anyway, sealed into bays that it opens one at a time. Its things are the
+//               panels of those bays; the bays themselves are planned with the station (planHaulBays in
+//               03-levelgen.js) and run by 08-loose-objects.js.                               (salvage)
 //
 // And a quest holds up one of three moments (`blocks`):
 //   'mains'     Generator 2 will not start until it is done.
@@ -199,6 +204,26 @@ const QUESTS = [
     }
   },
 
+  // ---- salvage: a sum's worth of what lies about, sealed into bays ----
+  // About half the stations have it (`count`: it has it, or it has not). How many bays there are goes by the
+  // station's size (`salvageBays` in GENERATED_SIZE_PRESETS). What it asks for is worked out from what the
+  // station has lying about, and so is how far along it is: see "Salvage" in 08-loose-objects.js.
+  {
+    key: 'haul', kind: 'haul', blocks: 'upload',
+    count: [0, 1],
+    tiers: [0, 'beforeLast'],
+    names: ['Salvage bay 1', 'Salvage bay 2', 'Salvage bay 3', 'Salvage bay 4'],
+    progress: function () { return getHaulProgress(); },
+    reset: function () { resetHaulBays(); },
+    tell: { line: 'salvageWanted', after: 'leftLift', seconds: 16 },
+    text: {
+      objective: 'Salvage also wants {total} worth of what lies about, sealed into its bays: {done} so far.',
+      objectiveAlone: 'Salvage still wants {total} worth of what lies about, sealed into its bays: {done} so far.',
+      chip: 'SALVAGE {done}/{total}',
+      refused: 'LIFT CONTROL: manifest short. Salvage in the bays: {done} of {total}.'
+    }
+  },
+
   // ---- the winch breaker ----
   {
     key: 'breaker', kind: 'activate', blocks: 'lift', pool: 'jobs', legacy: { placeNumbers: 'station', placeRank: 3 },
@@ -301,6 +326,7 @@ function planQuests(seed, size, stationRandom) {
 const questLookup = {}; // by object number: { instance, object, isItem }
 
 function clearQuests() {
+  clearHaulBays();
   level.quests.length = 0;
   for (const objectId in questLookup) delete questLookup[objectId];
 }
@@ -429,7 +455,16 @@ function placeQuests(plan, stationRandom) {
   const placeOne = function (definition) {
     const wanted = plan.quests[definition.key], random = randomFor(definition), instance = createQuestInstanceWithFixedThings(definition);
     const fixedCount = instance.objects.length;
-    if (definition.kind === 'supply') {
+    if (definition.kind === 'haul') {
+      // Its things are the panels of the bays that were planned with the station.
+      if (!plan.bays || plan.bays.length === 0) return;
+      plan.bays.forEach(function (planned, index) {
+        const objectId = getQuestObjectId(definition, index, false);
+        const panel = buildHaulBay(planned, objectId, index);
+        instance.objects.push({ objectId: objectId, index: index, name: definition.names[index], x: panel.x, z: panel.z, needsItem: false, itemObjectId: 0, isSupplied: false, isDone: false });
+      });
+      instance.total = instance.objects.length;
+    } else if (definition.kind === 'supply') {
       // One thing to bring, to a machine that is already there. It must be in reach before the mains is on.
       const target = definition.target(), objectId = getQuestObjectId(definition, 0, true);
       if (!placeItemNear(definition.requires.item, objectId, target.x, target.z, 0, null, random)) return;
@@ -644,6 +679,7 @@ function useQuestObject(interactable) {
   if (!entry) return false;
   const instance = entry.instance, definition = instance.definition, object = entry.object, flags = game.flags;
   if (entry.isItem) { takeQuestItem(interactable, definition.requires.item); return true; }
+  if (definition.kind === 'haul') { makeQuestKnown(instance); useHaulBay(object.index); return true; }
 
   if (definition.kind === 'collect' && definition.taken) {
     object.isDone = true;
@@ -803,6 +839,7 @@ function isQuestObjectWantedNow(objectId) {
     return getCarriedCount(itemKey) < QUEST_ITEMS[itemKey].carryMost && isQuestItemWantedNow(itemKey);
   }
   if (definition.kind === 'collect') return true;
+  if (definition.kind === 'haul') return haulState.bays[object.index] !== undefined && haulState.bays[object.index].state !== 'sealed' && !isQuestDone(entry.instance);
   if (definition.needsPower && !game.flags.powerOn) return false;
   return !object.needsItem || object.isSupplied || getCarriedCount(definition.requires.item) > 0;
 }

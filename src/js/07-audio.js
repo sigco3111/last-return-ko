@@ -33,6 +33,7 @@ const SOUND_LEVELS = {
   looseKnockTin: 1,       // ... an empty can
   looseKnockCard: 1,      // ... a cardboard box
   looseFling: 1,          // the Hollow throwing something back at you
+  haulBayPing: 1,         // the lamp over an open salvage bay, once a minute
   looseHandling: 1,       // taking an object in your hands, and the grunt of air as you throw it
   scanGrenade: 1,         // a scan grenade: the click of arming it, and the whine and crack as it goes off
   heartbeat: 4,
@@ -1316,6 +1317,18 @@ function playLooseObjectFlingSound(x, y, z) {
   const level = SOUND_LEVELS.looseFling;
   playNoiseBurst({ duration: 0.22, filterType: 'bandpass', frequency: 900, resonance: 0.8, gain: 2.2 * level, attack: 0.06, playbackRate: 1.6, destination: destination });
   playNoiseBurst({ duration: 0.16, filterType: 'lowpass', frequency: 260, resonance: 0.7, gain: 2.6 * level, attack: 0.03, useBrownNoise: true, destination: destination });
+}
+
+// The lamp over an open salvage bay at (x, y, z): two clean notes, the second higher, like a lift arriving
+// somewhere else in the building.
+function playHaulBayPing(x, y, z) {
+  if (!isAudioReady()) return;
+  const destination = createTemporaryPanner(x, y, z);
+  if (!destination) return;
+  const level = SOUND_LEVELS.haulBayPing;
+  playTone({ waveform: 'sine', frequency: 880, duration: 0.5, gain: 0.9 * level, attack: 0.005, destination: destination });
+  playTone({ waveform: 'sine', frequency: 1320, duration: 0.7, gain: 0.8 * level, attack: 0.005, delay: 0.22, destination: destination });
+  playTone({ waveform: 'triangle', frequency: 2640, duration: 0.25, gain: 0.15 * level, attack: 0.002, delay: 0.22, destination: destination });
 }
 
 // A scan grenade at (x, y, z). `what` is 'arm' (the pin: a click and a rising tick) or 'burst' (it goes off: a

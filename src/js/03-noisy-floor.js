@@ -91,6 +91,7 @@ function rateNoisyFloorTile(index) {
   if (tileFlags[index] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT | TILE_FLAG_WATER | TILE_FLAG_GRATE | TILE_FLAG_HAZARD)) return 0;
   const zoneName = ZONE_NAMES[tileZone[index]] || '';
   if (zoneName === 'LIFT CAR' || zoneName === 'LIFT LOBBY' || zoneName === 'STAIRS') return 0; // not where you start, not on the stairs
+  if (zoneName.indexOf('SALVAGE BAY') === 0) return 0; // a salvage bay starts empty
   const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
   let isNextToDoor = false, isNearDoor = false;
   for (let offsetZ = -2; offsetZ <= 2; offsetZ++) {

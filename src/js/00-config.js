@@ -198,6 +198,12 @@ const TUNING = {
   // What a station has lying about (see planStationLooseObjects in 08-loose-objects.js).
   looseLitterPerRoom: 0.7,          // boxes, plates and stray cans: this many for every room and corridor
   looseValuablesPerRoom: 0.4,       // things worth carrying out: this many for every room and corridor
+  haulShareOfValue: 0.4,            // the salvage quest asks for this share of what everything within walking reach of the lift is worth
+  haulBayPulseSeconds: 60,          // an open salvage bay's lamp lights the floor in front of its door this often, and pings
+  haulBayPulseRays: 420,            // ... with this many scan points ...
+  haulBayPulseMetres: 1.1,          // ... in a patch of this radius, a step or two in front of the door
+  noiseRadiusHaulBayPing: 9,        // how far the Hollow hears that ping
+  looseAppraiseHits: 20,            // after this many pulses on a thing the scanner has read it, and the screen says what it is worth
   looseValuablesShareOnSurfaces: 0.5, // this share of those stands on tables, shelves and crates; the rest on the floor, out of the way
   // Walking into one that lies on the floor.
   looseShoveFreeMass: 2,            // lighter than this (kg) you kick along without it slowing you
@@ -453,6 +459,7 @@ const RADIO_MESSAGES = {
   // Said the first time any generator will not start for want of fuel, Generator 2 or one of the small ones.
   generatorNoFuel: 'Day tank reads empty from here. There will be a fuel can somewhere on your level. Bring it to the generator.',
   generatorsWanted: 'One set will not lift the car. There are more generators on your level, and the winch wants every one of them running before you call the lift. We have marked them for you. They are not quiet.',
+  salvageWanted: 'Salvage has put its name on the order too. There are bays down there with their doors shut, the first not far from the lift. Open one, fill it with what is worth carrying, and it seals itself. Then find the next. The terminal keeps count.',
   badgesWanted: 'Personnel wants the badges of Crew 2 back. They will be with whatever the crew left lying about. Bring every one you find. The terminal will count them.',
   valvesWanted: 'One more for the list. The isolation valves on your level have to be shut before we bring you up. I have marked them. Those actuators have not turned in years. They will complain.',
   coresWanted: 'One more thing while you are down there. The lab wants the core samples Crew 2 pulled. Grey tubes. Bring them all.',
@@ -554,6 +561,7 @@ const CAPTIONS = {
   ambientPipe: { text: '[a pipe groans]', level: 'sound', withinMetres: 19, seconds: 3, slot: 'station', rank: 0 },
   ambientMetal: { text: '[metal ticks as it settles]', level: 'sound', withinMetres: 37, seconds: 2.5, slot: 'station', rank: 0 },
   ambientKnocks: { text: '[knocking, far below]', level: 'sound', withinMetres: 13, seconds: 3.5, slot: 'station', rank: 0 },
+  salvageBayPing: { text: '[a salvage bay pings]', level: 'sound', withinMetres: 45, seconds: 2.5, slot: 'salvageBay', rank: 0 },
   liftBell: { text: '[the lift bell rings]', level: 'sound', withinMetres: 50, seconds: 2.2 },
 
   // ---- you ----

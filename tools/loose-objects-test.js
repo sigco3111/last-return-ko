@@ -1033,7 +1033,7 @@ function installLab() {
     }
     if (!mouth) return null;
     result.mouth = mouth;
-    for (const kindKey of ['jar', 'crate']) {
+    for (const kindKey of ['jar', 'crate', 'pumpMotor', 'pipe', 'toolCase']) {
       d.clearLooseObjects();
       lab.stand(mouth.x - mouth.stepX * 1.6, mouth.z - mouth.stepZ * 1.6, Math.atan2(mouth.stepX, -mouth.stepZ));
       d.input.keysDown.add('KeyC');
@@ -1043,14 +1043,18 @@ function installLab() {
       d.input.keysDown.add('KeyW');
       let objectInVent = false;
       for (let step = 0; step < 150; step++) { d.simulate(1 / 30); if (d.isVentAt(object.x, object.z)) objectInVent = true; }
-      result[kindKey] = { playerInVent: d.isVentAt(p.x, p.z), objectInVent: objectInVent, stillHeld: d.getHeldLooseObject() === object, knocks: lab.since(before), messages: lab.messages() };
+      result[kindKey] = { playerInVent: d.isVentAt(p.x, p.z), objectInVent: objectInVent, objectInVentAtTheEnd: d.isVentAt(object.x, object.z), stillHeld: d.getHeldLooseObject() === object, knocks: lab.since(before), messages: lab.messages(),
+        metresIn: lab.round((p.x - mouth.x) * mouth.stepX + (p.z - mouth.z) * mouth.stepZ) };
       d.input.keysDown.clear();
     }
     return result;
   });
-  check('a jar goes into a vent ahead of you; with a crate in the beam you cannot crawl in, and are told why',
-    vent !== null && vent.jar.playerInVent && vent.jar.objectInVent && vent.jar.stillHeld && !vent.crate.playerInVent && vent.crate.stillHeld &&
-    vent.crate.messages.some((text) => /crate will not go in there/.test(text)), vent);
+  // No rule says what may go into a vent: a thing goes where it fits. A vent is a metre wide and 1.15 m high.
+  check('a jar, a tool case, a crate and a pump motor each go into a vent ahead of you, still in the beam',
+    vent !== null && ['jar', 'toolCase', 'crate', 'pumpMotor'].every((key) => vent[key].playerInVent && vent[key].objectInVent && vent[key].stillHeld), vent);
+  check('a pipe hangs across the beam and is wider than the vent: it jams at the mouth and stops you there, and nothing but the pipe says so',
+    vent !== null && !vent.pipe.playerInVent && vent.pipe.stillHeld && vent.pipe.metresIn < -0.3 &&
+    ['jar', 'toolCase', 'crate', 'pumpMotor', 'pipe'].every((key) => !vent[key].messages.some((text) => /will not go in|no room in here/.test(text))), vent ? vent.pipe : null);
 
   // --- the pit, and a new descent ---
   const housekeeping = await inGame((spot) => {
@@ -1226,6 +1230,37 @@ function installLab() {
     thrownBack.can.knocksOnLanding.heard + thrownBack.can.knocksOnLanding.quiet >= 1 && thrownBack.can.noisesTheHollowHeard === 0 && thrownBack.can.ignored && !thrownBack.can.stillOfInterest &&
     !thrownBack.can.afterPickingItUp.ignored && thrownBack.can.afterPickingItUp.ofInterest, thrownBack.can);
   check('a gas canister is too heavy for that: it goes after it and does not throw it', thrownBack.canister.kicked && thrownBack.canister.flungAfterSeconds < 0 && !thrownBack.canister.ignored, thrownBack.canister);
+
+  // --- what a thing is worth ---
+  await inGame((spot) => {
+    const d = window.lastReturnDebug, lab = window.looseLab;
+    lab.reset();
+    lab.stand(spot.x, spot.z, Math.PI / 2);
+    const object = d.createLooseObject('canister', spot.x + 1, 0.3, spot.z, 0);
+    for (let step = 0; step < 150 && !object.isAsleep; step++) d.simulate(1 / 30);
+    d.player.pitch = Math.atan2(object.y - d.getPlayerEyeY(), 1); // look at it
+    d.simulate(0.1);
+  }, spot);
+  await drawFrames(page, 3);
+  const unread = await inGame(() => { const d = window.lastReturnDebug, object = d.looseObjects[0]; return { prompt: document.getElementById('hud-prompt').textContent, worth: d.getLooseObjectWorth(object), pulses: object.scanHits }; });
+  // Scanned where it lies, from where you stand: a second and a half of the ordinary beam.
+  const read = await inGame(() => {
+    const d = window.lastReturnDebug, object = d.looseObjects[0];
+    d.looseState.hasShownAppraisalHint = false;
+    d.clearMessages();
+    d.setDebugOption('unlimitedScanner', true);
+    d.setScanHeld(true); d.simulate(1.5); d.setScanHeld(false); d.simulate(0.1);
+    return { worth: d.getLooseObjectWorth(object), really: object.kind.value, pulses: object.scanHits, needed: d.tuning.looseAppraiseHits, messages: window.looseLab.messages() };
+  });
+  await drawFrames(page, 3);
+  const readPrompt = await inGame(() => document.getElementById('hud-prompt').textContent);
+  await inGame(() => { const d = window.lastReturnDebug; d.pickUpLooseObject(d.looseObjects[0], false); d.simulate(0.3); });
+  await drawFrames(page, 3);
+  const readChip = await inGame(() => { const d = window.lastReturnDebug, chip = document.getElementById('chip-carrying').textContent; d.releaseHeldLooseObject(0); return chip; });
+  check('what a thing is worth is not on screen until the scanner has read it: enough pulses on it, and then the prompt and the status line say it',
+    /Pick up the gas canister$/.test(unread.prompt) && unread.worth === 0 && read.pulses >= read.needed && read.worth === read.really && read.really > 0 &&
+    read.messages.some((text) => /The scanner has read what that is: gas canister, worth 25/.test(text)) && /Pick up the gas canister \(worth 25\)$/.test(readPrompt) && readChip === 'CARRYING: GAS CANISTER · 25',
+    { unread: unread, read: read, prompt: readPrompt, chip: readChip });
 
   // --- what it costs ---
   const cost = await inGame((spot) => {

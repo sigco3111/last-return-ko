@@ -24,10 +24,11 @@ const GENERATED_SIZE_PRESETS = {
   // extraSpools: the fewest and the most survey spools it has besides the three every station has.
   // keycards: 1 to 3. Each card opens one more ring of doors, and the next card is somewhere inside that ring;
   //           Shaft 9 is behind the last. The third number of "fillers" is shared out between the rings.
-  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], errands: [0, 0], extraGenerators: [0, 1], extraSpools: [0, 0], spineLength: [10, 14] },
-  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], errands: [0, 1], extraGenerators: [0, 2], extraSpools: [0, 0], spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], errands: [0, 1], extraGenerators: [1, 2], extraSpools: [0, 1], spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [15, 8, 6], loops: 8, vents: 14, keycards: 3, extraJobs: [2, 3], errands: [1, 2], extraGenerators: [1, 3], extraSpools: [0, 2], spineLength: [15, 28] },
+  // salvageBays: the fewest and the most bays a station with the salvage quest has (the quest is in about half of them).
+  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], errands: [0, 0], extraGenerators: [0, 1], extraSpools: [0, 0], salvageBays: [1, 2], spineLength: [10, 14] },
+  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], errands: [0, 1], extraGenerators: [0, 2], extraSpools: [0, 0], salvageBays: [2, 2], spineLength: [13, 18] },
+  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], errands: [0, 1], extraGenerators: [1, 2], extraSpools: [0, 1], salvageBays: [2, 3], spineLength: [16, 22] },
+  massive: { label: 'Massive', fillers: [15, 8, 6], loops: 8, vents: 14, keycards: 3, extraJobs: [2, 3], errands: [1, 2], extraGenerators: [1, 3], extraSpools: [0, 2], salvageBays: [3, 4], spineLength: [15, 28] },
 };
 
 // TWEAK: how spread out a station is.
@@ -711,6 +712,76 @@ function tryPlanDuct(plan, blocked, first, second, isVent) {
   return true;
 }
 
+// Salvage bays, for a station that has the salvage quest (09-quests.js): each is two tiles dug into the rock
+// behind a doorway that nothing else used, with a door of its own kind in the doorway. The first is as near
+// the lift as there is room for one; each one after that is as far from all the others as it can be.
+// They are planned last, with numbers of their own, so that everything else is where it would be without them.
+// A station with no room for even one bay does not get the quest.
+const HAUL_BAY_DEPTH = 2;            // tiles into the rock
+const HAUL_BAYS_LEAST_TILES_APART = 10;
+function planHaulBays(plan, seed, size) {
+  plan.bays = [];
+  if (!plan.quests.haul) return;
+  const random = createQuestRandom(seed, 'salvage bays');
+  const range = size.salvageBays || [1, 1];
+  const wanted = range[0] + Math.floor(random() * (range[1] - range[0] + 1));
+  const blocked = createDuctBlockGrid(plan);
+  const lobby = plan.rooms.find(function (room) { return room.key === 'liftLobby'; });
+  const lobbyX = (lobby.startX + lobby.endX) / 2, lobbyZ = (lobby.startZ + lobby.endZ) / 2;
+  const candidates = [];
+  for (const socket of plan.sockets) {
+    if (socket.isUsed || socket.owner.tier >= plan.finalTier) continue; // not behind the last keycard's doors
+    if (['calibrationStore', 'stairwell', 'shaftChamber'].indexOf(socket.owner.key) >= 0 || socket.owner.isDuct || socket.owner.isVent) continue;
+    const step = WALL_DIRECTIONS[socket.wall], tiles = [];
+    let isRock = true;
+    for (let depth = 1; depth <= HAUL_BAY_DEPTH + 1 && isRock; depth++) {
+      const tileX = socket.tileX + step[0] * depth, tileZ = socket.tileZ + step[1] * depth;
+      if (tileX < 4 || tileZ < 4 || tileX >= GRID_WIDTH - 4 || tileZ >= GRID_DEPTH - 4 || blocked[tileIndexAt(tileX, tileZ)]) isRock = false;
+      else if (depth <= HAUL_BAY_DEPTH) tiles.push([tileX, tileZ]);
+    }
+    if (!isRock) continue;
+    candidates.push({ socket: socket, tiles: tiles, draw: random(), fromLobby: Math.abs(socket.tileX - lobbyX) + Math.abs(socket.tileZ - lobbyZ) });
+  }
+  const tilesApart = function (first, second) { return Math.abs(first.socket.tileX - second.socket.tileX) + Math.abs(first.socket.tileZ - second.socket.tileZ); };
+  const chosen = [];
+  for (let count = 0; count < wanted; count++) {
+    let best = null, bestScore = -Infinity;
+    for (const candidate of candidates) {
+      if (chosen.indexOf(candidate) >= 0) continue;
+      let score;
+      if (chosen.length === 0) {
+        // The first: reachable from the start, and as near the lift as can be.
+        if (candidate.socket.owner.tier > 0) continue;
+        score = -candidate.fromLobby + candidate.draw;
+      } else {
+        let nearest = Infinity;
+        for (const other of chosen) nearest = Math.min(nearest, tilesApart(candidate, other));
+        if (nearest < HAUL_BAYS_LEAST_TILES_APART) continue;
+        score = nearest + candidate.draw * 4;
+      }
+      if (score > bestScore) { bestScore = score; best = candidate; }
+    }
+    if (best === null) break;
+    chosen.push(best);
+  }
+  if (chosen.length === 0) { delete plan.quests.haul; return; }
+  for (const candidate of chosen) {
+    const socket = candidate.socket, tiles = candidate.tiles;
+    const bay = {
+      key: 'bay', name: 'SALVAGE BAY', tier: socket.owner.tier, isCorridor: true, isBay: true,
+      route: tiles.map(function (tile) { return tileIndexAt(tile[0], tile[1]); }),
+      startX: Math.min(tiles[0][0], tiles[tiles.length - 1][0]), endX: Math.max(tiles[0][0], tiles[tiles.length - 1][0]) + 1,
+      startZ: Math.min(tiles[0][1], tiles[tiles.length - 1][1]), endZ: Math.max(tiles[0][1], tiles[tiles.length - 1][1]) + 1,
+      floorY: socket.floorY, ceiling: 2.4, zone: 0,
+      doorTileX: socket.tileX, doorTileZ: socket.tileZ, wall: socket.wall
+    };
+    plan.rooms.push(bay);
+    plan.doors.push({ tileX: socket.tileX, tileZ: socket.tileZ, kind: DOOR_KIND_BAY, cardLevel: 0, roomA: socket.owner, roomB: bay });
+    socket.isUsed = true;
+    plan.bays.push(bay);
+  }
+}
+
 // `isVent` plans vents instead of service ducts (see tryPlanDuct). `isLessPicky` accepts pairs that are only two
 // doors apart on foot, and vents that run from corridor to corridor: used when the picky pass came up short.
 function planLoops(plan, wantedCount, isVent, isLessPicky) {
@@ -879,6 +950,7 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   // The quests, drawn last so that nothing about them changes the rooms and corridors a seed gives.
   plan.seed = seed;
   plan.quests = planQuests(seed, size, random);
+  planHaulBays(plan, seed, size);
   return plan;
 }
 
@@ -983,7 +1055,7 @@ function addCorridorDirectionSigns(plan) {
   computeDistanceField(fieldToPumpHall, findNearestWalkableTileIndex((pumpHall.startX + pumpHall.endX) / 2, (pumpHall.startZ + pumpHall.endZ) / 2), 0, null);
   computeDistanceField(fieldToShaft, findNearestWalkableTileIndex(SHAFT_POSITION.x, SHAFT_POSITION.z), 0, null);
   for (const corridor of plan.rooms) {
-    if (!corridor.isCorridor || corridor.isDuct) continue;
+    if (!corridor.isCorridor || corridor.isDuct || corridor.isBay) continue;
     const length = corridor.runsAlongX ? corridor.endX - corridor.startX : corridor.endZ - corridor.startZ;
     if (length < 6) continue;
     // The sign goes on the south wall (corridors running east-west) or the east wall (north-south).
@@ -1016,6 +1088,7 @@ function addCorridorDirectionSigns(plan) {
 function furnishGeneratedCorridor(corridor, random) {
   const startX = corridor.startX, startZ = corridor.startZ, endX = corridor.endX, endZ = corridor.endZ;
   const ceiling = corridor.ceiling;
+  if (corridor.isBay) return; // a salvage bay is bare: what goes in it, you bring
   if (corridor.isFlooded) setTileFlagInRectangle(startX, startZ, endX, endZ, TILE_FLAG_WATER);
   if (corridor.isVent) {
     // A vent: nothing in it but the seams of the sheet metal, one every other tile, so a scan has something to
@@ -1249,7 +1322,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
 
   // Places for the Hollow to wander between: the middle of every room and corridor.
   for (const room of plan.rooms) {
-    if (room.key === 'calibrationStore' || room.isVent) continue; // a vent is a way through, not somewhere to wander to
+    if (room.key === 'calibrationStore' || room.isVent || room.isBay) continue; // a vent is a way through, not somewhere to wander to; nor is a salvage bay
     if (room.route) {
       const middle = room.route[Math.floor(room.route.length / 2)];
       roamingWaypoints.push([middle % GRID_WIDTH + 0.5, Math.floor(middle / GRID_WIDTH) + 0.5]);
@@ -1258,7 +1331,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
     const index = findNearestWalkableTileIndex((room.startX + room.endX) / 2, (room.startZ + room.endZ) / 2);
     if (index >= 0) roamingWaypoints.push([index % GRID_WIDTH + 0.5, Math.floor(index / GRID_WIDTH) + 0.5]);
   }
-  level.roomCount = plan.rooms.length;
+  level.roomCount = plan.rooms.length - plan.bays.length; // (how much lies about a station goes by this: the bays are not rooms to litter)
   level.loopCount = plan.loopCount;
   level.ventCount = plan.ventCount;
   return true;
@@ -1280,6 +1353,7 @@ function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
   // And everything that lies loose: the cans, the litter, and the things worth carrying out.
   planStationLooseObjects();
   spawnStationLooseObjects();
+  settleHaulTarget(); // what Salvage asks for, if this station has that quest, now that it is known what lies about
   return wasBuiltAsAsked;
 }
 

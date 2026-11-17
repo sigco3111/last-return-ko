@@ -137,7 +137,7 @@ function initializeInterface() {
     const isGenerated = settings.station === 'generated';
     elements['station-options'].hidden = !isGenerated;
     let description = isGenerated
-      ? 'No drawings exist. Different on every descent; the same seed gives the same station.'
+      ? 'No drawings exist. Different on every descent; the same seed gives the same station. (The game is still being built: after an update, a seed may give a different station than it did before.)'
       : 'The annex as it was built. The same every time.';
     // After a run in a generated station, say which one it was, so it can be visited again.
     if (isGenerated && level.kind === 'generated') description += ' Last descent: seed ' + level.seed + '.';
@@ -711,7 +711,7 @@ function updateHud(realDt) {
     elements['chip-extra'].textContent = extraText;
     const carried = getHeldLooseObject();
     elements['chip-carrying'].hidden = carried === null;
-    if (carried !== null) elements['chip-carrying'].textContent = 'CARRYING: ' + getLooseObjectLabel(carried).toUpperCase();
+    if (carried !== null) elements['chip-carrying'].textContent = 'CARRYING: ' + getLooseObjectLabel(carried).toUpperCase() + (getLooseObjectWorth(carried) > 0 ? ' · ' + getLooseObjectWorth(carried) : '');
     // On a phone held sideways the captions hang under the work order (see style.css), and the work order
     // is as tall as its sentence is long: the stylesheet is told where it ends.
     const workOrderBlock = elements['hud-block-objective'];
@@ -762,7 +762,7 @@ function updateHud(realDt) {
       prompt.textContent = 'THROW  ' + '\u25AE'.repeat(filled) + '\u25AF'.repeat(8 - filled);
     } else if (game.mode === 'playing' && focusedLooseObject && !heldLooseObject) {
       prompt.hidden = false;
-      prompt.textContent = (input.isTouchDevice ? 'USE · ' : '[E] or hold [Right mouse]  ') + 'Pick up the ' + getLooseObjectLabel(focusedLooseObject);
+      prompt.textContent = (input.isTouchDevice ? 'USE · ' : '[E] or hold [Right mouse]  ') + 'Pick up the ' + getLooseObjectLabel(focusedLooseObject) + (getLooseObjectWorth(focusedLooseObject) > 0 ? ' (worth ' + getLooseObjectWorth(focusedLooseObject) + ')' : '');
     } else if (game.mode === 'playing' && focused) {
       prompt.hidden = false;
       prompt.textContent = (input.isTouchDevice ? 'USE · ' : '[E]  ') + focused.prompt;
