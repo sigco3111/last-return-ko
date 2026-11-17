@@ -755,6 +755,13 @@ function updateHud(realDt) {
     const prompt = elements['hud-prompt'];
     const focused = player.focusedInteractable;
     const focusedLooseObject = player.focusedLooseObject, heldLooseObject = getHeldLooseObject();
+    // Something in the beam that does something, and has not done it yet: on a phone a button for it appears.
+    const canSetOffCarried = game.mode === 'playing' && heldLooseObject !== null && Boolean(heldLooseObject.kind.use) && !heldLooseObject.isSpent && heldLooseObject.armedTime < 0;
+    const carriedButton = document.getElementById('touch-use-carried');
+    if (carriedButton) {
+      carriedButton.hidden = !(input.isTouchDevice && canSetOffCarried);
+      if (canSetOffCarried) carriedButton.textContent = heldLooseObject.kind.use.button || 'USE IT';
+    }
     if (game.mode === 'playing' && heldLooseObject && getThrowWindUp() > 0) {
       // Winding up a throw: a bar that fills.
       const filled = Math.round(getThrowWindUp() * 8);
@@ -766,10 +773,10 @@ function updateHud(realDt) {
     } else if (game.mode === 'playing' && focused) {
       prompt.hidden = false;
       prompt.textContent = (input.isTouchDevice ? 'USE · ' : '[E]  ') + focused.prompt;
-    } else if (game.mode === 'playing' && heldLooseObject && heldLooseObject.kind.use && !heldLooseObject.isSpent && heldLooseObject.armedTime < 0 && !input.isTouchDevice) {
-      // In the beam, and it does something: say which key.
+    } else if (canSetOffCarried) {
+      // In the beam, and it does something: say which key, or which button.
       prompt.hidden = false;
-      prompt.textContent = '[Q]  ' + heldLooseObject.kind.use.prompt;
+      prompt.textContent = (input.isTouchDevice ? (heldLooseObject.kind.use.button || 'USE IT') + ' · ' : '[Q]  ') + heldLooseObject.kind.use.prompt;
     } else if (game.mode === 'playing' && !input.isPointerLocked && !input.useDragLook && !input.isTouchDevice) {
       prompt.hidden = false;
       prompt.textContent = 'Click to take control of the scanner';

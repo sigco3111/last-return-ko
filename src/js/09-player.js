@@ -349,6 +349,7 @@ function initializeTouchControls() {
   };
   bindTapButton('touch-sweep', function () { input.wantsSweep = true; });
   bindTapButton('touch-use', function () { input.wantsInteract = true; });
+  bindTapButton('touch-use-carried', function () { input.wantsUseCarried = true; }); // what Q is on a keyboard
   bindTapButton('touch-map', function () { toggleMapOverlay(); });
   bindTapButton('touch-pause', function () { pauseGame(); });
   bindTapButton('touch-run', function (element) {

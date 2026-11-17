@@ -1546,6 +1546,25 @@ function installLab() {
     return { windUp: windUp, stillCarryingWhileHeld: stillCarrying, carrying: d.getHeldLooseObject() !== null, speed: Math.hypot(object.velocityX, object.velocityY, object.velocityZ) };
   });
   check('a finger held on USE winds up a throw, and lifting it throws', phoneThrow.stillCarryingWhileHeld && phoneThrow.windUp > 0.5 && !phoneThrow.carrying && phoneThrow.speed > 3, phoneThrow);
+  // Something that does something: a button for it appears, and only then.
+  await phone.page.evaluate(() => { const d = window.lastReturnDebug, lab = window.looseLab; d.clearLooseObjects(); lab.carry('canister'); d.player.pitch = 0; d.simulate(0.3); });
+  await drawFrames(phone.page, 4);
+  const phoneWithCanister = await phone.page.evaluate(() => ({ buttonHidden: document.getElementById('touch-use-carried').hidden }));
+  await phone.page.evaluate(() => { const d = window.lastReturnDebug, lab = window.looseLab; d.clearLooseObjects(); lab.carry('scanGrenade'); d.player.pitch = 0; d.simulate(0.3); });
+  await drawFrames(phone.page, 4);
+  const phoneWithGrenade = await phone.page.evaluate(() => {
+    const button = document.getElementById('touch-use-carried'), box = button.getBoundingClientRect(), scan = document.getElementById('touch-scan').getBoundingClientRect();
+    return { buttonHidden: button.hidden, says: button.textContent, prompt: document.getElementById('hud-prompt').textContent, onScreen: box.width > 40 && box.right <= window.innerWidth && box.top >= 0,
+      clearOfScan: box.bottom <= scan.top + 1, armed: window.lastReturnDebug.getHeldLooseObject().armedTime >= 0 };
+  });
+  await phone.page.tap('#touch-use-carried');
+  await phone.page.evaluate(() => window.lastReturnDebug.simulate(0.1));
+  await drawFrames(phone.page, 4);
+  const phoneArmed = await phone.page.evaluate(() => { const d = window.lastReturnDebug, grenade = d.getHeldLooseObject(); return { armed: grenade !== null && grenade.armedTime >= 0, buttonHidden: document.getElementById('touch-use-carried').hidden, messages: window.looseLab.messages() }; });
+  check('on a phone, a scan grenade in the beam brings up an ARM button above SCAN and a prompt that names it; a canister does not',
+    phoneWithCanister.buttonHidden && !phoneWithGrenade.buttonHidden && phoneWithGrenade.says === 'ARM' && phoneWithGrenade.prompt === 'ARM · Arm the scan grenade' && phoneWithGrenade.onScreen && phoneWithGrenade.clearOfScan && !phoneWithGrenade.armed,
+    [phoneWithCanister, phoneWithGrenade]);
+  check('a tap on it arms the grenade, and the button goes away again', phoneArmed.armed && phoneArmed.buttonHidden && phoneArmed.messages.some((text) => /Armed/.test(text)), phoneArmed);
   check('no script errors were reported on the phone', phone.problems.length === 0, phone.problems);
   await phone.browser.close();
 

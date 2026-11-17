@@ -140,6 +140,9 @@ body {
 .touch-button.is-held { background: var(--instrument); color: var(--void); }
 .touch-small { height: 34px; min-width: 52px; font-size: 10px; }
 .touch-scan { width: 92px; height: 92px; border-radius: 50%; font-size: 13px; border-color: var(--instrument); }
+/* Above the block of buttons on the right, over SCAN: the one for setting off what the beam carries. */
+.touch-carried { position: absolute; right: var(--gutter-right); bottom: calc(172px + env(safe-area-inset-bottom, 0px)); min-width: 92px; border-color: var(--instrument); }
+.touch-carried[hidden] { display: none; }
 .touch-top-buttons { position: absolute; top: calc(150px + env(safe-area-inset-top, 0px)); right: var(--gutter-right); display: flex; gap: 6px; }
 .touch-right-buttons {
   position: absolute; right: var(--gutter-right); bottom: calc(18px + env(safe-area-inset-bottom, 0px));

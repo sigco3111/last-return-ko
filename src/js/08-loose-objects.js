@@ -36,7 +36,8 @@
 //              { shape: 'ball', center: [x, y, z], radius: r }
 //              { shape: 'capsule', from: [x, y, z], to: [x, y, z], radius: r }   a rod with round ends
 //   use        for an object that does something when you press Q with it in the beam:
-//              { prompt: 'Arm the scan grenade', activate: function (object) { ... } }
+//              { prompt: 'Arm the scan grenade', button: 'ARM', activate: function (object) { ... } }
+//              (`button` is what the phone's button for it says)
 //              What it then does over time is `update(object, dt)`, called every frame for every object of the kind.
 // Where it hangs is the same for all of them: straight out from the scanner's lens, `looseHoldDistance` (in
 // 00-config.js) beyond its own size. How much of the beam it takes follows from how big it is.
@@ -70,7 +71,7 @@ const LOOSE_OBJECT_KINDS = {
       { shape: 'capsule', from: [0, -0.045, 0], to: [0, 0.045, 0], radius: 0.04 },
       { shape: 'box', center: [0.05, 0.02, 0], half: [0.02, 0.05, 0.02] }
     ],
-    use: { prompt: 'Arm the scan grenade', activate: armScanGrenade },
+    use: { prompt: 'Arm the scan grenade', button: 'ARM', activate: armScanGrenade },
     update: updateScanGrenade
   },
   // ---- litter: what lies about a station that nobody has swept in forty years ----
