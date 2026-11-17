@@ -101,6 +101,22 @@ const LOOSE_OBJECT_KINDS = {
     stepRadius: 0.025,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.2, 0.012, 0.15] }]
   },
+  // The cover of a vent: a sheet-metal grille a little smaller than the opening. About half of them still stand
+  // in their vent's mouth, where they hide the vent from a scan and fall over, loudly, if anything walks into
+  // them; the rest lie on the floor in front of it. Heavy, awkward, and worth carrying off.
+  ventCover: {
+    label: 'vent cover', mass: 9, value: 20, fragile: 0.3, material: 'metal', loud: 1.2, lies: 'upright', bulky: true, bounce: 0.2, grip: 0.5,
+    stepRadius: 0.03,
+    // Lying flat it is a plate on the floor: you and the Hollow walk over it. Standing or leaning it is in the way.
+    stepOverHeight: 0.15,
+    // The sheet, and a lug at each corner, front and back: it stands on the bottom four, and lies flat on four of a side.
+    parts: [{ shape: 'box', center: [0, 0, 0], half: [0.47, 0.5, 0.02] },
+      { shape: 'ball', center: [0.43, -0.48, 0.045], radius: 0.02 }, { shape: 'ball', center: [-0.43, -0.48, 0.045], radius: 0.02 },
+      { shape: 'ball', center: [0.43, -0.48, -0.045], radius: 0.02 }, { shape: 'ball', center: [-0.43, -0.48, -0.045], radius: 0.02 },
+      { shape: 'ball', center: [0.43, 0.48, 0.045], radius: 0.02 }, { shape: 'ball', center: [-0.43, 0.48, 0.045], radius: 0.02 },
+      { shape: 'ball', center: [0.43, 0.48, -0.045], radius: 0.02 }, { shape: 'ball', center: [-0.43, 0.48, -0.045], radius: 0.02 }]
+  },
+
   pumpMotor: {
     label: 'pump motor', mass: 18, value: 150, fragile: 0.6, material: 'metal', loud: 1, lies: 'upright', bulky: true, bounce: 0.1, grip: 0.65,
     parts: [
@@ -469,6 +485,33 @@ function getLooseObjectValue(object) {
 
 // Wakes an object at rest, and with it whatever lies against it or on top of it: take the bottom crate away
 // and the one above must fall.
+// Does it lie low enough to be walked over? Only a kind with a step-over height can: a vent cover flat on the floor.
+function isLooseObjectLyingLow(object) {
+  const stepOverHeight = object.kind.stepOverHeight || 0;
+  if (stepOverHeight === 0 || object.isHeld) return false;
+  const tileX = Math.floor(object.x), tileZ = Math.floor(object.z);
+  if (!isInsideGrid(tileX, tileZ)) return false;
+  // How far its first part (the sheet) reaches above its centre, turned as it is.
+  const part = object.prepared.parts[0], matrix = object.matrix;
+  const reachUp = part.shape === 'box' ? Math.abs(matrix[3]) * part.halfX + Math.abs(matrix[4]) * part.halfY + Math.abs(matrix[5]) * part.halfZ : object.prepared.boundsRadius;
+  return object.y + reachUp < tileFloorHeight[tileIndexAt(tileX, tileZ)] + stepOverHeight;
+}
+
+// Does touching it make a noise worth a warning? That is what the scanner's warning colour on a loose thing
+// says. A loud kind does, except where it lies low and is walked over.
+function isLooseObjectLoudToTouch(object) {
+  return object.kind.loud > 1 && !isLooseObjectLyingLow(object);
+}
+
+// Is something big standing within `radius` of (x, z): a vent cover in its mouth, a crate left there?
+function isLooseObjectInTheWayAt(x, z, radius) {
+  for (const object of looseObjects) {
+    if (object.prepared.boundsRadius < 0.3 || isLooseObjectLyingLow(object)) continue;
+    if ((object.x - x) * (object.x - x) + (object.z - z) * (object.z - z) < radius * radius) return true;
+  }
+  return false;
+}
+
 function wakeLooseObject(object) {
   if (!object.isAsleep) return;
   object.isAsleep = false;
@@ -829,14 +872,16 @@ function collectLooseContacts(object, positionX, positionY, positionZ, radius) {
     }
   }
 
-  // You and the Hollow. What you are carrying passes through you: the beam has it.
+  // You and the Hollow. What you are carrying passes through you: the beam has it. A kind with a step-over
+  // height is only in your way where it stands higher than that: the part of it below is walked over.
+  const stepOverHeight = object.kind.stepOverHeight || 0;
   if (!object.isHeld && game.mode === 'playing') {
-    addLooseContactWithWalker(true, getLooseShoveResistance(object.kind.mass), player.x, player.z, TUNING.playerRadius, player.floorY, player.floorY + (player.isCrouching ? 1.0 : 1.7),
+    addLooseContactWithWalker(true, getLooseShoveResistance(object.kind.mass), player.x, player.z, TUNING.playerRadius, player.floorY + stepOverHeight, player.floorY + (player.isCrouching ? 1.0 : 1.7),
       looseState.playerStrideX, looseState.playerStrideZ, positionX, positionY, positionZ, radius);
   }
   if (hollow.isActive) {
     const figure = hollow.figure;
-    addLooseContactWithWalker(false, 0, figure.x, figure.z, 0.34, figure.y, figure.y + 1.9,
+    addLooseContactWithWalker(false, 0, figure.x, figure.z, 0.34, figure.y + stepOverHeight, figure.y + 1.9,
       looseState.hollowVelocityX, looseState.hollowVelocityZ, positionX, positionY, positionZ, radius);
   }
 }
@@ -1486,6 +1531,41 @@ function getLooseRestHeight(kindKey, orientation) {
   return -lowest;
 }
 
+// Is the floor round (x, z) bare for `reach` metres: all of it floor at this height, and nothing on it that
+// stands more than a couple of centimetres proud?
+function isLooseFloorClearAt(x, z, floorY, reach) {
+  for (let tileZ = Math.floor(z - reach); tileZ <= Math.floor(z + reach); tileZ++) {
+    for (let tileX = Math.floor(x - reach); tileX <= Math.floor(x + reach); tileX++) {
+      if (!isInsideGrid(tileX, tileZ)) return false;
+      const index = tileIndexAt(tileX, tileZ);
+      if (tileIsOpen[index] !== 1 || Math.abs(tileFloorHeight[index] - floorY) > 0.01 || tileCeilingHeight[index] - floorY < 1.5) return false;
+      if (tileFlags[index] & (TILE_FLAG_DOOR | TILE_FLAG_PIT | TILE_FLAG_WATER)) return false;
+      const list = tilePropLists[index];
+      if (!list) continue;
+      for (const prop of list) {
+        if (prop.isRemoved || prop.maximumY < floorY + 0.025 || prop.minimumY > floorY + 1.2) continue;
+        if (Math.abs(prop.centerX - x) < prop.boundsHalfX + reach && Math.abs(prop.centerZ - z) < prop.boundsHalfZ + reach) return false;
+      }
+    }
+  }
+  return true;
+}
+
+// Would a thing of this kind, put down at (x, z) turned like this, have all of itself over bare floor? A length
+// of pipe is longer than a tile is wide: turned the wrong way in a narrow place, its end would be inside the wall.
+function isLooseRestClearAt(kindKey, x, z, floorY, orientation) {
+  const prepared = prepareLooseObjectKind(kindKey), shell = prepared.shell;
+  const turnX = orientation[0], turnY = orientation[1], turnZ = orientation[2], turnW = orientation[3];
+  for (let ballIndex = 0; ballIndex < prepared.shellCount; ballIndex++) {
+    const localX = shell[ballIndex * 4], localY = shell[ballIndex * 4 + 1], localZ = shell[ballIndex * 4 + 2];
+    // The top and bottom rows of the rotation: where the ball is east and south of the thing's centre.
+    const offsetX = (1 - 2 * (turnY * turnY + turnZ * turnZ)) * localX + 2 * (turnX * turnY - turnW * turnZ) * localY + 2 * (turnX * turnZ + turnW * turnY) * localZ;
+    const offsetZ = 2 * (turnX * turnZ - turnW * turnY) * localX + 2 * (turnY * turnZ + turnW * turnX) * localY + (1 - 2 * (turnX * turnX + turnY * turnY)) * localZ;
+    if (!isLooseFloorClearAt(x + offsetX, z + offsetZ, floorY, shell[ballIndex * 4 + 3] + 0.02)) return false;
+  }
+  return true;
+}
+
 function addStationLooseObject(kindKey, x, surfaceY, z, yaw, isOnItsSide, alongX, on) {
   const orientation = getLooseRestOrientation(kindKey, yaw, isOnItsSide, alongX);
   stationLooseObjects.push({ kindKey: kindKey, x: x, y: surfaceY + getLooseRestHeight(kindKey, orientation) + 0.001, z: z, orientation: orientation, on: on });
@@ -1576,6 +1656,35 @@ function planStationLooseObjects() {
       addStationLooseObject('can', x, floor, z, random() * TWO_PI, !can.isStanding, can.liesAlongX, 'floor');
     }
   }
+  // The covers of the vents: standing in the mouth, or lying where they fell. They have numbers of their own,
+  // so that nothing else here is moved by how many vents a station has.
+  const coverRandom = createSeededRandomGenerator(Math.imul(level.seed + 1, 0x9E3779B1) ^ 0x7e47c0);
+  const fallenCovers = []; // [x, z] of each cover that lies on the floor: nothing else is put down on top of one
+  for (const mouth of level.ventMouths) {
+    let isInPlace = coverRandom() < TUNING.ventCoverInPlaceChance;
+    // Where it lies: where the old grille lay if that floor is bare, or else a little further into the room.
+    // If there is no bare floor for it at all (cans, a bench, a wall too near), it never came off.
+    let fallenX = mouth.fallenX, fallenZ = mouth.fallenZ;
+    if (!isInPlace) {
+      const tries = [[mouth.fallenX, mouth.fallenZ]];
+      for (const back of [1.45, 1.75, 2.1]) tries.push([mouth.tileX + 0.5 - mouth.outwardX * back, mouth.tileZ + 0.5 - mouth.outwardZ * back]);
+      isInPlace = true;
+      for (const spot of tries) {
+        let isBare = isLooseFloorClearAt(spot[0], spot[1], mouth.floorY, 0.6);
+        for (const heap of noisyFloorCanHeaps) if (distanceBetweenPoints(heap.x, heap.z, spot[0], spot[1]) < 1.5) isBare = false;
+        if (!isBare) continue;
+        fallenX = spot[0]; fallenZ = spot[1]; isInPlace = false;
+        break;
+      }
+    }
+    if (!isInPlace) fallenCovers.push([fallenX, fallenZ]);
+    if (isInPlace) {
+      // Its face along the wall: turned a quarter if the vent runs east or west.
+      addStationLooseObject('ventCover', mouth.faceX + mouth.outwardX * 0.07, mouth.floorY, mouth.faceZ + mouth.outwardZ * 0.07, mouth.outwardX !== 0 ? Math.PI / 2 : 0, false, false, 'vent');
+    } else {
+      addStationLooseObject('ventCover', fallenX, mouth.floorY, fallenZ, mouth.fallenYaw, true, false, 'floor');
+    }
+  }
   const rooms = level.roomCount || 19;
   // Every tile of plain floor that will do, in a drawn order: for the litter, and for what stands on the floor.
   const tiles = [];
@@ -1586,6 +1695,7 @@ function planStationLooseObjects() {
       if (rateNoisyFloorTile(index) === 0 || (tileFlags[index] & TILE_FLAG_DEBRIS)) continue;
       let isTaken = false;
       for (const heap of noisyFloorCanHeaps) if (heap.index === index) isTaken = true;
+      for (const cover of fallenCovers) if (Math.abs(cover[0] - tileX - 0.5) < 1.2 && Math.abs(cover[1] - tileZ - 0.5) < 1.2) isTaken = true;
       if (!isTaken) tiles.push([random(), index, rateNoisyFloorTile(index)]);
     }
   }
@@ -1625,10 +1735,25 @@ function planStationLooseObjects() {
     let kindKey = drawFromLooseTable(STATION_VALUABLES_ON_THE_FLOOR, random);
     // What cannot be shoved aside does not go where it would stand in the only way through.
     if (LOOSE_OBJECT_KINDS[kindKey].mass >= TUNING.looseShoveBlockMass * 0.6 && !isLooseTileEasyToPass(index)) kindKey = 'canister';
-    const lies = LOOSE_OBJECT_KINDS[kindKey].lies;
-    const yaw = random() * TWO_PI, isOnItsSide = lies === 'onItsSide' || (lies === 'either' && random() < 0.5), isTurnedTheOtherWay = random() < 0.5;
+    let lies = LOOSE_OBJECT_KINDS[kindKey].lies;
+    let yaw = random() * TWO_PI;
+    const sideDraw = lies === 'either' ? random() : 1, isTurnedTheOtherWay = random() < 0.5; // drawn exactly as they always were
+    const centerX = index % GRID_WIDTH + 0.5, centerZ = Math.floor(index / GRID_WIDTH) + 0.5;
+    // Something longer than its tile is turned, an eighth at a time, until all of it lies on bare floor. If no
+    // way round fits (a pipe in a nook), a canister stands there instead.
+    if (prepareLooseObjectKind(kindKey).boundsRadius > 0.45) {
+      let fits = false;
+      for (let turn = 0; turn < 4 && !fits; turn++) {
+        const tried = yaw + turn * Math.PI / 4;
+        const isOnItsSideTried = lies === 'onItsSide' || (lies === 'either' && sideDraw < 0.5);
+        if (!isLooseRestClearAt(kindKey, centerX, centerZ, tileFloorHeight[index], getLooseRestOrientation(kindKey, tried, isOnItsSideTried, lies === 'onItsSide' ? false : isTurnedTheOtherWay))) continue;
+        yaw = tried; fits = true;
+      }
+      if (!fits) { kindKey = 'canister'; lies = LOOSE_OBJECT_KINDS[kindKey].lies; }
+    }
+    const isOnItsSide = lies === 'onItsSide' || (lies === 'either' && sideDraw < 0.5);
     // Something round lies either way; a tool case lies on its broad side, never on its end.
-    addStationLooseObject(kindKey, index % GRID_WIDTH + 0.5, tileFloorHeight[index], Math.floor(index / GRID_WIDTH) + 0.5, yaw,
+    addStationLooseObject(kindKey, centerX, tileFloorHeight[index], centerZ, yaw,
       isOnItsSide, lies === 'onItsSide' ? false : isTurnedTheOtherWay, 'floor');
     placed++;
   }
@@ -1652,7 +1777,10 @@ function auditStationLooseObjects() {
   for (const entry of stationLooseObjects) {
     const where = entry.kindKey + ' at ' + entry.x.toFixed(1) + ', ' + entry.z.toFixed(1);
     if (!isLooseSpaceOpenAt(Math.floor(entry.x), Math.floor(entry.z), entry.y)) problems.push(where + ' is not in open space');
-    if (tileFlags[tileIndexAt(Math.floor(entry.x), Math.floor(entry.z))] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT)) problems.push(where + ' is in a doorway, a vent or the pit');
+    const flagsThere = tileFlags[tileIndexAt(Math.floor(entry.x), Math.floor(entry.z))];
+    // (A vent's cover that still stands in its mouth is in a vent, and should be.)
+    if (flagsThere & (TILE_FLAG_DOOR | TILE_FLAG_PIT) || ((flagsThere & TILE_FLAG_VENT) && entry.on !== 'vent')) problems.push(where + ' is in a doorway, a vent or the pit');
+    if (entry.on === 'vent' && !(flagsThere & TILE_FLAG_VENT)) problems.push(where + ' should stand in the mouth of a vent and does not');
     const zoneName = ZONE_NAMES[tileZone[tileIndexAt(Math.floor(entry.x), Math.floor(entry.z))]] || '';
     if (zoneName === 'LIFT CAR') problems.push(where + ' is in the lift car');
   }

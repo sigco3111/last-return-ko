@@ -544,6 +544,8 @@ function findPhantomCrawlerSpot() {
     if (metresInFront < 1.5 || metresToTheSide > metresInFront) continue;
     if (getAngleFromPlayerView(x, z) < scannedHalfAngle) continue;
     if (!canPlayerSeePoint(x, floor + 0.45, z)) continue;
+    // Not where the vent's cover still stands in the mouth (or a crate has been left in it): it would be in the middle of that.
+    if (isLooseObjectInTheWayAt(x, z, 0.5)) continue;
     good.push({ x: x, z: z, yaw: Math.atan2(mouth.outX, -mouth.outZ) });
   }
   return good.length > 0 ? good[Math.floor(Math.random() * good.length)] : null;

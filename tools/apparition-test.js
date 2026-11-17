@@ -136,6 +136,7 @@ const labSource = String(function () {
         if (kind === 'crawler') {
           if (!d.isVentAt(figure.x, figure.z)) complain('it is not in a vent');
           if (figure.pose.crawl !== 1) complain('it is not on its knees and hands');
+          if (d.isLooseObjectInTheWayAt(figure.x, figure.z, 0.5)) complain('the cover of that vent still stands in its mouth, and it is in the middle of it');
           if (!d.canPlayerSeePoint(figure.x, floor + 0.45, figure.z)) complain('the player cannot see it');
         } else {
           if (!d.canPhantomStandOnTile(tileX, tileZ)) complain('it is not standing on good floor');

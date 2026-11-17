@@ -1315,6 +1315,107 @@ function installLab() {
     !thrownBack.can.afterPickingItUp.ignored && thrownBack.can.afterPickingItUp.ofInterest, thrownBack.can);
   check('a gas canister is too heavy for that: it goes after it and does not throw it', thrownBack.canister.kicked && thrownBack.canister.flungAfterSeconds < 0 && !thrownBack.canister.ignored, thrownBack.canister);
 
+  // --- vent covers ---
+  const covers = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = { wrong: [] };
+    lab.reset();
+    d.loadStation('generated', 3, 'large', 'mixed', 'one');
+    d.game.flags.hasLeftLift = true; d.game.flags.powerOn = true;
+    d.setDebugOption('freezeCreatures', true); d.hollow.isActive = false;
+    const all = d.stationLooseObjects.map((item, index) => ({ item: item, object: d.looseObjects[index] })).filter((entry) => entry.item.kindKey === 'ventCover');
+    const mouthOf = function (object) { return d.level.ventMouths.slice().sort((a, b) => Math.hypot(a.faceX - object.x, a.faceZ - object.z) - Math.hypot(b.faceX - object.x, b.faceZ - object.z))[0]; };
+    result.counts = { vents: d.level.ventCount, mouths: d.level.ventMouths.length, covers: all.length, standing: all.filter((entry) => entry.item.on === 'vent').length, worth: d.looseObjectKinds.ventCover.value };
+    for (const entry of all) {
+      const object = entry.object, mouth = mouthOf(object), fromMouth = Math.hypot(mouth.faceX - object.x, mouth.faceZ - object.z), up = Math.abs(object.matrix[4]);
+      const where = 'the cover at ' + object.x.toFixed(1) + ', ' + object.z.toFixed(1);
+      if (entry.item.on === 'vent') { if (!d.isVentAt(object.x, object.z) || up < 0.99 || fromMouth > 0.2) result.wrong.push(where + ' should stand upright in the mouth of its vent'); }
+      else if (d.isVentAt(object.x, object.z) || up > 0.1 || object.y - mouth.floorY > 0.12 || fromMouth > 3.2) result.wrong.push(where + ' should lie flat on the floor in front of its vent');
+    }
+    const standing = all.filter((entry) => entry.item.on === 'vent').map((entry) => entry.object);
+    if (standing.length < 3) return result;
+    const into = function (mouth, metres) { return d.castScannerRay(mouth.faceX - mouth.outwardX * 0.5, mouth.floorY + 0.6, mouth.faceZ - mouth.outwardZ * 0.5, mouth.outwardX, 0, mouth.outwardZ, metres) ? { metres: lab.round(d.rayHit.distance), colour: d.rayHit.surfaceClass, isTheCover: d.rayHit.looseObject !== null } : { metres: 99, colour: -1, isTheCover: false }; };
+
+    // A cover that lies flat is a plate on the floor: walked over, it stays where it is and makes no sound.
+    const lying = all.filter((entry) => entry.item.on === 'floor')[0].object;
+    lab.stand(lying.x - 1.2, lying.z, Math.PI / 2);
+    d.simulate(0.5);
+    result.scanLying = d.castScannerRay(lying.x - 0.3, lying.y + 0.8, lying.z, 0.3, -0.954, 0, 3) ? { colour: d.rayHit.surfaceClass, isTheCover: d.rayHit.looseObject === lying } : { colour: -1, isTheCover: false };
+    let before = lab.knocks();
+    const lyingAt = { x: lying.x, z: lying.z }, walkedFrom = p.x;
+    d.input.keysDown.add('KeyW');
+    d.simulate(1.4);
+    d.input.keysDown.clear();
+    d.simulate(0.5);
+    result.walkedOver = { youWalked: lab.round(Math.abs(p.x - walkedFrom)), itMoved: lab.round(Math.hypot(lying.x - lyingAt.x, lying.z - lyingAt.z)), knocks: lab.since(before) };
+
+    // One taken off with the beam: quietly, and then the vent is open.
+    let cover = standing[0], mouth = mouthOf(cover);
+    lab.stand(cover.x - mouth.outwardX * 1.6, cover.z - mouth.outwardZ * 1.6, Math.atan2(mouth.outwardX, -mouth.outwardZ));
+    p.pitch = -0.4;
+    d.simulate(0.2);
+    result.scanBefore = into(mouth, 3);
+    before = lab.knocks();
+    result.taken = { picked: d.pickUpLooseObject(cover, false) };
+    d.simulate(1.5);
+    result.taken.held = d.getHeldLooseObject() === cover; result.taken.knocks = lab.since(before); result.taken.slowsYouTo = lab.round(d.getCarrySpeedFactor()); result.taken.bulky = cover.kind.bulky;
+    // Turned away and put down behind you: now nothing stands in the mouth.
+    p.yaw += Math.PI;
+    d.simulate(1.5);
+    p.pitch = -1.1;
+    d.simulate(1.5);
+    d.releaseHeldLooseObject(0);
+    d.simulate(2);
+    result.scanAfter = into(mouth, 3);
+
+    // One crawled into: it goes over, and that carries.
+    cover = standing[1]; mouth = mouthOf(cover);
+    lab.stand(cover.x - mouth.outwardX * 1.5, cover.z - mouth.outwardZ * 1.5, Math.atan2(mouth.outwardX, -mouth.outwardZ));
+    d.input.keysDown.add('KeyC');
+    d.simulate(0.8);
+    before = lab.knocks();
+    lab.noises.length = 0;
+    let carries = 0, knockTime = d.looseState.lastKnock.time;
+    d.input.keysDown.add('KeyW');
+    for (let step = 0; step < 150; step++) {
+      d.simulate(1 / 30);
+      if (d.looseState.lastKnock.time !== knockTime) { knockTime = d.looseState.lastKnock.time; carries = Math.max(carries, d.looseState.lastKnock.carries); }
+    }
+    d.input.keysDown.clear();
+    const alongDuct = function (x, z) { return (x - mouth.faceX) * mouth.outwardX + (z - mouth.faceZ) * mouth.outwardZ; };
+    result.crawledInto = { liesFlat: Math.abs(cover.matrix[4]) < 0.1, knocks: lab.since(before), carries: lab.round(carries), youInTheVent: d.isVentAt(p.x, p.z),
+      youAreIn: lab.round(alongDuct(p.x, p.z)), itLiesIn: lab.round(alongDuct(cover.x, cover.z)) };
+
+    // One the Hollow comes through: you hear that, with a direction, and it does not startle the Hollow.
+    cover = standing[2]; mouth = mouthOf(cover);
+    lab.stand(cover.x - mouth.outwardX * 6, cover.z - mouth.outwardZ * 6, 0);
+    d.simulate(4.5);
+    d.spawnHollow(cover.x - mouth.outwardX * 1.6, cover.z - mouth.outwardZ * 1.6);
+    d.hollow.graceTimer = 0; d.hollow.state = 0;
+    for (const key of ['objectKnock', 'objectCrash']) d.captionCounts[key] = 0;
+    lab.noises.length = 0;
+    before = lab.knocks();
+    const startedAt = { x: cover.x, z: cover.z };
+    for (let step = 0; step < 40; step++) { d.hollow.figure.x += mouth.outwardX * 3 / 30; d.hollow.figure.z += mouth.outwardZ * 3 / 30; d.simulate(1 / 30); }
+    result.byTheHollow = { moved: lab.round(Math.hypot(cover.x - startedAt.x, cover.z - startedAt.z)), stillUpright: Math.abs(cover.matrix[4]) > 0.9, knocks: lab.since(before),
+      said: d.captionCounts.objectKnock + d.captionCounts.objectCrash, noiseAtTheCover: lab.noises.some((noise) => Math.hypot(noise.x - startedAt.x, noise.z - startedAt.z) < 1.5) };
+    d.hollow.isActive = false;
+    lab.reset();
+    return result;
+  });
+  check('every vent mouth has its cover: either standing upright in the mouth, or lying flat on the floor in front of it; a cover is worth something',
+    covers.counts.vents >= 2 && covers.counts.mouths === covers.counts.vents * 2 && covers.counts.covers === covers.counts.mouths && covers.counts.standing >= 3 && covers.counts.standing < covers.counts.covers &&
+    covers.counts.worth > 0 && covers.wrong.length === 0, [covers.counts, covers.wrong]);
+  check('a cover in its vent hides the vent from a scan, in the warning colour; taken off with the beam it comes quietly, is heavy to carry, and the vent is open',
+    covers.scanBefore.isTheCover && covers.scanBefore.colour === 12 && covers.scanBefore.metres < 0.7 && covers.taken.picked && covers.taken.held && covers.taken.knocks.heard === 0 && covers.taken.slowsYouTo < 0.85 && covers.taken.bulky &&
+    !covers.scanAfter.isTheCover && covers.scanAfter.metres > 1.2, [covers.scanBefore, covers.taken, covers.scanAfter]);
+  check('crawl into a cover that still stands and it goes over with a clang that carries; then it lies flat, and you crawl on over it',
+    covers.crawledInto.liesFlat && covers.crawledInto.knocks.heard >= 1 && covers.crawledInto.carries > 10 && covers.crawledInto.youInTheVent && covers.crawledInto.youAreIn > covers.crawledInto.itLiesIn + 0.5, covers.crawledInto);
+  check('a cover that lies flat on the floor is walked over: it stays where it is, without a sound, and so a scan does not show it in the warning colour',
+    covers.walkedOver.youWalked > 1.5 && covers.walkedOver.itMoved < 0.02 && covers.walkedOver.knocks.heard + covers.walkedOver.knocks.quiet === 0 &&
+    covers.scanLying.isTheCover && covers.scanLying.colour !== 12, [covers.walkedOver, covers.scanLying]);
+  check('the Hollow coming through knocks a cover out of its vent: you hear that, with a direction, and it does not startle the Hollow',
+    covers.byTheHollow.moved > 0.2 && covers.byTheHollow.knocks.heard >= 1 && covers.byTheHollow.said >= 1 && !covers.byTheHollow.noiseAtTheCover, covers.byTheHollow);
+
   // --- what a knock costs ---
   const breakage = await inGame((spot) => {
     const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = {};
@@ -1463,13 +1564,17 @@ function installLab() {
       d.simulate(2);
       tumbling = Math.min(tumbling, performance.now() - started);
     }
-    for (let step = 0; step < 300; step++) d.simulate(1 / 30);
+    // Given up to a minute for the last of them to stop: a box that came down on a length of pipe rides it across
+    // the floor for half a minute before both lie still. How long it took is in the result.
+    let secondsToRest = 0;
+    while (secondsToRest < 60 && d.looseObjects.some((object) => !object.isAsleep)) { for (let step = 0; step < 30; step++) d.simulate(1 / 30); secondsToRest++; }
     const atRest = d.looseObjects.filter((object) => object.isAsleep).length;
+    const notAtRest = d.looseObjects.filter((object) => !object.isAsleep).map((object) => object.kind.label + ' at height ' + lab.round(object.y) + ', moving ' + lab.round(Math.hypot(object.velocityX, object.velocityY, object.velocityZ)) + ' m/s, turning ' + lab.round(Math.hypot(object.spinX, object.spinY, object.spinZ)));
     started = performance.now();
     d.simulate(2);
     const resting = performance.now() - started;
     const allInTheOpen = d.looseObjects.every((object) => lab.isInTheOpen(object.x, object.y, object.z));
-    return { millisecondsPerSecondOfPlay: { nothingLoose: Math.round(plain / 2), twelveTumbling: Math.round(tumbling / 2), twelveAtRest: Math.round(resting / 2) }, atRest: atRest, of: d.looseObjects.length, allInTheOpen: allInTheOpen };
+    return { millisecondsPerSecondOfPlay: { nothingLoose: Math.round(plain / 2), twelveTumbling: Math.round(tumbling / 2), twelveAtRest: Math.round(resting / 2) }, atRest: atRest, of: d.looseObjects.length, secondsToRest: secondsToRest + 2, notAtRest: notAtRest, allInTheOpen: allInTheOpen };
   }, spot);
   check('twelve objects thrown in a heap all come to rest inside the room', cost.atRest === cost.of && cost.allInTheOpen, cost);
   check('twelve tumbling at once cost less than a fifth of the time there is (200 ms of work per second of play), and at rest they cost nothing to speak of',

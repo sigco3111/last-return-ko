@@ -976,13 +976,13 @@ function addVentMouth(mouth, random) {
     addBoxBetween(mouth.tileX - 0.08, 0, nearZ, mouth.tileX, VENT_HEIGHT, farZ, frame);
     addBoxBetween(mouth.tileX + 1, 0, nearZ, mouth.tileX + 1.08, VENT_HEIGHT, farZ, frame);
   }
-  // The grille, flat on the floor a step inside the room.
+  // Its cover. That used to be scenery: a grille lying flat on the floor a step inside the room. It is a loose
+  // thing now (08-loose-objects.js puts it out): either still standing in the mouth, or lying where the grille lay.
+  // Where that is, is still drawn here, with the numbers it always was.
   const grilleX = mouth.tileX + 0.5 - outward[0] * 1.2 + (random() - 0.5) * 0.3, grilleZ = mouth.tileZ + 0.5 - outward[1] * 1.2 + (random() - 0.5) * 0.3;
   const grilleYaw = random() * 3;
-  addBoxProp(grilleX, 0.02, grilleZ, 0.47, 0.02, 0.5, { yaw: grilleYaw, surfaceClass: SURFACE_METAL, blocksMovement: false });
-  for (let slat = -2; slat <= 2; slat++) {
-    addBoxProp(grilleX + Math.cos(grilleYaw) * slat * 0.17, 0.05, grilleZ + Math.sin(grilleYaw) * slat * 0.17, 0.02, 0.012, 0.44, { yaw: grilleYaw, surfaceClass: SURFACE_METAL, blocksMovement: false });
-  }
+  level.ventMouths.push({ tileX: mouth.tileX, tileZ: mouth.tileZ, outwardX: outward[0], outwardZ: outward[1], floorY: placement.offsetY,
+    faceX: outward[0] !== 0 ? faceX : mouth.tileX + 0.5, faceZ: outward[1] !== 0 ? faceZ : mouth.tileZ + 0.5, fallenX: grilleX, fallenZ: grilleZ, fallenYaw: grilleYaw });
 }
 
 // Finds a stretch of one side wall of a corridor that has no doorway in it, as near the middle as possible.

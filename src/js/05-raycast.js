@@ -282,7 +282,7 @@ function castRayAgainstThings(originX, originY, originZ, directionX, directionY,
     ? findLooseObjectOnRay(originX, originY, originZ, directionX, directionY, directionZ, bestDistance) : null;
   if (looseObject !== null) {
     // What is loud to kick shows in the warning colour, like broken glass on the floor; the rest as things you can take.
-    fillRayHit(looseRayDistance, looseObject.kind.loud > 1 ? SURFACE_HAZARD : SURFACE_INTERACTIVE, 0.6 + Math.random() * 0.3, 0,
+    fillRayHit(looseRayDistance, isLooseObjectLoudToTouch(looseObject) ? SURFACE_HAZARD : SURFACE_INTERACTIVE, 0.6 + Math.random() * 0.3, 0,
       originX, originY, originZ, directionX, directionY, directionZ);
     rayHit.looseObject = looseObject;
     return true;

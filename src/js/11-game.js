@@ -947,6 +947,7 @@ function startApplication() {
     sanitizeCustomDifficultyValues: sanitizeCustomDifficultyValues, describeCustomDifficulty: describeCustomDifficulty,
     explainCustomDifficultyValue: explainCustomDifficultyValue, retryFromCheckpoint: retryFromCheckpoint,
     // Apparitions: the list of those that exist, the part that decides when the chance ones come, and a way to call one up.
+    isLooseObjectInTheWayAt: isLooseObjectInTheWayAt,
     phantoms: phantoms, phantomDirector: phantomDirector, phantomKindKeys: PHANTOM_KIND_KEYS, phantomVentMouths: phantomVentMouths,
     summonPhantom: summonPhantom, getPhantomHoldReason: getPhantomHoldReason, isRealThreatNearPlayer: isRealThreatNearPlayer,
     canPlayerSeePoint: canPlayerSeePoint, getAngleFromPlayerView: getAngleFromPlayerView, getScannedHalfAngle: getScannedHalfAngle,
