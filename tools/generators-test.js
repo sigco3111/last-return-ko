@@ -17,6 +17,7 @@ function check(description, condition, detail) {
   await startGame(page, false);
 
   // --- how many, and where ---
+  // Small generators are the Restart work order's: every station here is built with only that order switched on.
   // 64 stations built one after another. Before each one the browser gets a moment to clear the last one away
   // (browser-harness.js says why).
   const survey = await inGame(async () => {
@@ -30,8 +31,9 @@ function check(description, condition, detail) {
       const counts = [];
       for (let seed = 1; seed <= 16; seed++) {
         await window.letTheBrowserCatchUp();
-        const built = d.loadStation('generated', seed, size, layouts[seed % 4], seed % 2 ? 'one' : 'two');
+        const built = d.loadStation('generated', seed, size, layouts[seed % 4], seed % 2 ? 'one' : 'two', undefined, ['restart']);
         if (!built) { result.bad.push(size + ' ' + seed + ': not built'); continue; }
+        if (d.level.workOrder !== 'restart') result.bad.push(size + ' ' + seed + ': the work order is ' + d.level.workOrder + ', not Restart');
         const found = d.auditLayout().concat(d.auditProgression());
         if (found.length > 0) result.bad.push(size + ' ' + seed + ': ' + found.slice(0, 3).join('; '));
         const generators = d.level.mission.extraGenerators;
@@ -52,11 +54,11 @@ function check(description, condition, detail) {
     }
     result.canSteps.sort((a, b) => a - b); result.mainCanSteps.sort((a, b) => a - b);
     // The same seed gives the same generators and cans; another seed gives others.
-    d.loadStation('generated', 7, 'massive', 'mixed', 'two');
+    d.loadStation('generated', 7, 'massive', 'mixed', 'two', undefined, ['restart']);
     const first = describe();
-    d.loadStation('generated', 8, 'massive', 'mixed', 'two');
+    d.loadStation('generated', 8, 'massive', 'mixed', 'two', undefined, ['restart']);
     result.anotherSeedDiffers = describe() !== first;
-    d.loadStation('generated', 7, 'massive', 'mixed', 'two');
+    d.loadStation('generated', 7, 'massive', 'mixed', 'two', undefined, ['restart']);
     result.sameSeedSame = describe() === first;
     d.loadStation('classic', 0);
     result.classic = { generators: d.level.mission.extraGenerators.length, cans: d.interactables.filter((thing) => thing.mapLabel === 'FUEL').length,
@@ -64,9 +66,9 @@ function check(description, condition, detail) {
     return result;
   });
   const median = (list) => list[Math.floor(list.length / 2)];
-  check('64 stations of every size: each can still be finished, with its generators and cans where the rules allow', survey.bad.length === 0, survey.bad.slice(0, 4));
-  check('every size has as many extra generators as its range says, and uses the whole range',
-    Object.keys(survey.sizes).every((size) => survey.sizes[size].fewest === survey.sizes[size].allowed[0] && survey.sizes[size].most === survey.sizes[size].allowed[1]), survey.sizes);
+  check('64 stations of every size on a Restart order: each has it, and can still be finished, with its generators and cans where the rules allow', survey.bad.length === 0, survey.bad.slice(0, 4));
+  check('every size has as many extra generators as its range says (and at least one, the order being about them), and uses the whole range',
+    Object.keys(survey.sizes).every((size) => survey.sizes[size].fewest === Math.max(1, survey.sizes[size].allowed[0]) && survey.sizes[size].most === survey.sizes[size].allowed[1]), survey.sizes);
   check('a fuel can is near the generator it is for: half within 25 steps of walking, none over 60',
     survey.canSteps.length >= 20 && median(survey.canSteps) <= 25 && survey.canSteps[survey.canSteps.length - 1] <= 60, survey.canSteps);
   check('the can for Generator 2 too: half within 30 steps, none over 45',
@@ -78,16 +80,16 @@ function check(description, condition, detail) {
   //     and an empty tank on Generator 2 as well ---
   // (Looked for eight seeds at a time: building hundreds of stations in one go leaves the browser no moment to
   // clear up after itself, and on a machine short of processor time its memory has been seen to run out.
-  // The station may have badges or valves as well; those are done out of the way further down.)
+  // The order's valves, and a tripped winch breaker if the station has one, are done out of the way further down.)
   let found = null;
   for (let firstSeed = 1; firstSeed < 400 && !found; firstSeed += 8) {
     found = await inGame(([firstSeed]) => {
       const d = window.lastReturnDebug;
       for (let seed = firstSeed; seed < firstSeed + 8; seed++) {
-        if (!d.loadStation('generated', seed, 'large', 'mixed', 'one')) continue;
+        if (!d.loadStation('generated', seed, 'large', 'mixed', 'one', undefined, ['restart']) || d.level.workOrder !== 'restart') continue;
         const mission = d.level.mission, generators = mission.extraGenerators;
         if (generators.length >= 2 && generators.some((generator) => generator.needsFuel) && generators.some((generator) => !generator.needsFuel) &&
-            mission.needsFuel && d.level.quests.every((quest) => ['spools', 'fuel', 'generators', 'badges', 'valves'].indexOf(quest.key) >= 0)) return { seed: seed, generators: JSON.parse(JSON.stringify(generators)) };
+            mission.needsFuel) return { seed: seed, generators: JSON.parse(JSON.stringify(generators)) };
       }
       return null;
     }, [firstSeed]);
@@ -128,7 +130,7 @@ function check(description, condition, detail) {
       d.hollow.isActive = false;
 
       // Anything else this station asks for is done now, so that what is left is about the generators.
-      for (const key of ['badges', 'valves']) d.doQuest(key);
+      for (const quest of d.level.quests) if (!quest.isOptional && ['generators', 'fuel'].indexOf(quest.key) < 0) d.doQuest(quest.key);
       d.hollow.isActive = false;
 
       // With the mains on.
@@ -186,13 +188,13 @@ function check(description, condition, detail) {
     await drawFrames(page, 8); // the screen's text is brought up to date a few times a second, and only while frames are drawn
     const chip = await inGame(() => document.getElementById('chip-extra').textContent);
 
-    check('before the mains is on: a small generator will not start, and the map shows Generator 2, its can and the spool brightly, the small one and the terminal dimly',
-      rules.beforeMains.refused && rules.beforeMains.wantedOnMap.generator2 && rules.beforeMains.wantedOnMap.ownCan && rules.beforeMains.wantedOnMap.spool &&
+    check('before the mains is on: a small generator will not start, and the map shows Generator 2 and its can brightly; the small one, the terminal and a spool (nobody asked for those on this order) dimly',
+      rules.beforeMains.refused && rules.beforeMains.wantedOnMap.generator2 && rules.beforeMains.wantedOnMap.ownCan && !rules.beforeMains.wantedOnMap.spool &&
       !rules.beforeMains.wantedOnMap.small && !rules.beforeMains.wantedOnMap.terminal, rules.beforeMains);
     check('any can fills any tank, and you carry one at a time: the can left for a small generator starts Generator 2, and a second can is refused meanwhile',
       rules.generator2.refusedEmpty && rules.generator2.tookTheOtherCan && rules.generator2.secondCanRefused && rules.generator2.started, rules.generator2);
-    check('some seconds after Generator 2 starts, Dispatch says the lift needs the others and marks them on the map; the objective counts them',
-      !rules.beforeTold.knows && !rules.beforeTold.marked && !/generator/i.test(rules.beforeTold.objective) &&
+    check('until Dispatch speaks the objective is the work order in its own words, with nothing counted or marked; some seconds after Generator 2 starts he says the lift needs the others and marks them, and the objective counts them',
+      !rules.beforeTold.knows && !rules.beforeTold.marked && rules.beforeTold.objective === 'Get every generator running and shut the isolation valves.' &&
       rules.told.knows && rules.told.marked && rules.told.radio && /every generator running: 1 of/.test(rules.told.objective), [rules.beforeTold, rules.told]);
     check('with the mains on: the map shows the generator that can start and a can for the one that cannot, brightly; the empty one and the terminal dimly',
       rules.afterMains.wantedOnMap.generator2Gone && rules.afterMains.wantedOnMap.ready && rules.afterMains.wantedOnMap.can &&
@@ -212,7 +214,7 @@ function check(description, condition, detail) {
     // --- a new descent starts with all of it as it was ---
     const again = await inGame(([found]) => {
       const d = window.lastReturnDebug, flags = d.game.flags;
-      d.loadStation('generated', found.seed, 'large', 'mixed', 'one');
+      d.loadStation('generated', found.seed, 'large', 'mixed', 'one', undefined, ['restart']);
       return { running: flags.extraGeneratorsRunning, knows: flags.knowsAboutGenerators, carrying: flags.hasFuel,
         available: found.generators.every((generator) => d.findInteractable(generator.objectId).isAvailable && !d.findInteractable(generator.objectId).isDiscovered),
         tanks: d.level.mission.extraGenerators.every((generator) => !generator.isRunning && !generator.isFilled),

@@ -220,7 +220,7 @@ function debugBringLift() {
   if (!game.flags.powerOn) debugRestorePower();
   if (game.flags.spoolsCollected < level.spoolCount) debugGiveAllSpools();
   if (!game.flags.uploadStarted) startLiftCall();
-  game.liftCountdown = 0.5;
+  if (!game.flags.liftArrived) game.liftCountdown = 0.5; // (a station with no wait for the lift has it already)
 }
 
 function debugTeleportToZone(zone) {
@@ -443,8 +443,24 @@ function debugLoadOtherQuests() {
   const mapBefore = level.mapFingerprint, questSeed = 1 + Math.floor(Math.random() * 999999);
   loadStation('generated', level.seed, level.sizeKey, level.layoutKey, level.levelsKey, questSeed);
   resetWorldState();
-  const names = level.quests.map(function (quest) { return quest.key + (quest.total > 0 ? ' ' + quest.total : ''); }).join(', ');
-  showMessage((level.mapFingerprint === mapBefore ? 'The same station' : 'NOT the same station') + ', other quests (numbers ' + questSeed + '): ' + names + '.', 7, level.mapFingerprint === mapBefore ? 'info' : 'warning');
+  showMessage((level.mapFingerprint === mapBefore ? 'The same station' : 'NOT the same station') + ', other quests (numbers ' + questSeed + '): ' + describeQuestsForDebug() + '.', 7, level.mapFingerprint === mapBefore ? 'info' : 'warning');
+}
+
+// What the loaded station asks for, in a line: its work order, each quest with its count, and the lift.
+function describeQuestsForDebug() {
+  const names = level.quests.map(function (quest) { return quest.key + (quest.total > 0 ? ' ' + quest.total : '') + (quest.isOptional ? ' (not asked for)' : ''); }).join(', ');
+  return (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label + ' order: ' + names + '; ' + (level.liftWaits ? 'the lift has to come down' : 'the lift never left');
+}
+
+// The same station and the same numbers for its quests, on the next work order in the list: for trying each of
+// them in a station you know. (A station with no doorway left for a salvage bay gets Survey instead.)
+function debugLoadNextWorkOrder() {
+  if (level.kind !== 'generated') { showMessage('Kessel-9 is always a Survey order.', 3, 'info'); return; }
+  const mapBefore = level.mapFingerprint;
+  const next = WORK_ORDERS[(WORK_ORDERS.indexOf(findWorkOrder(level.workOrder)) + 1) % WORK_ORDERS.length];
+  loadStation('generated', level.seed, level.sizeKey, level.layoutKey, level.levelsKey, level.questSeed, [next.key]);
+  resetWorldState();
+  showMessage((level.mapFingerprint === mapBefore ? 'The same station' : 'NOT the same station') + ', ' + describeQuestsForDebug() + '.', 7, level.mapFingerprint === mapBefore ? 'info' : 'warning');
 }
 
 function debugRemoveLooseObjects() {
@@ -636,6 +652,11 @@ function initializeDebugMode() {
   otherQuestsButton.id = 'debug-other-quests';
   otherQuestsButton.addEventListener('click', function () { debugLoadOtherQuests(); otherQuestsButton.blur(); });
   looseGrid.appendChild(otherQuestsButton);
+  const nextOrderButton = createDebugElement('button', 'button-quiet', 'Next work order, same station');
+  nextOrderButton.type = 'button';
+  nextOrderButton.id = 'debug-next-work-order';
+  nextOrderButton.addEventListener('click', function () { debugLoadNextWorkOrder(); nextOrderButton.blur(); });
+  looseGrid.appendChild(nextOrderButton);
   panel.appendChild(looseGrid);
 
   // Apparitions: call one up of a chosen kind, now, whatever the phantom director thinks of it.

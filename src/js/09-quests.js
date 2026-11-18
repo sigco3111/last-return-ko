@@ -1,9 +1,19 @@
 // ---------------------------------------------------------------------------
 // Quests: everything a descent asks of you between "power" and "lift", the survey spools first among them.
 //
+// WORK ORDERS
+// A descent has one work order, and the work order says which quests it has: Survey wants the spools, Recovery
+// the crew's badges and the core samples, Salvage a sum's worth sealed into its bays, Restart the generators
+// running and the valves shut. See WORK_ORDERS below. A station never asks for a mixed bag of them.
+// On top of its order a station may have a complication or two (QUEST_COMPLICATIONS): something that holds up
+// the mains or the lift itself, whatever you came for. The wait for the lift is one of them.
+// The three spools Crew 2 left are part of every station (its rooms put them out). On a Survey order they are
+// what you came for. On any other they are still there to be taken, and nobody asks for them: the one in the
+// calibration store still wakes what is in that room.
+//
 // HOW TO ADD A QUEST
-// Add one entry to QUESTS below. Nothing else in the game needs to know about it: the entry says what kind
-// of quest it is, what it holds up, where its things go, what they look like and every word it uses, and
+// Add one entry to QUESTS below, and its key to a work order (or to the complications). Nothing else in the
+// game needs to know about it: the entry says what kind of quest it is, what it holds up, where its things go, what they look like and every word it uses, and
 // this file does the rest (which stations get it, placing, the rules, the objective line, the status chip,
 // the marks on the map, the lift terminal's refusal, Dispatch, and the check that it can be finished).
 //
@@ -27,9 +37,8 @@
 // THE FIELDS OF AN ENTRY
 //   key            its name, used nowhere but in this file, the tests and debug mode
 //   kind, blocks   as above
-//   pool           which draw decides whether a station has it (see QUEST_POOLS). Leave out for a quest
-//                  that decides for itself from `countFromSize`: no things, no quest.
-//   always         true: every station has it, Kessel-9 too (the spools)
+//   always         true: every station has it, Kessel-9 too (the spools). On a work order that does not name
+//                  it, it is there and asked of nobody (`isOptional` on its instance).
 //   fixedObjectIds things of the quest that the rooms put out themselves, by object number; `count` then
 //                  says how many more are put out besides them
 //   placeLast      true: its things are put out after every other quest's, so that giving a station more
@@ -83,12 +92,62 @@ const QUEST_ITEMS = {
   }
 };
 
-// The draws that decide which quests a station has. A pool gives a station some of its quests, not all:
-// how many is the [fewest, most] pair named `sizeField` in GENERATED_SIZE_PRESETS (03-levelgen.js).
-const QUEST_POOLS = {
-  jobs: { sizeField: 'extraJobs' },
-  errands: { sizeField: 'errands' }
-};
+// The work orders. A descent has one of them, and the quests it names; the order they are named in is the
+// order the objective and the terminal speak of them in.
+// TWEAK: `intro` is the line on the way down; `report` is what you are told to do when it is all done;
+// `manifest` is what the ending screen says came up with you.
+const WORK_ORDERS = [
+  { key: 'survey', label: 'Survey', quests: ['spools'],
+    blurb: 'Bring back the survey spools Crew 2 left. The deeper ones are behind keycard doors.',
+    intro: function () { return 'Work order 4471-B: recover ' + (level.spoolCount === 3 ? 'three' : 'the ' + level.spoolCount) + ' survey spools left by Crew 2.'; },
+    report: OBJECTIVE_TEXT.returnToLift,
+    manifest: function () { return level.spoolCount + ' spools'; } },
+  { key: 'recovery', label: 'Recovery', quests: ['badges', 'cores'],
+    blurb: 'Bring back the badges of Crew 2 and the core samples they pulled.',
+    intro: function () { return 'Work order 4471-C: recover the badges of Crew 2 and their core samples.'; },
+    report: OBJECTIVE_TEXT.returnToLiftWithManifest,
+    manifest: function () { return countQuestThings('badges') + ' crew badges, ' + countQuestThings('cores') + ' core samples'; } },
+  { key: 'salvage', label: 'Salvage', quests: ['haul'],
+    blurb: 'Seal a sum\'s worth of what lies about into the salvage bays.',
+    intro: function () { return 'Work order 4471-D: salvage. Fill the bays.'; },
+    report: OBJECTIVE_TEXT.returnToLiftWithManifest,
+    manifest: function () { return 'salvage to the worth of ' + countQuestThings('haul') + ', sealed in ' + (findQuest('haul') ? findQuest('haul').total : 0) + ' bays'; } },
+  { key: 'restart', label: 'Restart', quests: ['generators', 'valves'],
+    blurb: 'Get every generator running and shut the isolation valves.',
+    intro: function () { return 'Work order 4471-E: restart the plant. Generators on, isolation valves shut.'; },
+    report: OBJECTIVE_TEXT.returnToLiftWithManifest,
+    manifest: function () { return countQuestThings('generators') + ' generators running, ' + countQuestThings('valves') + ' isolation valves shut'; } }
+];
+
+// What may come on top of any work order: how many is the [fewest, most] pair `complications` in
+// GENERATED_SIZE_PRESETS (03-levelgen.js). Each holds up the mains or the lift, not the order itself.
+// Two are quests of their own (an entry of QUESTS below). `liftWait` is not: it is the wait for the car to come
+// down once you call it, with the Hollow told where you are. A station without it has a car that never went
+// back up, and opens the moment the terminal takes the work order (startLiftCall in 11-game.js). Kessel-9
+// always has the wait.
+const QUEST_COMPLICATIONS = ['fuel', 'breaker', 'liftWait'];
+
+// How many things a quest of this station counts, the way its own count on screen does (0 if the station has
+// no such quest). For the salvage quest that is the sum it asks for; the generators count Generator 2 with them.
+function countQuestThings(key) {
+  const instance = findQuest(key);
+  return instance ? getQuestProgress(instance).total + (instance.definition.countsWith || 0) : 0;
+}
+
+// What the ending screen lists as having come up in the car: what the work order asked for, and any survey
+// spools you took that nobody asked for.
+function describeUploadManifest() {
+  const order = findWorkOrder(level.workOrder) || WORK_ORDERS[0];
+  let text = order.manifest();
+  const held = game.flags.spoolsCollected;
+  if (!areSpoolsOnTheOrder() && held > 0) text += '. Not on the work order: ' + held + (held === 1 ? ' survey spool' : ' survey spools');
+  return text;
+}
+
+function findWorkOrder(key) {
+  for (const order of WORK_ORDERS) if (order.key === key) return order;
+  return null;
+}
 
 // TWEAK: a thing that is needed (a fuel can) goes in the nearest other room, unless that is more than this many
 // steps' walk (a step is a metre) from the machine it is for: then it goes in the machine's own room.
@@ -118,7 +177,7 @@ const QUESTS = [
 
   // ---- fuel for Generator 2 ----
   {
-    key: 'fuel', kind: 'supply', blocks: 'mains', pool: 'jobs',
+    key: 'fuel', kind: 'supply', blocks: 'mains',
     requires: { item: 'fuel', objectId: OBJECT_FUEL_CAN },
     target: function () { return GENERATOR_POSITION; },
     text: {
@@ -130,11 +189,11 @@ const QUESTS = [
 
   // ---- core samples ----
   {
-    key: 'cores', kind: 'collect', blocks: 'upload', pool: 'jobs',
+    key: 'cores', kind: 'collect', blocks: 'upload',
     count: [2, 4], fewest: 2, most: MAXIMUM_CORE_SAMPLES, firstObjectId: OBJECT_CORE_FIRST,
     tiers: [0, 'beforeLast'],
     build: function (objectId, x, z, random) { addCoreSample(objectId, x, z, random() * 3); },
-    tell: { line: 'coresWanted', after: 'firstSpool', seconds: 12 },
+    tell: { line: 'coresWanted', after: 'leftLift', seconds: 30 }, // after the line about the badges, which are the same order's
     text: {
       objective: 'Dispatch also wants the core samples.',
       objectiveAlone: 'Dispatch still wants the core samples.',
@@ -173,14 +232,14 @@ const QUESTS = [
 
   // ---- crew badges (new with this file: written as nothing but this entry) ----
   {
-    key: 'badges', kind: 'collect', blocks: 'upload', pool: 'errands',
+    key: 'badges', kind: 'collect', blocks: 'upload',
     count: [2, 3], fewest: 2,
     tiers: [0, 'beforeLast'],
     build: function (objectId, x, z, random) { addCrewBadge(objectId, x, z, random() * TWO_PI); },
-    tell: { line: 'badgesWanted', after: 'firstSpool', seconds: 24 },
+    tell: { line: 'badgesWanted', after: 'leftLift', seconds: 14 },
     text: {
       objective: 'Personnel also wants the badges of Crew 2.',
-      objectiveAlone: 'Personnel still wants the badges of Crew 2.',
+      objectiveAlone: 'Personnel wants the badges of Crew 2 brought back.',
       chip: 'BADGES {done}/{total}',
       taken: 'Crew badge {done} of {total}.',
       refused: 'LIFT CONTROL: manifest incomplete. Crew badges loaded: {done} of {total}.'
@@ -189,7 +248,7 @@ const QUESTS = [
 
   // ---- isolation valves (new with this file) ----
   {
-    key: 'valves', kind: 'activate', blocks: 'upload', pool: 'errands',
+    key: 'valves', kind: 'activate', blocks: 'upload',
     count: [2, 3], fewest: 2,
     tiers: [1, 'beforeLast'],
     names: ['Isolation valve A', 'Isolation valve B', 'Isolation valve C'],
@@ -198,7 +257,7 @@ const QUESTS = [
     noise: function () { return TUNING.noiseRadiusValve; },
     activated: function (instance, object) { playValveSound(object.x, object.z); },
     hideUntilTold: true,
-    tell: { line: 'valvesWanted', after: 'keycard', seconds: 8, marksOnMap: true },
+    tell: { line: 'valvesWanted', after: 'mainsOn', seconds: 34, secondsWithoutHollow: 24, marksOnMap: true }, // after the line about the generators
     text: {
       objective: 'The isolation valves have to be shut before the lift will come: {done} of {total} so far. They are marked on the map.',
       chip: 'VALVES {done}/{total}',
@@ -210,12 +269,12 @@ const QUESTS = [
   },
 
   // ---- salvage: a sum's worth of what lies about, sealed into bays ----
-  // About half the stations have it (`count`: it has it, or it has not). How many bays there are goes by the
+  // It is the Salvage work order. How many bays there are goes by the
   // station's size (`salvageBays` in GENERATED_SIZE_PRESETS). What it asks for is worked out from what the
   // station has lying about, and so is how far along it is: see "Salvage" in 08-loose-objects.js.
   {
     key: 'haul', kind: 'haul', blocks: 'upload',
-    count: [0, 1],
+    count: 1,
     tiers: [0, 'beforeLast'],
     names: ['Salvage bay 1', 'Salvage bay 2', 'Salvage bay 3', 'Salvage bay 4'],
     progress: function () { return getHaulProgress(); },
@@ -223,7 +282,7 @@ const QUESTS = [
     tell: { line: 'salvageWanted', after: 'leftLift', seconds: 16 },
     text: {
       objective: 'Salvage also wants {total} worth of what lies about, sealed into its bays: {done} so far.',
-      objectiveAlone: 'Salvage still wants {total} worth of what lies about, sealed into its bays: {done} so far.',
+      objectiveAlone: 'Salvage wants {total} worth of what lies about, sealed into its bays: {done} so far.',
       chip: 'SALVAGE {done}/{total}',
       refused: 'LIFT CONTROL: manifest short. Salvage in the bays: {done} of {total}.'
     }
@@ -231,7 +290,7 @@ const QUESTS = [
 
   // ---- the winch breaker ----
   {
-    key: 'breaker', kind: 'activate', blocks: 'lift', pool: 'jobs',
+    key: 'breaker', kind: 'activate', blocks: 'lift',
     count: 1, firstObjectId: OBJECT_WINCH_BREAKER,
     tiers: [1, 1],
     names: ['Winch breaker'],
@@ -284,12 +343,13 @@ function createQuestRandom(seed, name) {
 // ---------------------------------------------------------------------------
 
 // How many things a quest has in this station, and which of them need an item brought first.
-function planOneQuest(definition, size, random) {
+// `atLeast` is the fewest it may have (a quest that a work order names has to be there).
+function planOneQuest(definition, size, random, atLeast) {
   let count = 1;
   const range = definition.countFromSize ? (size[definition.countFromSize] || [0, 0]) : definition.count;
   if (Array.isArray(range)) count = range[0] + Math.floor(random() * (range[1] - range[0] + 1));
   else if (typeof range === 'number') count = range;
-  count = Math.min(count, definition.most || QUEST_MOST_THINGS);
+  count = Math.min(Math.max(count, atLeast || 0), definition.most || QUEST_MOST_THINGS);
   const needsItem = [];
   for (let index = 0; index < count; index++) {
     needsItem.push(definition.kind === 'activate' && definition.requires ? random() < definition.requires.chance : false);
@@ -297,26 +357,43 @@ function planOneQuest(definition, size, random) {
   return { count: count, needsItem: needsItem };
 }
 
-// Returns { questKey: { count, needsItem } } for the quests a station of this size is to have, by this seed.
-function planQuests(seed, size) {
+// The work orders a station may be given, in the order they are to be tried: `allowed` is the keys that are
+// switched on (all of them, if it is left out). Each order has a draw of its own, named after it, so that an
+// order added later does not change which of the others a seed picks any more than it has to. The first is the
+// one the station gets, unless there is no room in it for that order's things; Survey, which needs nothing
+// but what the rooms put out, comes last if all else fails.
+function rankWorkOrders(seed, allowed) {
+  const ranked = WORK_ORDERS.filter(function (order) { return !allowed || allowed.indexOf(order.key) >= 0; })
+    .map(function (order) { return [createQuestRandom(seed, 'order ' + order.key)(), order]; })
+    .sort(function (a, b) { return a[0] - b[0]; }).map(function (pair) { return pair[1]; });
+  if (ranked.indexOf(WORK_ORDERS[0]) < 0) ranked.push(WORK_ORDERS[0]);
+  return ranked;
+}
+
+// Returns { questKey: { count, needsItem } } for the quests a station of this size has on this work order:
+// the order's own, the quests every station has, and its complications.
+function planQuests(seed, size, order) {
   const planned = {};
-  for (const poolKey in QUEST_POOLS) {
-    const pool = QUEST_POOLS[poolKey];
-    const members = QUESTS.filter(function (definition) { return definition.pool === poolKey; });
-    if (members.length === 0) continue;
-    const random = createQuestRandom(seed, 'pool ' + poolKey);
-    const range = size[pool.sizeField] || [0, 0];
-    const wanted = Math.min(members.length, range[0] + Math.floor(random() * (range[1] - range[0] + 1)));
-    // Which of the pool: each member has a draw of its own, named after it, so that a quest joining the pool
-    // later does not change which of the others a seed picks any more than it has to.
-    const chosen = members.map(function (definition) { return [createQuestRandom(seed, 'pick ' + definition.key)(), definition]; })
-      .sort(function (a, b) { return a[0] - b[0]; }).slice(0, wanted).map(function (pair) { return pair[1]; });
-    for (const definition of members) if (chosen.indexOf(definition) >= 0) planned[definition.key] = planOneQuest(definition, size, createQuestRandom(seed, 'plan ' + definition.key));
-  }
   for (const definition of QUESTS) {
-    if (definition.pool) continue;
-    const one = planOneQuest(definition, size, createQuestRandom(seed, 'plan ' + definition.key));
-    if (one.count > 0 || definition.always) planned[definition.key] = one;
+    const isOfTheOrder = order.quests.indexOf(definition.key) >= 0;
+    if (!isOfTheOrder && !definition.always) continue;
+    // A quest the order names has to be there: at least one thing, or as many as it takes to be a quest at all.
+    // (The spools are there already, put out by the rooms: for them the count is how many more.)
+    const atLeast = isOfTheOrder && !definition.fixedObjectIds ? Math.max(1, definition.fewest || 1) : 0;
+    const one = planOneQuest(definition, size, createQuestRandom(seed, 'plan ' + definition.key), atLeast);
+    // A quest every station has, on an order that does not name it, has only what the rooms put out.
+    if (!isOfTheOrder) { one.count = 0; one.needsItem = []; }
+    planned[definition.key] = one;
+  }
+  const random = createQuestRandom(seed, 'complications');
+  const range = size.complications || [0, 0];
+  const wanted = Math.min(QUEST_COMPLICATIONS.length, range[0] + Math.floor(random() * (range[1] - range[0] + 1)));
+  const chosen = QUEST_COMPLICATIONS.map(function (key) { return [createQuestRandom(seed, 'pick ' + key)(), key]; })
+    .sort(function (a, b) { return a[0] - b[0]; }).slice(0, wanted).map(function (pair) { return pair[1]; });
+  for (const key of chosen) {
+    const definition = findQuestDefinition(key);
+    // One that is no quest has nothing to put out: being named is all there is to it.
+    planned[key] = definition ? planOneQuest(definition, size, createQuestRandom(seed, 'plan ' + key), 1) : { count: 1, needsItem: [] };
   }
   return planned;
 }
@@ -335,8 +412,9 @@ function clearQuests() {
   for (const objectId in questLookup) delete questLookup[objectId];
 }
 
+// `isOptional`: it is there, and nobody asks for it (the spools, on a work order that is not Survey).
 function createQuestInstance(definition) {
-  return { key: definition.key, definition: definition, total: 0, done: 0, isKnown: false, wasSaid: false, objects: [] };
+  return { key: definition.key, definition: definition, total: 0, done: 0, isKnown: false, wasSaid: false, objects: [], isOptional: false };
 }
 
 function findQuest(key) {
@@ -369,21 +447,24 @@ function registerQuests() {
   level.spoolCount = spools ? spools.total : 0;
 }
 
-// The quests every station has, with nothing but what its rooms put out. This is all of Kessel-9's quests;
-// a generated station goes through placeQuests instead, which may add to them.
+// The quests every station has, with nothing but what its rooms put out. This is all of Kessel-9's quests,
+// and Kessel-9's work order is Survey; a generated station goes through placeQuests instead.
 function addAlwaysQuests() {
   clearQuests();
+  level.workOrder = 'survey';
+  level.liftWaits = true;
   for (const definition of QUESTS) if (definition.always) level.quests.push(createQuestInstanceWithFixedThings(definition));
   registerQuests();
 }
 
 // Puts the quests into a station that is finished. `plan` is the plan it was built from (its rooms, which ring
 // each is in, and its doorways); `seed` is what the quests' numbers come from; `size` is the entry of
-// GENERATED_SIZE_PRESETS. Nothing of the map is moved or removed (see the top of this file).
-function placeQuests(plan, seed, size) {
+// GENERATED_SIZE_PRESETS; `allowedOrders` is the keys of the work orders that are switched on (all, if left
+// out). Nothing of the map is moved or removed (see the top of this file).
+function placeQuests(plan, seed, size, allowedOrders) {
   clearQuests();
-  const wantedQuests = planQuests(seed, size);
-  const takenSpots = [];
+  let wantedQuests = {};
+  let takenSpots = [];
   const lastRing = plan.finalTier - 1;
   const resolveTier = function (tier) { return tier === 'beforeLast' ? lastRing : (tier === 'last' ? plan.finalTier : tier); };
   const ordinaryRooms = plan.rooms.filter(function (room) {
@@ -431,13 +512,15 @@ function placeQuests(plan, seed, size) {
   // Every quest has a sequence of random numbers to itself.
   const randomFor = function (definition) { return createQuestRandom(seed, 'place ' + definition.key); };
 
-  // The order things are put out in: the order of QUESTS, with those marked `placeLast` after the rest, and
-  // the salvage bays dug last of all, so that no other quest's thing is anywhere else for a bay being there.
-  const rankOf = function (definition) { return (definition.kind === 'haul' ? 2000 : (definition.placeLast ? 1000 : 0)) + QUESTS.indexOf(definition); };
-  const inOrder = QUESTS.filter(function (definition) { return wantedQuests[definition.key] !== undefined; })
-    .sort(function (a, b) { return rankOf(a) - rankOf(b); });
+  // The order things are put out in: the complications first (the fuel has to be in reach before the mains is
+  // on), then the order of QUESTS, with those marked `placeLast` after the rest, and the salvage bays dug last
+  // of all, so that no other quest's thing is anywhere else for a bay being there.
+  const rankOf = function (definition) {
+    return (definition.kind === 'haul' ? 3000 : (definition.placeLast ? 2000 : (QUEST_COMPLICATIONS.indexOf(definition.key) >= 0 ? 0 : 1000))) + QUESTS.indexOf(definition);
+  };
 
-  const placed = {};
+  let placed = {}, workOrder = null;
+  // Puts one quest's things out. Returns false if it found no room for them (and has taken out what it put).
   const placeOne = function (definition) {
     const wanted = wantedQuests[definition.key], random = randomFor(definition), instance = createQuestInstanceWithFixedThings(definition);
     const fixedCount = instance.objects.length;
@@ -446,7 +529,7 @@ function placeQuests(plan, seed, size) {
       // with no place for even one bay does not have the quest.
       const range = size.salvageBays || [1, 1];
       const bays = findHaulBaySites(plan, range[0] + Math.floor(random() * (range[1] - range[0] + 1)), random);
-      if (bays.length === 0) return;
+      if (bays.length === 0) return false;
       bays.forEach(function (bay, index) {
         digHaulBay(bay, index + 1);
         const objectId = getQuestObjectId(definition, index, false);
@@ -457,7 +540,7 @@ function placeQuests(plan, seed, size) {
     } else if (definition.kind === 'supply') {
       // One thing to bring, to a machine that is already there. It must be in reach before the mains is on.
       const target = definition.target(), objectId = getQuestObjectId(definition, 0, true);
-      if (!placeItemNear(definition.requires.item, objectId, target.x, target.z, 0, null, random)) return;
+      if (!placeItemNear(definition.requires.item, objectId, target.x, target.z, 0, null, random)) return false;
       instance.total = 1;
       instance.objects.push({ objectId: 0, index: 0, name: '', x: target.x, z: target.z, needsItem: true, itemObjectId: objectId, isSupplied: false, isDone: false });
     } else {
@@ -493,15 +576,43 @@ function placeQuests(plan, seed, size) {
             interactables.splice(index, 1);
           }
         }
-        return;
+        return false;
       }
     }
+    // On a work order that does not name it, a quest every station has is there and asked of nobody.
+    instance.isOptional = Boolean(definition.always) && workOrder.quests.indexOf(definition.key) < 0;
     placed[definition.key] = instance;
+    return true;
   };
-  for (const definition of inOrder) placeOne(definition);
 
-  // The station's quests, in the order of QUESTS: the order the objective and the terminal speak of them in.
-  for (const definition of QUESTS) if (placed[definition.key]) level.quests.push(placed[definition.key]);
+  // The work order: the first of those the seed ranks that this station has room for. A try that fails (no
+  // doorway left for a salvage bay, too few free corners for the badges) is taken out again to the last prop,
+  // and the next order is tried. Survey, which needs only what the rooms put out, never fails.
+  const firstInteractable = interactables.length, firstProp = worldProps.length;
+  for (const order of rankWorkOrders(seed, allowedOrders)) {
+    workOrder = order;
+    wantedQuests = planQuests(seed, size, order);
+    takenSpots = [];
+    placed = {};
+    const inOrder = QUESTS.filter(function (definition) { return wantedQuests[definition.key] !== undefined; })
+      .sort(function (a, b) { return rankOf(a) - rankOf(b); });
+    let hasRoom = true;
+    for (const definition of inOrder) {
+      const wasPlaced = placeOne(definition);
+      if (!wasPlaced && order.quests.indexOf(definition.key) >= 0) { hasRoom = false; break; }
+    }
+    if (hasRoom) break;
+    for (let index = firstProp; index < worldProps.length; index++) worldProps[index].isRemoved = true;
+    interactables.length = firstInteractable;
+    clearHaulBays();
+  }
+  level.workOrder = workOrder.key;
+  level.liftWaits = wantedQuests.liftWait !== undefined;
+
+  // The station's quests: the work order's own first, in the order it names them (the order the objective and
+  // the terminal speak of them in), then the rest in the order of QUESTS.
+  for (const key of workOrder.quests) if (placed[key]) level.quests.push(placed[key]);
+  for (const definition of QUESTS) if (placed[definition.key] && workOrder.quests.indexOf(definition.key) < 0) level.quests.push(placed[definition.key]);
   registerQuests();
   // Crates, cabinets and machines stand on the floor, and a bay is new floor: work out again where things can
   // walk, and how far the station reaches.
@@ -566,7 +677,28 @@ function isQuestDone(instance) {
 
 // The quests that hold up a moment ('mains', 'upload' or 'lift') and are not done, in the order of QUESTS.
 function getUnfinishedQuests(moment) {
-  return level.quests.filter(function (instance) { return instance.definition.blocks === moment && !isQuestDone(instance); });
+  return level.quests.filter(function (instance) { return instance.definition.blocks === moment && !instance.isOptional && !isQuestDone(instance); });
+}
+
+// How far along the work order is: 0 with nothing of it done, 1 with all of it. This is what presses the
+// Hollow on. (On a Survey order it is the share of the spools you hold, as it always was.)
+function getWorkOrderProgressShare() {
+  const order = findWorkOrder(level.workOrder);
+  let share = 0, count = 0;
+  for (const instance of level.quests) {
+    if (instance.isOptional || !order || order.quests.indexOf(instance.key) < 0) continue;
+    const progress = getQuestProgress(instance);
+    if (progress.total <= 0) continue;
+    share += clampNumber(progress.done / progress.total, 0, 1);
+    count++;
+  }
+  return count > 0 ? share / count : 0;
+}
+
+// Are the survey spools what this descent is for? (They are in the station either way.)
+function areSpoolsOnTheOrder() {
+  const spools = findQuest('spools');
+  return spools !== null && !spools.isOptional;
 }
 
 function isQuestUnfinished(key) {
@@ -788,12 +920,19 @@ function getMainsQuestObjective() {
 // The sentences of the objective with the mains on: one for each quest that still holds up the upload.
 function getUploadQuestObjectives() {
   const parts = [];
+  let isOrderUnspoken = false;
   for (const instance of getUnfinishedQuests('upload')) {
     const definition = instance.definition;
-    if (definition.hideUntilTold && !instance.isKnown) continue;
+    if (definition.hideUntilTold && !instance.isKnown) {
+      // Dispatch has not spoken of it yet. If it is what this descent is for, the work order itself says so.
+      const order = findWorkOrder(level.workOrder);
+      if (order && order.quests.indexOf(instance.key) >= 0) isOrderUnspoken = true;
+      continue;
+    }
     parts.push(parts.length === 0 && definition.text.objectiveAlone ? fillQuestText(instance, 'objectiveAlone') : fillQuestText(instance, 'objective'));
     if (definition.requires && getCarriedCount(definition.requires.item) > 0 && definition.text.carrying) parts.push(fillQuestText(instance, 'carrying'));
   }
+  if (isOrderUnspoken && parts.length === 0) parts.push(findWorkOrder(level.workOrder).blurb);
   return parts;
 }
 
@@ -830,7 +969,7 @@ function isQuestObjectWantedNow(objectId) {
     const itemKey = definition.requires.item;
     return getCarriedCount(itemKey) < QUEST_ITEMS[itemKey].carryMost && isQuestItemWantedNow(itemKey);
   }
-  if (definition.kind === 'collect') return true;
+  if (definition.kind === 'collect') return !entry.instance.isOptional; // what nobody asks for is not marked as wanted
   if (definition.kind === 'haul') return haulState.bays[object.index] !== undefined && haulState.bays[object.index].state !== 'sealed' && !isQuestDone(entry.instance);
   if (definition.needsPower && !game.flags.powerOn) return false;
   return !object.needsItem || object.isSupplied || getCarriedCount(definition.requires.item) > 0;

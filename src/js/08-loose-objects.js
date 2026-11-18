@@ -374,6 +374,7 @@ function createLooseObject(kindKey, x, y, z, yaw) {
     lastKnockTime: -10,
     lastHandledTime: -10,               // when you last had it in the beam: a knock soon after is your doing
     lastScannedTime: -10,               // when a pulse last landed on it
+    settleX: x, settleY: y, settleZ: z, settleSeconds: 0, // where it was when it last went anywhere, and for how long it has not (finishLooseObjectStep)
     hasRestPoints: false,               // it was scanned where it lies, and those points are still on it
     // For a kind that does something (`use`): when it was set off, when it starts doing it, and whether it is used up.
     armedTime: -1, goesOffTime: -1, burstSeconds: 0, burstBudget: 0, burstHitsOnHollow: 0, isSpent: false,
@@ -547,6 +548,7 @@ function wakeLooseObject(object) {
   if (!object.isAsleep) return;
   object.isAsleep = false;
   object.restSeconds = 0;
+  object.settleX = object.x; object.settleY = object.y; object.settleZ = object.z; object.settleSeconds = 0;
   if (object.hasRestPoints) {
     // Its points stay behind where it lay, and go over the next moment.
     changePointsOnLooseObject(object, TUNING.looseImprintSeconds);
@@ -1252,6 +1254,27 @@ function finishLooseObjectStep(object, stepSeconds) {
     object.x = object.lastGoodX; object.y = object.lastGoodY; object.z = object.lastGoodZ;
     object.velocityX = 0; object.velocityY = 0; object.velocityZ = 0;
     looseState.statistics.putBack++;
+  }
+
+  // Something that has been going nowhere for a while has had its time. A canister leaning in a corner can rock
+  // to and fro for most of a minute, and a box that came down on a length of pipe rides it across the floor at
+  // a few centimetres a second: neither ever gets below the speeds that count as rest further down, and neither
+  // would last ten seconds on a real floor. So: touching something, never fast, and still within a stride of
+  // where it was when this count began, for long enough: it is at rest.
+  const settleX = object.x - object.settleX, settleY = object.y - object.settleY, settleZ = object.z - object.settleZ;
+  const speedSquared = object.velocityX * object.velocityX + object.velocityY * object.velocityY + object.velocityZ * object.velocityZ;
+  if (object.isHeld || !object.touchedThisStep || speedSquared > TUNING.looseSettleSpeed * TUNING.looseSettleSpeed ||
+      settleX * settleX + settleY * settleY + settleZ * settleZ > TUNING.looseSettleMetres * TUNING.looseSettleMetres) {
+    object.settleX = object.x; object.settleY = object.y; object.settleZ = object.z; object.settleSeconds = 0;
+  } else {
+    object.settleSeconds += stepSeconds;
+    if (object.settleSeconds >= TUNING.looseSettleSeconds) {
+      object.isAsleep = true;
+      object.velocityX = 0; object.velocityY = 0; object.velocityZ = 0;
+      object.spinX = 0; object.spinY = 0; object.spinZ = 0;
+      object.settleSeconds = 0;
+      return;
+    }
   }
 
   // Rest: slow, touching something, and for long enough.

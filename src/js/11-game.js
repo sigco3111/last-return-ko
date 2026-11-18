@@ -99,8 +99,11 @@ function fireGameEvent(eventName) {
   for (const cue of DISPATCH_CUES) {
     if (cue.when !== eventName) continue;
     if (cue.onlyWithHollow && !game.difficulty.hollowEnabled) continue;
-    if (cue.ifSpools !== undefined && level.spoolCount !== cue.ifSpools) continue;
-    if (cue.unlessSpools !== undefined && level.spoolCount === cue.unlessSpools) continue;
+    // (Two of the recordings count the spools, which is only true where there are three and they are what you
+    // came for. On any other work order the station counts as one where that is not so.)
+    const spoolsCounted = areSpoolsOnTheOrder() ? level.spoolCount : 0;
+    if (cue.ifSpools !== undefined && spoolsCounted !== cue.ifSpools) continue;
+    if (cue.unlessSpools !== undefined && spoolsCounted === cue.unlessSpools) continue;
     scheduleEvent(cue.seconds, function () { playRadioLine(cue.line); });
   }
   fireQuestEvent(eventName);
@@ -116,7 +119,7 @@ function refreshObjective() {
   else {
     // With the mains on: the spools, and whatever else this station asks for before the lift can be called.
     const parts = getUploadQuestObjectives();
-    setObjective(parts.length > 0 ? parts.join(' ') : OBJECTIVE_TEXT.returnToLift);
+    setObjective(parts.length > 0 ? parts.join(' ') : (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).report);
   }
 }
 
@@ -177,8 +180,9 @@ function resetWorldState() {
 // Returns false if a generated station could not be planned (the classic one is loaded instead).
 // `questSeed` is left out in play: the quests then come from the station's own seed. Given, the same map gets
 // other quests (the tests and debug mode use that; the map does not change by it).
-function loadStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed) {
-  const wasBuiltAsAsked = buildStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed);
+// `workOrders` is the keys of the work orders it may be given: all of them, if left out.
+function loadStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed, workOrders) {
+  const wasBuiltAsAsked = buildStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed, workOrders);
   uploadWorldOccluderMesh(buildWorldOccluderVertices());
   if (debugHooks.stationLoaded) debugHooks.stationLoaded();
   moveMachinerySoundsToLevel();
@@ -206,7 +210,7 @@ function beginNewGame() {
   game.difficulty = getChosenDifficulty();
   const quality = QUALITY_PRESETS[settings.quality];
   if (pointCloud.capacity !== quality.maximumPoints) allocatePointCloud(quality.maximumPoints);
-  if (settings.station === 'generated') loadStation('generated', chooseSeedFromText(settings.seedText), settings.stationSize, settings.stationLayout, settings.stationLevels);
+  if (settings.station === 'generated') loadStation('generated', chooseSeedFromText(settings.seedText), settings.stationSize, settings.stationLayout, settings.stationLevels, undefined, getAllowedWorkOrders());
   else if (level.kind !== 'classic') loadStation('classic', 0);
   resetWorldState();
   requestPointerLockOnCanvas();
@@ -220,8 +224,7 @@ function beginNewGame() {
   container.textContent = '';
   for (const timer of interfaceState.introTimers) window.clearTimeout(timer);
   interfaceState.introTimers.length = 0;
-  const introLines = INTRO_LINES.slice();
-  if (level.kind === 'generated') introLines.push('No drawings survive for this annex. Survey reference ' + level.seed + '.');
+  const introLines = getIntroLines();
   introLines.forEach(function (line, lineIndex) {
     interfaceState.introTimers.push(window.setTimeout(function () {
       if (game.mode !== 'intro') return;
@@ -320,7 +323,7 @@ function pauseGame() {
   setScannerSound(0);
   closeMapOverlay();
   interfaceState.elements['pause-objective'].textContent = game.objectiveText;
-  interfaceState.elements['pause-station'].textContent = 'Station: ' + level.description;
+  interfaceState.elements['pause-station'].textContent = 'Station: ' + level.description + ' · Work order: ' + (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label;
   interfaceState.elements['pause-build'].textContent = 'Version: ' + describeBuild();
   interfaceState.elements['link-report-problem'].href = buildReportProblemAddress();
   interfaceState.refreshSettingControls();
@@ -388,7 +391,10 @@ function collectSpool(interactable) {
   // Ripley numbered hers "of 3". In a station with more spools than that, the heading counts them all.
   openReader(log, level.spoolCount === 3 ? '' : log.heading.replace(' of 3', ' of ' + level.spoolCount));
   const collected = game.flags.spoolsCollected;
-  if (collected >= level.spoolCount) fireGameEvent('allSpools');
+  if (!areSpoolsOnTheOrder()) {
+    // Not what this descent is for: it is yours if you want it, and Dispatch does not count it.
+    if (collected === 1) showMessage('A survey spool. It is not on this work order.', 4, 'info');
+  } else if (collected >= level.spoolCount) fireGameEvent('allSpools');
   else if (collected === 1) fireGameEvent('firstSpool');
   // The spool in the calibration store wakes the Stills of that room. What Dispatch says then goes with that
   // (the 'stillsWake' entries of DISPATCH_CUES), not with how many spools you hold.
@@ -458,10 +464,27 @@ function startGenerator(interactable) {
   }
 }
 
+// The lines on the way down, for the station that is loaded. The one that names the work order is this
+// descent's own, and a generated station adds its seed.
+function getIntroLines() {
+  const order = findWorkOrder(level.workOrder) || WORK_ORDERS[0];
+  const introLines = INTRO_LINES.map(function (line) { return line.indexOf('Work order') === 0 ? order.intro() : line; });
+  if (level.kind === 'generated') introLines.push('No drawings survive for this annex. Survey reference ' + level.seed + '.');
+  return introLines;
+}
+
 // `radioKey` is what dispatch says as the car starts down.
 function startLiftCall(radioKey) {
   const flags = game.flags;
   flags.uploadStarted = true;
+  if (!level.liftWaits) {
+    // The car never went back up (no `liftWait` among this station's complications): the doors open at once,
+    // and Dispatch says so in one line instead of two.
+    saveCheckpoint();
+    playPickupSound();
+    completeLiftArrival((radioKey || 'uploadStarted') + 'CarWaiting');
+    return;
+  }
   game.liftCountdown = game.difficulty.hollowEnabled ? TUNING.liftArrivalSeconds : TUNING.liftArrivalSecondsWithoutHollow;
   saveCheckpoint();
   refreshObjective();
@@ -475,7 +498,8 @@ function startLiftCall(radioKey) {
   }
 }
 
-function completeLiftArrival() {
+// `radioKey` is what dispatch says as the doors open (left out: that the car is at your level).
+function completeLiftArrival(radioKey) {
   game.flags.liftArrived = true;
   game.liftCountdown = -1;
   liftDoor.forcedState = true;
@@ -483,7 +507,7 @@ function completeLiftArrival() {
   playLiftBell();
   showCaption('liftBell', LIFT_POSITION);
   refreshObjective();
-  playRadioLine('liftArrived');
+  playRadioLine(radioKey || 'liftArrived');
 }
 
 // ---------------------------------------------------------------------------
@@ -862,7 +886,8 @@ function startApplication() {
     auditLayout: auditFacilityLayout,
     auditProgression: auditLevelProgression,
     level: level, interactables: interactables, zoneNames: ZONE_NAMES,
-    loadStation: function (kind, seed, sizeKey, layoutKey, levelsKey, questSeed) { const result = loadStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed); resetWorldState(); return result; },
+    loadStation: function (kind, seed, sizeKey, layoutKey, levelsKey, questSeed, workOrders) { const result = loadStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed, workOrders); resetWorldState(); return result; },
+    workOrders: WORK_ORDERS, questComplications: QUEST_COMPLICATIONS, rankWorkOrders: rankWorkOrders, getWorkOrderProgressShare: getWorkOrderProgressShare, getDirectorPaceFactor: getDirectorPaceFactor, areSpoolsOnTheOrder: areSpoolsOnTheOrder, describeUploadManifest: describeUploadManifest, getIntroLines: getIntroLines, areStillsHunting: function () { return stillsAreHunting; }, getAllowedWorkOrders: getAllowedWorkOrders,
     auditMapApartFromQuests: auditMapApartFromQuests, computeMapFingerprint: computeMapFingerprint, planQuests: planQuests,
     getFloorHeightAt: getFloorHeightAt,
     getHeadroomAt: getHeadroomAt,
@@ -907,7 +932,7 @@ function startApplication() {
     keycardObjectIds: KEYCARD_OBJECT_IDS,
     missionObjectIds: { fuelCan: OBJECT_FUEL_CAN, winchBreaker: OBJECT_WINCH_BREAKER, firstCore: OBJECT_CORE_FIRST, firstExtraGenerator: OBJECT_EXTRA_GENERATOR_FIRST, firstExtraFuelCan: OBJECT_EXTRA_FUEL_CAN_FIRST },
     // Quests (09-quests.js): the descriptions, this station's, and the questions the game asks of them.
-    quests: QUESTS, questPools: QUEST_POOLS, questItems: QUEST_ITEMS, findQuest: findQuest, isQuestUnfinished: isQuestUnfinished, getUnfinishedQuests: getUnfinishedQuests,
+    quests: QUESTS, questItems: QUEST_ITEMS, findQuest: findQuest, isQuestUnfinished: isQuestUnfinished, getUnfinishedQuests: getUnfinishedQuests,
     getQuestChips: getQuestChips, fireGameEvent: fireGameEvent, dispatchCues: DISPATCH_CUES,
     radioText: function (key) { return RADIO_MESSAGES[key]; }, clearMessages: clearMessages, closeReader: closeReader,
     // Does a quest the way a player would, thing by thing (fetching what a machine needs first), wherever the player stands.

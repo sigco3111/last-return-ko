@@ -152,7 +152,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     return Object.fromEntries(new URL(link.href).searchParams);
   });
   check('"Report a problem" carries the seed and the station options',
-    reported.station === 'Uncharted annex' && new RegExp('^' + playSeed + ', medium, [a-z]+, two levels$').test(reported.seed), reported);
+    reported.station === 'Uncharted annex' && new RegExp('^' + playSeed + ', medium, [a-z]+, two levels, work order (Survey|Recovery|Salvage|Restart), (with the|no) wait for the lift$').test(reported.seed), reported);
 
   await page.keyboard.down('KeyW');
   await inGame(() => window.lastReturnDebug.simulate(4));
@@ -411,16 +411,26 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     check('with the winch breaker open the upload goes through but the lift does not come; closing the breaker calls it',
       waiting.uploaded && !waiting.started && waiting.marked && /breaker/i.test(waiting.objective) && (await inGame(() => window.lastReturnDebug.game.flags.uploadStarted)) === true, waiting);
   }
-  const upload = await inGame(() => ({ started: window.lastReturnDebug.game.flags.uploadStarted, countdown: window.lastReturnDebug.game.liftCountdown }));
-  check('uploading three spools calls the lift', upload.started && upload.countdown > 39 && upload.countdown <= 40, upload);
-  await inGame(() => { const debug = window.lastReturnDebug; debug.hollow.isActive = false; debug.simulate(41); });
-  check('the lift arrives and opens', await inGame(() => window.lastReturnDebug.game.flags.liftArrived && window.lastReturnDebug.getLiftDoor().openFraction === 1));
+  // (Whether the car has to come down is one of the station's complications: without it, it is there at once.)
+  const upload = await inGame(() => ({ started: window.lastReturnDebug.game.flags.uploadStarted, countdown: window.lastReturnDebug.game.liftCountdown,
+    waits: window.lastReturnDebug.level.liftWaits, arrived: window.lastReturnDebug.game.flags.liftArrived }));
+  check('with the work order done the terminal calls the lift: forty seconds in a station with the wait, at once in one without',
+    upload.started && (upload.waits ? upload.countdown > 39 && upload.countdown <= 40 && !upload.arrived : upload.arrived), upload);
+  // Forty-one seconds with nothing hunting you: the Hollow is sent away again every second, because its waking
+  // (some seconds after Generator 2 starts, by the game's own clock) may fall anywhere in this wait.
+  await inGame(() => { const debug = window.lastReturnDebug; for (let second = 0; second < 41; second++) { debug.hollow.isActive = false; debug.simulate(1); } });
+  const arrival = await inGame(() => { const debug = window.lastReturnDebug; return { arrived: debug.game.flags.liftArrived, door: debug.getLiftDoor().openFraction, mode: debug.game.mode, countdown: debug.game.liftCountdown, workOrder: debug.level.workOrder, objective: debug.game.objectiveText }; });
+  check('the lift arrives and opens', arrival.arrived && arrival.door === 1, arrival);
   await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
   check('boarding the lift starts the ascent', (await inGame(() => window.lastReturnDebug.game.mode)) === 'ascending');
   await page.waitForFunction(() => window.lastReturnDebug.game.mode === 'ending', null, { timeout: 90000 });
   await drawFrames(page, 1);
   const endingText = await page.evaluate(() => document.getElementById('ending-stats').textContent);
   check('the ending screen names the station and its seed', endingText.indexOf('seed ' + playSeed) >= 0, endingText);
+  const endingOrder = await page.evaluate(() => ({ label: window.lastReturnDebug.workOrders.filter((order) => order.key === window.lastReturnDebug.level.workOrder)[0].label,
+    manifest: document.getElementById('ending-manifest').textContent, says: window.lastReturnDebug.describeUploadManifest() }));
+  check('the ending screen names the work order, and its manifest lists what that order brought up',
+    endingText.indexOf('Work order' + endingOrder.label) >= 0 && endingOrder.manifest.indexOf('Upload manifest: ' + endingOrder.says + '. Automatic classification') === 0, endingOrder);
   check('the ending screen names the build', /Build\d+\.\d+\.\d+ · build \d+ · [0-9a-f]{7}/.test(endingText), endingText);
 
   // --- "somewhere uncharted" on the ending screen switches the title screen over ---
@@ -490,7 +500,7 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
     debug.use(1);
     result.acceptedWithCores = flags.uploadStarted === true;
     // The winch breaker, closed after the upload.
-    result.breakerSeed = findStation((mission) => mission.needsBreaker);
+    result.breakerSeed = findStation((mission) => mission.needsBreaker && debug.level.liftWaits);
     debug.grantSpools();
     debug.use(ids.winchBreaker);
     result.breakerNeedsPower = flags.breakerClosed === false;

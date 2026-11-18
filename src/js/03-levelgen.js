@@ -18,17 +18,19 @@ const ZONE_GENERATED_ROOM = 250; // stand-in zone for rooms that only exist in g
 // TWEAK: how big each size of station is. "fillers" are the extra rooms per tier (no power, power, keycard).
 const GENERATED_SIZE_PRESETS = {
   // vents: crawl-height tunnels between rooms. loops: full-height service ducts. Both join places far apart on foot.
-  // extraJobs, errands: the fewest and the most quests a station of this size is given from each of the two
-  //           draws of quests (QUEST_POOLS in 09-quests.js, where every quest is described).
-  // extraGenerators: the fewest and the most generators it has besides Generator 2.
-  // extraSpools: the fewest and the most survey spools it has besides the three every station has.
+  // complications: the fewest and the most things a station of this size has on top of its work order, that
+  //           hold up the mains or the lift itself (QUEST_COMPLICATIONS in 09-quests.js: no fuel in
+  //           Generator 2's tank, the winch breaker tripped, the wait for the car to come down). Each of the
+  //           three is as likely as the others, so a size's odds of any one is its average number over three.
+  // extraGenerators: the fewest and the most generators it has besides Generator 2, on a Restart order (it always has one).
+  // extraSpools: the fewest and the most survey spools it has besides the three every station has, on a Survey order.
   // keycards: 1 to 3. Each card opens one more ring of doors, and the next card is somewhere inside that ring;
   //           Shaft 9 is behind the last. The third number of "fillers" is shared out between the rings.
-  // salvageBays: the fewest and the most bays a station with the salvage quest has (the quest is in about half of them).
-  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, extraJobs: [0, 1], errands: [0, 0], extraGenerators: [0, 1], extraSpools: [0, 0], salvageBays: [1, 2], spineLength: [10, 14] },
-  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, extraJobs: [1, 1], errands: [0, 1], extraGenerators: [0, 2], extraSpools: [0, 0], salvageBays: [2, 2], spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, extraJobs: [1, 2], errands: [0, 1], extraGenerators: [1, 2], extraSpools: [0, 1], salvageBays: [2, 3], spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [15, 8, 6], loops: 8, vents: 14, keycards: 3, extraJobs: [2, 3], errands: [1, 2], extraGenerators: [1, 3], extraSpools: [0, 2], salvageBays: [3, 4], spineLength: [15, 28] },
+  // salvageBays: the fewest and the most bays it has on a Salvage order.
+  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, complications: [0, 1], extraGenerators: [0, 1], extraSpools: [0, 0], salvageBays: [1, 2], spineLength: [10, 14] },
+  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, complications: [0, 2], extraGenerators: [0, 2], extraSpools: [0, 0], salvageBays: [2, 2], spineLength: [13, 18] },
+  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, complications: [1, 2], extraGenerators: [1, 2], extraSpools: [0, 1], salvageBays: [2, 3], spineLength: [16, 22] },
+  massive: { label: 'Massive', fillers: [15, 8, 6], loops: 8, vents: 14, keycards: 3, complications: [1, 3], extraGenerators: [1, 3], extraSpools: [0, 2], salvageBays: [3, 4], spineLength: [15, 28] },
 };
 
 // TWEAK: how spread out a station is.
@@ -1401,11 +1403,12 @@ function pushPhantom(x, z, yaw, triggerZone, onlyBeforePower) {
 //   THE MAP is everything a seed gives: rooms, corridors, doors, vents, furniture, signs, the Hollow's hatches,
 //   the floor that is loud to walk on, and everything that lies loose. Nothing in it knows what a quest is.
 //   THE QUESTS are put into the finished map afterwards (09-quests.js), from numbers of their own (`questSeed`,
-//   which is the station's seed unless something else is asked for). They take places the map has free, and dig
+//   which is the station's seed unless something else is asked for). `workOrders` is the keys of the work
+//   orders the station may be given (all of them, if it is left out). They take places the map has free, and dig
 //   their salvage bays into rock behind doorways it left unused. They move nothing and remove nothing.
 // So the same seed gives the same map whatever quests it has, and a quest that is added or changed later
 // alters no map. recordMapAsBuilt and auditMapApartFromQuests below are how that is checked.
-function buildStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed) {
+function buildStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed, workOrders) {
   generatedStationPlan = null;
   const wasBuiltAsAsked = buildStationRooms(kind, seed, sizeKey, layoutKey, levelsKey);
   releaseDuctRouteScratch(); // the megabytes the ducts were routed with are not needed again until the next station
@@ -1420,7 +1423,7 @@ function buildStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed) {
 
   // The quests. Kessel-9 asks for nothing but power, its three spools and the lift.
   level.questSeed = generatedStationPlan ? (questSeed === undefined || questSeed === null ? level.seed : questSeed) : 0;
-  if (generatedStationPlan) placeQuests(generatedStationPlan, level.questSeed, GENERATED_SIZE_PRESETS[level.sizeKey]);
+  if (generatedStationPlan) placeQuests(generatedStationPlan, level.questSeed, GENERATED_SIZE_PRESETS[level.sizeKey], workOrders);
   else addAlwaysQuests();
 
   spawnStationLooseObjects();

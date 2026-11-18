@@ -167,6 +167,9 @@ const TUNING = {
   looseRestSpeed: 0.05,             // slower than this (m/s) ...
   looseRestSpin: 0.35,              // ... and turning slower than this (radians per second) ...
   looseRestSeconds: 0.4,            // ... for this long, while touching something: it is at rest, and left alone until something touches it
+  looseSettleSeconds: 6,            // something that touches the ground and has gone nowhere for this long is at rest, however it rocks or creeps ...
+  looseSettleMetres: 0.9,           // ... "nowhere" being within this far of where it was when the count began ...
+  looseSettleSpeed: 0.6,            // ... and never faster than this (m/s) in that time
   looseImprintSeconds: 0.7,         // how long points scanned onto a moving or carried object stay. (On one at rest they stay for good.)
   looseMarkerSeconds: 4,            // what a thing is worth floats at it for this long after a pulse last landed on it, once the scanner has read it. Scan it again and it shows again.
   looseMarkerFadeSeconds: 1,        // ... fading out over the last of those
@@ -482,7 +485,7 @@ const RADIO_MESSAGES = {
   // Said the first time any generator will not start for want of fuel, Generator 2 or one of the small ones.
   generatorNoFuel: 'Day tank reads empty from here. There will be a fuel can somewhere on your level. Bring it to the generator.',
   generatorsWanted: 'One set will not lift the car. There are more generators on your level, and the winch wants every one of them running before you call the lift. We have marked them for you. They are not quiet.',
-  salvageWanted: 'Salvage has put its name on the order too. There are bays down there with their doors shut, the first not far from the lift. Open one, fill it with what is worth carrying, and it seals itself. Then find the next. The terminal keeps count.',
+  salvageWanted: 'This order is Salvage\'s. There are bays down there with their doors shut, the first not far from the lift. Open one, fill it with what is worth carrying, and it seals itself. Then find the next. The terminal keeps count.',
   badgesWanted: 'Personnel wants the badges of Crew 2 back. They will be with whatever the crew left lying about. Bring every one you find. The terminal will count them.',
   valvesWanted: 'One more for the list. The isolation valves on your level have to be shut before we bring you up. I have marked them. Those actuators have not turned in years. They will complain.',
   coresWanted: 'One more thing while you are down there. The lab wants the core samples Crew 2 pulled. Grey tubes. Bring them all.',
@@ -491,7 +494,11 @@ const RADIO_MESSAGES = {
   doorBroken: 'I just lost a door on the board. Those are rated for the whole shaft coming down. Do not count on the ones you have left.',
   allSpools: 'That is all of them. Go back to the lift lobby and upload them.',
   uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',
-  liftArrived: 'The car is at your level. Get in quick.'
+  liftArrived: 'The car is at your level. Get in quick.',
+  // Said instead of uploadStarted and breakerClosed in a station where the car never went back up (no wait for
+  // the lift: `liftWait` of QUEST_COMPLICATIONS in 09-quests.js). The key is the other line's, with CarWaiting.
+  uploadStartedCarWaiting: 'Upload received. The car never left your level. The doors are opening. Get in.',
+  breakerClosedCarWaiting: 'Breaker is in. The car never left your level. The doors are opening. Get back to the lobby.'
 };
 
 // TWEAK: when Dispatch speaks. Each entry: something that happens (`when`), the line of RADIO_MESSAGES he says,
@@ -503,7 +510,8 @@ const RADIO_MESSAGES = {
 //   stillsWake      the Stills of a room have woken: a line that goes with that room, whatever you came for
 //   enter:NAME      the first time you set foot in a room, by the name on its door: 'enter:PUMP HALL B'
 // A line about a quest is not here but with its quest (`tell` in 09-quests.js). Three lines are said from the
-// code that does the thing itself: uploadStarted, breakerClosed and liftArrived (the lift), and doorBroken.
+// code that does the thing itself: uploadStarted, breakerClosed and liftArrived (the lift, and their CarWaiting
+// forms where there is no wait for it), and doorBroken.
 const DISPATCH_CUES = [
   { when: 'leftLift', line: 'leftLift', seconds: 3.0 },
   { when: 'firstSpool', line: 'firstSpool', seconds: 1.5, ifSpools: 3 },
@@ -691,6 +699,7 @@ const OBJECTIVE_TEXT = {
   collectSpools: 'Recover the three survey spools left by Crew 2.',
   collectSpoolsOfMany: 'Recover the {total} survey spools left by Crew 2.', // in a station that has more than three
   returnToLift: 'Return to the lift lobby and upload the spools at the terminal.',
+  returnToLiftWithManifest: 'That is the work order done. Return to the lift lobby and call the lift at the terminal.', // on an order that is not about spools
   findFuel: 'Generator 2 has no fuel. Find the fuel can on this level.',
   bringFuel: 'Carry the fuel can to Generator 2, off Pump Hall B.',
   collectCores: 'Dispatch also wants the core samples.',   // added after the spool objective while samples are missing

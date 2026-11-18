@@ -9,17 +9,17 @@ const config = new Function(configSource + '\nreturn { RADIO_MESSAGES: RADIO_MES
 // How each line should be said. Edit these freely; they only affect the sheet.
 const dispatchDirections = {
   leftLift: 'Routine. Reading a checklist for the hundredth time.',
-  firstSpool: 'Flat, mildly pleased. Already looking at the next item. Only in stations with exactly three spools.',
-  firstSpoolOfMany: 'The same, a little wearier: the list is longer than he would like. Only in stations with more than three spools.',
+  firstSpool: 'Flat, mildly pleased. Already looking at the next item. Only on a Survey order with exactly three spools.',
+  firstSpoolOfMany: 'The same, a little wearier: the list is longer than he would like. Only on a Survey order with more than three spools.',
   generatorStarted: 'Matter-of-fact, eyes on a gauge.',
   generatorFollowUp: 'Mild curiosity on "Odd." Then talks himself out of it. Not worried.',
   keycardTaken: 'Helpful, brief.',
   generatorNoFuel: 'Reading it off a screen. Mildly annoyed at the station, not at you. Said the first time any generator will not start for want of fuel.',
-  generatorsWanted: 'Starts as a routine correction. Slows down on the last sentence: he knows what noise means down there. Only in stations with more generators, a little after Generator 2 starts.',
-  salvageWanted: 'Dry, a little weary: one more department with its hand out. "Then find the next" is flat, as if it were nothing. "The terminal keeps count" is a shrug. Only in stations with the salvage quest, a quarter of a minute after you step out of the lift.',
-  badgesWanted: 'Passing on a request he did not want to pass on. Flat. A short pause before "Bring every one you find." Only in stations with the badges quest.',
-  valvesWanted: 'Checklist voice. The last two sentences are almost an apology. Only in stations with the valves quest, a little after you take a keycard.',
-  coresWanted: 'An afterthought, as if someone has just handed him a note. Only in stations with the core sample job.',
+  generatorsWanted: 'Starts as a routine correction. Slows down on the last sentence: he knows what noise means down there. Only on a Restart order, a little after Generator 2 starts.',
+  salvageWanted: 'Dry, a little weary: reading out whose order this is. "Then find the next" is flat, as if it were nothing. "The terminal keeps count" is a shrug. Only on a Salvage order, a quarter of a minute after you step out of the lift.',
+  badgesWanted: 'Passing on a request he did not want to pass on. Flat. A short pause before "Bring every one you find." Only on a Recovery order, a quarter of a minute after you step out of the lift.',
+  valvesWanted: 'Checklist voice. The last two sentences are almost an apology. Only on a Restart order, half a minute after Generator 2 starts, after the line about the generators.',
+  coresWanted: 'An afterthought, as if someone has just handed him a note. Only on a Recovery order, half a minute after you step out of the lift, after the line about the badges.',
   winchBreakerOpen: 'The first two sentences flat. Then a beat. Then quicker: he knows what this means for you. Only with the breaker job.',
   breakerClosed: 'Fast and low. The last sentence is an order. Only with the breaker job.',
   doorBroken: 'Shaken, and trying not to sound it. The second sentence is disbelief. The last is advice, quietly. Heard the first time it breaks a door down.',
@@ -28,7 +28,9 @@ const dispatchDirections = {
   stillsWake: 'A little too quick, as if he has seen something on his board. Said when the Stills of the calibration store wake, in stations with more than three spools.',
   allSpools: 'Relief he is trying not to show. (The recording made before this text changed says "all three".)',
   uploadStarted: 'Businesslike. The last sentence is a dry understatement.',
-  liftArrived: 'Urgent now, but still quiet. He does not raise his voice.'
+  liftArrived: 'Urgent now, but still quiet. He does not raise his voice.',
+  uploadStartedCarWaiting: 'Businesslike, and a little surprised at his own board: this is good news and he does not trust it. Only in stations with no wait for the lift.',
+  breakerClosedCarWaiting: 'Fast and low. The last sentence is an order. Only with the breaker job, in stations with no wait for the lift.'
 };
 const spoolDirections = {
   spool1: 'Day 1. Calm and precise, a surveyor dictating notes. Slightly amused at the end, not yet afraid.',

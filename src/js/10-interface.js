@@ -42,7 +42,7 @@ function initializeInterface() {
     'difficulty-description', 'button-begin', 'intro-lines', 'button-skip-intro', 'pause-objective', 'button-resume',
     'button-pause-restart', 'reader-source', 'reader-heading', 'reader-body', 'button-close-reader', 'death-title',
     'death-lines', 'button-retry', 'button-death-restart', 'ending-stats', 'ending-manifest', 'button-ending-restart',
-    'button-ending-uncharted', 'station-options', 'station-description', 'pause-station', 'pause-build', 'link-report-problem',
+    'button-ending-uncharted', 'station-options', 'work-order-options', 'station-description', 'pause-station', 'pause-build', 'link-report-problem',
     'title-build', 'link-report-problem-title'
   ];
   for (const elementId of elementIds) interfaceState.elements[elementId] = getElement(elementId);
@@ -130,17 +130,49 @@ function initializeInterface() {
   buildCustomDifficultyPanel(refreshDifficulty);
   refreshDifficulty();
 
+  // Which work orders an uncharted annex may give you: a tick for each (WORK_ORDERS in 09-quests.js). A descent
+  // has one of those that are ticked; the seed says which. At least one stays ticked.
+  const workOrderInputs = [];
+  for (const order of WORK_ORDERS) {
+    const label = document.createElement('label');
+    label.className = 'pill';
+    label.title = order.blurb;
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = 'work-order-' + order.key;
+    input.value = order.key;
+    const text = document.createElement('span');
+    text.textContent = order.label;
+    label.appendChild(input);
+    label.appendChild(text);
+    elements['work-order-options'].appendChild(label);
+    workOrderInputs.push(input);
+    input.addEventListener('change', function () {
+      settings.workOrders[order.key] = input.checked;
+      // The last one cannot be switched off: a descent has to be for something.
+      if (!workOrderInputs.some(function (other) { return other.checked; })) { settings.workOrders[order.key] = true; }
+      saveSettings();
+      refreshStationControls();
+    });
+  }
+
   // Which station to go down into.
   const stationInputs = document.querySelectorAll('input[name="station"]');
   const refreshStationControls = function () {
     for (const radio of stationInputs) radio.checked = radio.value === settings.station;
     const isGenerated = settings.station === 'generated';
     elements['station-options'].hidden = !isGenerated;
+    elements['work-order-options'].hidden = !isGenerated;
+    for (const input of workOrderInputs) input.checked = settings.workOrders[input.value] !== false;
     let description = isGenerated
       ? 'No drawings exist. Different on every descent; the same seed gives the same station. (The game is still being built: after an update, a seed may give a different station than it did before.)'
       : 'The annex as it was built. The same every time.';
     // After a run in a generated station, say which one it was, so it can be visited again.
-    if (isGenerated && level.kind === 'generated') description += ' Last descent: seed ' + level.seed + '.';
+    if (isGenerated) {
+      const allowed = getAllowedWorkOrders();
+      description += ' A descent has one work order' + (allowed.length === 1 ? ': ' + findWorkOrder(allowed[0]).label + '. ' + findWorkOrder(allowed[0]).blurb : ', one of those ticked.');
+    }
+    if (isGenerated && level.kind === 'generated') description += ' Last descent: seed ' + level.seed + ' (' + (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label + ').';
     elements['station-description'].textContent = description;
   };
   for (const radio of stationInputs) {
@@ -794,9 +826,12 @@ function updateHud(realDt) {
   if (interfaceState.textRefreshTimer <= 0) {
     interfaceState.textRefreshTimer = 0.1;
     elements['hud-objective'].textContent = game.objectiveText;
-    const spools = game.flags.spoolsCollected;
-    elements['chip-spools'].textContent = 'SPOOLS ' + spools + '/' + level.spoolCount;
-    elements['chip-spools'].classList.toggle('is-on', spools >= level.spoolCount);
+    // The spools have a place of their own on screen where they are what you came for. On any other work order
+    // the place is empty until you take one anyway, and then says how many you hold and no more.
+    const spools = game.flags.spoolsCollected, areWanted = areSpoolsOnTheOrder();
+    elements['chip-spools'].hidden = !areWanted && spools === 0;
+    elements['chip-spools'].textContent = areWanted ? 'SPOOLS ' + spools + '/' + level.spoolCount : 'SPOOLS ' + spools;
+    elements['chip-spools'].classList.toggle('is-on', areWanted && spools >= level.spoolCount);
     elements['chip-power'].textContent = game.flags.powerOn ? 'MAINS ON' : 'MAINS OFF';
     elements['chip-power'].classList.toggle('is-on', game.flags.powerOn);
     elements['chip-keycard'].textContent = getKeycardStatusText();
@@ -1012,7 +1047,11 @@ function buildReportProblemAddress() {
     build: describeHowThePageIsServed()
   };
   if (!isOnTitleScreen) fields.where = ZONE_NAMES[getZoneAtPosition(player.x, player.z)] + ' (x ' + player.x.toFixed(1) + ', z ' + player.z.toFixed(1) + ')';
-  if (isGenerated) fields.seed = [level.seed, level.sizeKey, level.layoutKey, level.levelsKey === 'two' ? 'two levels' : 'one level'].join(', ');
+  // (The seed alone does not say what a descent asked for: that also hangs on which work orders were ticked.)
+  if (isGenerated) {
+    fields.seed = [level.seed, level.sizeKey, level.layoutKey, level.levelsKey === 'two' ? 'two levels' : 'one level',
+      'work order ' + (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label, level.liftWaits ? 'with the wait for the lift' : 'no wait for the lift'].join(', ');
+  }
   return REPORT_PROBLEM_ADDRESS + '?' + new URLSearchParams(fields).toString();
 }
 
@@ -1035,12 +1074,13 @@ function showEndingScreen() {
   addRow('Threat level', game.difficulty.label);
   if (game.difficulty.isCustom) addRow('Custom settings', game.difficulty.description);
   addRow('Station', level.description);
+  addRow('Work order', (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label);
   addRow('Build', describeBuild());
   if (debugState.hasBeenUsedThisRun) addRow('Debug mode', 'used, so this run sets no best time');
   if (game.statistics.bestTime !== null) addRow('Best time', formatClockTime(game.statistics.bestTime));
   const manifest = elements['ending-manifest'];
   manifest.textContent = '';
-  manifest.appendChild(document.createTextNode('Upload manifest: 3 spools. Automatic classification of objects in the car: 1 operator. '));
+  manifest.appendChild(document.createTextNode('Upload manifest: ' + describeUploadManifest() + '. Automatic classification of objects in the car: 1 operator. '));
   if (game.difficulty.hollowEnabled) {
     const strong = document.createElement('strong');
     strong.textContent = '1 unclassified.';

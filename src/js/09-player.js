@@ -71,8 +71,18 @@ const settings = {
   seedText: '',             // what is typed in the seed box; empty means a new random station each descent
   hud: 'quiet',             // 'quiet' shows instruments only while they matter; 'full' shows everything all the time
   captions: 'tells',        // the lines in square brackets: 'off', 'tells' (what the Hollow has just done) or 'all' (every sound, with where it comes from)
-  hasPickedSomethingUp: false // the line that says how to pick a thing up is a tutorial: shown until you have done it once, and never again
+  hasPickedSomethingUp: false, // the line that says how to pick a thing up is a tutorial: shown until you have done it once, and never again
+  // Which work orders a generated station may be given (09-quests.js): one that is switched off never comes up.
+  // A key that is missing counts as on, so that a work order added later is there without being asked for.
+  workOrders: {}
 };
+
+// The keys of the work orders that are switched on. If every one is switched off, all of them count as on:
+// a descent has to be for something.
+function getAllowedWorkOrders() {
+  const allowed = WORK_ORDERS.filter(function (order) { return settings.workOrders[order.key] !== false; }).map(function (order) { return order.key; });
+  return allowed.length > 0 ? allowed : WORK_ORDERS.map(function (order) { return order.key; });
+}
 
 // The game was called No Return before it was Last Return. Whatever a browser kept under the old name (the
 // settings, the best times, the workshop's unsaved work) is moved to the new keys once, so nobody loses it.
@@ -111,6 +121,7 @@ function loadSettings() {
       if (stored.hud === 'quiet' || stored.hud === 'full') settings.hud = stored.hud;
       if (stored.captions === 'off' || stored.captions === 'tells' || stored.captions === 'all') settings.captions = stored.captions;
       if (stored.hasPickedSomethingUp === true) settings.hasPickedSomethingUp = true;
+      if (stored.workOrders && typeof stored.workOrders === 'object') { for (const key in stored.workOrders) if (stored.workOrders[key] === false) settings.workOrders[key] = false; }
     }
   } catch (error) { /* storage is optional */ }
 }
