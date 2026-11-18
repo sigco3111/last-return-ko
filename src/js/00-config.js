@@ -210,7 +210,10 @@ const TUNING = {
   hollowFlingsSpeed: 12,            // how fast it throws, over the ground (m/s)
   hollowFlingsScatterMetres: 1.5,   // it lands within this far of you: at you or near you, on purpose
   // What a station has lying about (see planStationLooseObjects in 08-loose-objects.js).
-  ventCoverInPlaceChance: 0.5,      // this share of the vents' mouths still have their cover standing in them; the others' lie on the floor in front
+  ventCoverInPlaceChance: 0.5,      // this share of the vents' mouths still have their cover standing in front of them; the others' lie on the floor nearby
+  hollowThrowsCoverMetres: 1.2,     // the Hollow, going into a vent or coming out of one, has the cover that stands there in its hands from this near ...
+  hollowThrowsCoverSpeed: 8,        // ... and throws it out across the room at this speed over the ground (m/s) ...
+  hollowThrowsCoverLift: 2.2,       // ... and this much upwards
   looseLitterPerRoom: 0.7,          // boxes, plates and stray cans: this many for every room and corridor
   looseValuablesPerRoom: 0.4,       // things worth carrying out: this many for every room and corridor
   haulShareOfValue: 0.4,            // the salvage quest asks for this share of what everything within walking reach of the lift is worth

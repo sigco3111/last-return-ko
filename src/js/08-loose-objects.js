@@ -111,12 +111,14 @@ const LOOSE_OBJECT_KINDS = {
     stepRadius: 0.03,
     // Lying flat it is a plate on the floor: you and the Hollow walk over it. Standing or leaning it is in the way.
     stepOverHeight: 0.15,
-    // The sheet, and a lug at each corner, front and back: it stands on the bottom four, and lies flat on four of a side.
-    parts: [{ shape: 'box', center: [0, 0, 0], half: [0.47, 0.5, 0.02] },
-      { shape: 'ball', center: [0.43, -0.48, 0.045], radius: 0.02 }, { shape: 'ball', center: [-0.43, -0.48, 0.045], radius: 0.02 },
-      { shape: 'ball', center: [0.43, -0.48, -0.045], radius: 0.02 }, { shape: 'ball', center: [-0.43, -0.48, -0.045], radius: 0.02 },
-      { shape: 'ball', center: [0.43, 0.48, 0.045], radius: 0.02 }, { shape: 'ball', center: [-0.43, 0.48, 0.045], radius: 0.02 },
-      { shape: 'ball', center: [0.43, 0.48, -0.045], radius: 0.02 }, { shape: 'ball', center: [-0.43, 0.48, -0.045], radius: 0.02 }]
+    // Bigger than the mouth it covers (which is a metre wide and 1.15 m high): it stands in front of the mouth,
+    // against the frame, and does not go through it. The sheet, and a lug at each corner, front and back: it
+    // stands on the bottom four, and lies flat on four of a side.
+    parts: [{ shape: 'box', center: [0, 0, 0], half: [0.56, 0.6, 0.02] },
+      { shape: 'ball', center: [0.52, -0.58, 0.045], radius: 0.02 }, { shape: 'ball', center: [-0.52, -0.58, 0.045], radius: 0.02 },
+      { shape: 'ball', center: [0.52, -0.58, -0.045], radius: 0.02 }, { shape: 'ball', center: [-0.52, -0.58, -0.045], radius: 0.02 },
+      { shape: 'ball', center: [0.52, 0.58, 0.045], radius: 0.02 }, { shape: 'ball', center: [-0.52, 0.58, 0.045], radius: 0.02 },
+      { shape: 'ball', center: [0.52, 0.58, -0.045], radius: 0.02 }, { shape: 'ball', center: [-0.52, 0.58, -0.045], radius: 0.02 }]
   },
 
   pumpMotor: {
@@ -156,9 +158,10 @@ const looseState = {
   shoveBackDepth: 0, shoveBackX: 0, shoveBackZ: 0,
   // How fast you walked this frame before anything on the floor held you back: that is the speed you kick with.
   playerStrideX: 0, playerStrideZ: 0,
-  statistics: { knocksHeard: 0, knocksQuiet: 0, pulledFromHands: 0, lostDownThePit: 0, putBack: 0, grenadesSpent: 0, flungBack: 0, worthLost: 0, shattered: 0 }, // putBack: an object got into the rock and was set back where it last was not. Should stay 0.
+  statistics: { knocksHeard: 0, knocksQuiet: 0, pulledFromHands: 0, lostDownThePit: 0, putBack: 0, grenadesSpent: 0, flungBack: 0, worthLost: 0, shattered: 0, coversThrown: 0 }, // putBack: an object got into the rock and was set back where it last was not. Should stay 0.
   lastKnock: { x: 0, z: 0, speed: 0, carries: 0, isOwn: false, time: -10 }, // the last knock the Hollow could hear: where, how hard, how far it carried
-  lastFling: { x: 0, z: 0, targetX: 0, targetZ: 0, time: -100, id: 0 } // the last thing the Hollow threw back, for the tests and the debug readout
+  lastFling: { x: 0, z: 0, targetX: 0, targetZ: 0, time: -100, id: 0 }, // the last thing the Hollow threw back, for the tests and the debug readout
+  lastCoverThrown: { x: 0, z: 0, towardsX: 0, towardsZ: 0, time: -100 } // the last vent cover the Hollow threw out of its way, likewise
 };
 
 // Scratch space, so that a step allocates nothing.
@@ -406,7 +409,7 @@ function resetLooseObjectsForNewRun() {
   looseState.hasShownKnockHint = false;
   looseState.hasShownAppraisalHint = false;
   const statistics = looseState.statistics;
-  statistics.knocksHeard = 0; statistics.knocksQuiet = 0; statistics.pulledFromHands = 0; statistics.lostDownThePit = 0; statistics.putBack = 0; statistics.grenadesSpent = 0; statistics.flungBack = 0; statistics.worthLost = 0; statistics.shattered = 0;
+  statistics.knocksHeard = 0; statistics.knocksQuiet = 0; statistics.pulledFromHands = 0; statistics.lostDownThePit = 0; statistics.putBack = 0; statistics.grenadesSpent = 0; statistics.flungBack = 0; statistics.worthLost = 0; statistics.shattered = 0; statistics.coversThrown = 0;
   looseState.lastDamageSaidTime = -10;
   removeBrokenGlassFromPlay(); // what was broken in the last descent is swept up
 }
@@ -952,7 +955,10 @@ function pushLooseObject(object, armX, armY, armZ, pushX, pushY, pushZ) {
 // once per piece of a step for all of them, and then settled together. Taking the contacts one ball at a time
 // makes a box that lands flat kick up on the corner that happened to be looked at first; taking the objects one
 // at a time makes two things that lean on each other shove one another about for ever.
-const LOOSE_MAXIMUM_TOUCHES = 640;
+// How many touches one step can hold, over everything that is moving. An object the list has no room left for
+// gets none, and falls through what it rests on: so there is room for a whole massive station awake at once
+// (about 150 things, a vent cover lying flat touching with sixty balls), several times over.
+const LOOSE_MAXIMUM_TOUCHES = 6000;
 const LOOSE_SETTLE_PASSES = 8; // TWEAK: how many times the touches are gone over. More is steadier and slower.
 const looseTouches = [];
 for (let touchIndex = 0; touchIndex < LOOSE_MAXIMUM_TOUCHES; touchIndex++) {
@@ -1020,6 +1026,14 @@ function gatherLooseTouches(object) {
         cameInZ -= otherVelocityZ + otherSpinX * touch.otherArmY - otherSpinY * touch.otherArmX;
       }
       const closingSpeed = -(cameInX * normalX + cameInY * normalY + cameInZ * normalZ);
+      // What the Hollow has just kicked or thrown knocks other things about on its way: that is the Hollow's
+      // doing as well, and no more startles it than the first thing did. (The second thing takes the first one's
+      // time, so that a row of cans does not carry this on for ever.)
+      if (other && closingSpeed > 0.3) {
+        const isRecent = game.time - object.kickedByHollowTime < 3, isOtherRecent = game.time - other.kickedByHollowTime < 3;
+        if (isRecent && !isOtherRecent) other.kickedByHollowTime = object.kickedByHollowTime;
+        else if (isOtherRecent && !isRecent) object.kickedByHollowTime = other.kickedByHollowTime;
+      }
       // Another object that lies at rest is as good as part of the floor, until it is hit hard enough to shift it.
       if (other && other.isAsleep) {
         if (closingSpeed > TUNING.looseWakeFromSpeed) wakeLooseObject(other);
@@ -1598,6 +1612,36 @@ function isLooseFloorClearAt(x, z, floorY, reach) {
   return true;
 }
 
+// Where a vent's cover stands: in front of the mouth, out in the room, against the frame round the opening.
+// (The frame stands 6 cm proud of the wall; the cover's lugs reach 6.5 cm behind its middle.)
+const VENT_COVER_SEAT_METRES = 0.13;
+function getVentCoverSeat(mouth) {
+  return { x: mouth.faceX - mouth.outwardX * VENT_COVER_SEAT_METRES, z: mouth.faceZ - mouth.outwardZ * VENT_COVER_SEAT_METRES };
+}
+
+// Is there room for a cover to stand in front of this mouth? It is wider than the mouth, so it needs the wall to
+// run on a little to either side, floor at the mouth's height under all of it, and nothing standing where it would.
+function isVentCoverSeatClear(mouth) {
+  const seat = getVentCoverSeat(mouth), halfWidth = 0.6, halfDepth = 0.1, height = 1.25;
+  // Along the wall is across the way out of the mouth.
+  const halfX = mouth.outwardX !== 0 ? halfDepth : halfWidth, halfZ = mouth.outwardX !== 0 ? halfWidth : halfDepth;
+  for (let tileZ = Math.floor(seat.z - halfZ); tileZ <= Math.floor(seat.z + halfZ); tileZ++) {
+    for (let tileX = Math.floor(seat.x - halfX); tileX <= Math.floor(seat.x + halfX); tileX++) {
+      if (!isInsideGrid(tileX, tileZ)) return false;
+      const index = tileIndexAt(tileX, tileZ);
+      if (tileIsOpen[index] !== 1 || Math.abs(tileFloorHeight[index] - mouth.floorY) > 0.01 || tileCeilingHeight[index] - mouth.floorY < height) return false;
+      if (tileFlags[index] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT | TILE_FLAG_WATER)) return false;
+      const list = tilePropLists[index];
+      if (!list) continue;
+      for (const prop of list) {
+        if (prop.isRemoved || prop.isVentFrame || prop.maximumY < mouth.floorY + 0.025 || prop.minimumY > mouth.floorY + height) continue;
+        if (Math.abs(prop.centerX - seat.x) < prop.boundsHalfX + halfX && Math.abs(prop.centerZ - seat.z) < prop.boundsHalfZ + halfZ) return false;
+      }
+    }
+  }
+  return true;
+}
+
 // Would a thing of this kind, put down at (x, z) turned like this, have all of itself over bare floor? A length
 // of pipe is longer than a tile is wide: turned the wrong way in a narrow place, its end would be inside the wall.
 function isLooseRestClearAt(kindKey, x, z, floorY, orientation) {
@@ -1648,12 +1692,18 @@ function findStationSurfaces() {
 
 // Is there room for something `halfWidth` wide and `height` high standing on `surface` at (x, z)?
 function isStationSurfaceClearAt(surface, x, z, halfWidth, height) {
-  const index = tileIndexAt(Math.floor(x), Math.floor(z)), list = tilePropLists[index];
-  if (!list) return true;
-  for (const other of list) {
-    if (other === surface || other.isRemoved) continue;
-    if (other.maximumY <= surface.maximumY + 0.005 || other.minimumY >= surface.maximumY + height) continue;
-    if (Math.abs(other.centerX - x) < other.boundsHalfX + halfWidth && Math.abs(other.centerZ - z) < other.boundsHalfZ + halfWidth) return false;
+  // Whatever stands on it within reach, in whichever tile that is noted: a flask just across a tile line counts.
+  for (let tileZ = Math.floor(z - halfWidth); tileZ <= Math.floor(z + halfWidth); tileZ++) {
+    for (let tileX = Math.floor(x - halfWidth); tileX <= Math.floor(x + halfWidth); tileX++) {
+      if (!isInsideGrid(tileX, tileZ)) continue;
+      const list = tilePropLists[tileIndexAt(tileX, tileZ)];
+      if (!list) continue;
+      for (const other of list) {
+        if (other === surface || other.isRemoved) continue;
+        if (other.maximumY <= surface.maximumY + 0.005 || other.minimumY >= surface.maximumY + height) continue;
+        if (Math.abs(other.centerX - x) < other.boundsHalfX + halfWidth && Math.abs(other.centerZ - z) < other.boundsHalfZ + halfWidth) return false;
+      }
+    }
   }
   return true;
 }
@@ -1703,32 +1753,37 @@ function planStationLooseObjects() {
       addStationLooseObject('can', x, floor, z, random() * TWO_PI, !can.isStanding, can.liesAlongX, 'floor');
     }
   }
-  // The covers of the vents: standing in the mouth, or lying where they fell. They have numbers of their own,
-  // so that nothing else here is moved by how many vents a station has.
+  // The covers of the vents: standing in front of the mouth, or lying where they fell. They have numbers of
+  // their own, so that nothing else here is moved by how many vents a station has.
   const coverRandom = createSeededRandomGenerator(Math.imul(level.seed + 1, 0x9E3779B1) ^ 0x7e47c0);
   const fallenCovers = []; // [x, z] of each cover that lies on the floor: nothing else is put down on top of one
   for (const mouth of level.ventMouths) {
-    let isInPlace = coverRandom() < TUNING.ventCoverInPlaceChance;
-    // Where it lies: where the old grille lay if that floor is bare, or else a little further into the room.
-    // If there is no bare floor for it at all (cans, a bench, a wall too near), it never came off.
-    let fallenX = mouth.fallenX, fallenZ = mouth.fallenZ;
+    // It stands if the draw says so and there is room for it to (it is wider than the mouth: in a corner, or
+    // with a shelf against the wall beside the vent, there is not).
+    const canStand = isVentCoverSeatClear(mouth);
+    let isInPlace = coverRandom() < TUNING.ventCoverInPlaceChance && canStand;
+    // Where it lies otherwise: where the old grille lay if that floor is bare, or else a little further into the room.
+    let fallenX = mouth.fallenX, fallenZ = mouth.fallenZ, hasFallenSpot = false;
     if (!isInPlace) {
       const tries = [[mouth.fallenX, mouth.fallenZ]];
       for (const back of [1.45, 1.75, 2.1]) tries.push([mouth.tileX + 0.5 - mouth.outwardX * back, mouth.tileZ + 0.5 - mouth.outwardZ * back]);
-      isInPlace = true;
       for (const spot of tries) {
-        let isBare = isLooseFloorClearAt(spot[0], spot[1], mouth.floorY, 0.6);
-        for (const heap of noisyFloorCanHeaps) if (distanceBetweenPoints(heap.x, heap.z, spot[0], spot[1]) < 1.5) isBare = false;
+        let isBare = isLooseFloorClearAt(spot[0], spot[1], mouth.floorY, 0.72);
+        for (const heap of noisyFloorCanHeaps) if (distanceBetweenPoints(heap.x, heap.z, spot[0], spot[1]) < 1.6) isBare = false;
         if (!isBare) continue;
-        fallenX = spot[0]; fallenZ = spot[1]; isInPlace = false;
+        fallenX = spot[0]; fallenZ = spot[1]; hasFallenSpot = true;
         break;
       }
+      // No bare floor for it to lie on (cans, a bench, a wall too near): it never came off, if it can stand.
+      // If it can do neither, this mouth has no cover: somebody carried it off long ago.
+      if (!hasFallenSpot) { if (canStand) isInPlace = true; else continue; }
     }
-    if (!isInPlace) fallenCovers.push([fallenX, fallenZ]);
     if (isInPlace) {
       // Its face along the wall: turned a quarter if the vent runs east or west.
-      addStationLooseObject('ventCover', mouth.faceX + mouth.outwardX * 0.07, mouth.floorY, mouth.faceZ + mouth.outwardZ * 0.07, mouth.outwardX !== 0 ? Math.PI / 2 : 0, false, false, 'vent');
+      const seat = getVentCoverSeat(mouth);
+      addStationLooseObject('ventCover', seat.x, mouth.floorY, seat.z, mouth.outwardX !== 0 ? Math.PI / 2 : 0, false, false, 'vent');
     } else {
+      fallenCovers.push([fallenX, fallenZ]);
       addStationLooseObject('ventCover', fallenX, mouth.floorY, fallenZ, mouth.fallenYaw, true, false, 'floor');
     }
   }
@@ -1742,7 +1797,7 @@ function planStationLooseObjects() {
       if (rateNoisyFloorTile(index) === 0 || (tileFlags[index] & TILE_FLAG_DEBRIS)) continue;
       let isTaken = false;
       for (const heap of noisyFloorCanHeaps) if (heap.index === index) isTaken = true;
-      for (const cover of fallenCovers) if (Math.abs(cover[0] - tileX - 0.5) < 1.2 && Math.abs(cover[1] - tileZ - 0.5) < 1.2) isTaken = true;
+      for (const cover of fallenCovers) if (Math.abs(cover[0] - tileX - 0.5) < 1.35 && Math.abs(cover[1] - tileZ - 0.5) < 1.35) isTaken = true;
       if (!isTaken) tiles.push([random(), index, rateNoisyFloorTile(index)]);
     }
   }
@@ -1825,9 +1880,13 @@ function auditStationLooseObjects() {
     const where = entry.kindKey + ' at ' + entry.x.toFixed(1) + ', ' + entry.z.toFixed(1);
     if (!isLooseSpaceOpenAt(Math.floor(entry.x), Math.floor(entry.z), entry.y)) problems.push(where + ' is not in open space');
     const flagsThere = tileFlags[tileIndexAt(Math.floor(entry.x), Math.floor(entry.z))];
-    // (A vent's cover that still stands in its mouth is in a vent, and should be.)
-    if (flagsThere & (TILE_FLAG_DOOR | TILE_FLAG_PIT) || ((flagsThere & TILE_FLAG_VENT) && entry.on !== 'vent')) problems.push(where + ' is in a doorway, a vent or the pit');
-    if (entry.on === 'vent' && !(flagsThere & TILE_FLAG_VENT)) problems.push(where + ' should stand in the mouth of a vent and does not');
+    if (flagsThere & (TILE_FLAG_DOOR | TILE_FLAG_PIT | TILE_FLAG_VENT)) problems.push(where + ' is in a doorway, a vent or the pit');
+    // A vent's cover that still stands does so in front of a mouth, out in the room.
+    if (entry.on === 'vent') {
+      let isAtAMouth = false;
+      for (const mouth of level.ventMouths) { const seat = getVentCoverSeat(mouth); if (distanceBetweenPoints(seat.x, seat.z, entry.x, entry.z) < 0.05) isAtAMouth = true; }
+      if (!isAtAMouth) problems.push(where + ' should stand in front of the mouth of a vent and does not');
+    }
     const zoneName = ZONE_NAMES[tileZone[tileIndexAt(Math.floor(entry.x), Math.floor(entry.z))]] || '';
     if (zoneName === 'LIFT CAR') problems.push(where + ' is in the lift car');
   }
@@ -2147,6 +2206,53 @@ function fillHaulBays() {
 // Something light that the Hollow has just kicked rolls off, and it goes after it: for a few seconds, and not
 // while it is hunting you. Then it loses interest in that thing for a while. (Something you threw at it works
 // the same way, through the noise it made.)
+// The Hollow goes into a vent, or comes out of one, and the cover still stands in front of the mouth. It does
+// not push past it: it has it in its hands and throws it out across the room, and where that comes down it is
+// as loud as a sheet of steel thrown eight metres a second is. That noise does not startle the Hollow.
+function updateHollowAtVentCovers() {
+  if (!hollow.isActive || level.ventMouths.length === 0) return;
+  const figure = hollow.figure, reach = TUNING.hollowThrowsCoverMetres;
+  for (const mouth of level.ventMouths) {
+    // Where it is, measured from the middle of the mouth's face: `along` is positive inside the duct, negative out in the room.
+    const along = (figure.x - mouth.faceX) * mouth.outwardX + (figure.z - mouth.faceZ) * mouth.outwardZ;
+    const across = Math.abs((figure.x - mouth.faceX) * mouth.outwardZ - (figure.z - mouth.faceZ) * mouth.outwardX);
+    if (Math.abs(along) > reach || across > 0.6 || Math.abs(figure.y - mouth.floorY) > 0.6) continue;
+    // Only on its way through: towards the face of the mouth, from either side. Walking past along the wall is not.
+    const speedAlong = looseState.hollowVelocityX * mouth.outwardX + looseState.hollowVelocityZ * mouth.outwardZ;
+    if (along * speedAlong >= 0 || Math.abs(speedAlong) < 0.3) continue;
+    const seat = getVentCoverSeat(mouth);
+    for (const object of looseObjects) {
+      if (object.kindKey !== 'ventCover' || object.isHeld || object.isRemoved || isLooseObjectLyingLow(object)) continue;
+      if (distanceBetweenPoints(object.x, object.z, seat.x, seat.z) > 0.5 || game.time - object.kickedByHollowTime < 2) continue; // not there, or thrown a moment ago
+      throwVentCoverFromHollow(object, mouth, along < 0);
+      break;
+    }
+  }
+}
+
+function throwVentCoverFromHollow(object, mouth, isHollowInTheRoom) {
+  // Coming out of the duct, it throws the cover straight out into the room, or up to about fifty degrees to
+  // either side of that. Going in from the room it stands where that would hit it: it throws the cover away
+  // along the wall, to one side or the other, and a little out into the room.
+  const side = Math.random() < 0.5 ? -1 : 1;
+  const angle = isHollowInTheRoom ? side * (1.1 + Math.random() * 0.3) : (Math.random() * 2 - 1) * 0.9;
+  const cosine = Math.cos(angle), sine = Math.sin(angle);
+  const outX = -mouth.outwardX * cosine + mouth.outwardZ * sine, outZ = -mouth.outwardZ * cosine - mouth.outwardX * sine;
+  changePointsOnLooseObject(object, TUNING.looseImprintSeconds); // what you scanned of it where it stood fades
+  wakeLooseObjectsTouching(object);
+  wakeLooseObject(object);
+  object.velocityX = outX * TUNING.hollowThrowsCoverSpeed; object.velocityZ = outZ * TUNING.hollowThrowsCoverSpeed;
+  object.velocityY = TUNING.hollowThrowsCoverLift;
+  object.spinX = (Math.random() - 0.5) * 8; object.spinY = (Math.random() - 0.5) * 8; object.spinZ = (Math.random() - 0.5) * 8;
+  object.kickedByHollowTime = game.time;
+  object.wasHandled = false; object.isIgnoredByHollow = true;
+  object.chaseUntil = undefined; object.chasedSince = game.time;
+  looseState.statistics.coversThrown++;
+  looseState.lastCoverThrown.x = object.x; looseState.lastCoverThrown.z = object.z; looseState.lastCoverThrown.towardsX = outX; looseState.lastCoverThrown.towardsZ = outZ; looseState.lastCoverThrown.time = game.time;
+  playLooseObjectFlingSound(object.x, object.y, object.z);
+  showCaption('hollowFling', { x: object.x, z: object.z });
+}
+
 function updateHollowAfterKickedObjects() {
   if (!hollow.isActive) return;
   for (let objectIndex = 0; objectIndex < looseObjects.length; objectIndex++) {
@@ -2317,6 +2423,7 @@ function updateLooseObjects(dt, eyeX, eyeY, eyeZ) {
     stepLooseObjects(TUNING.looseStepSeconds);
   }
 
+  updateHollowAtVentCovers();
   updateHollowAfterKickedObjects();
   for (let objectIndex = looseObjects.length - 1; objectIndex >= 0; objectIndex--) {
     const object = looseObjects[objectIndex];

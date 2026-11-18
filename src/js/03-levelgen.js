@@ -965,19 +965,22 @@ function addVentMouth(mouth, random) {
   const outward = WALL_DIRECTIONS[mouth.wall];
   // The face of the mouth's tile that looks into the room, and a strip 6 cm thick standing proud of the wall there.
   const faceX = outward[0] > 0 ? mouth.tileX : mouth.tileX + 1, faceZ = outward[1] > 0 ? mouth.tileZ : mouth.tileZ + 1;
+  // (The three strips are marked: a cover that stands in front of the mouth stands against them.)
+  const strips = [];
   if (outward[0] !== 0) {
     const nearX = outward[0] > 0 ? faceX - 0.06 : faceX, farX = nearX + 0.06;
-    addBoxBetween(nearX, VENT_HEIGHT, mouth.tileZ - 0.08, farX, VENT_HEIGHT + 0.08, mouth.tileZ + 1.08, frame);
-    addBoxBetween(nearX, 0, mouth.tileZ - 0.08, farX, VENT_HEIGHT, mouth.tileZ, frame);
-    addBoxBetween(nearX, 0, mouth.tileZ + 1, farX, VENT_HEIGHT, mouth.tileZ + 1.08, frame);
+    strips.push(addBoxBetween(nearX, VENT_HEIGHT, mouth.tileZ - 0.08, farX, VENT_HEIGHT + 0.08, mouth.tileZ + 1.08, frame));
+    strips.push(addBoxBetween(nearX, 0, mouth.tileZ - 0.08, farX, VENT_HEIGHT, mouth.tileZ, frame));
+    strips.push(addBoxBetween(nearX, 0, mouth.tileZ + 1, farX, VENT_HEIGHT, mouth.tileZ + 1.08, frame));
   } else {
     const nearZ = outward[1] > 0 ? faceZ - 0.06 : faceZ, farZ = nearZ + 0.06;
-    addBoxBetween(mouth.tileX - 0.08, VENT_HEIGHT, nearZ, mouth.tileX + 1.08, VENT_HEIGHT + 0.08, farZ, frame);
-    addBoxBetween(mouth.tileX - 0.08, 0, nearZ, mouth.tileX, VENT_HEIGHT, farZ, frame);
-    addBoxBetween(mouth.tileX + 1, 0, nearZ, mouth.tileX + 1.08, VENT_HEIGHT, farZ, frame);
+    strips.push(addBoxBetween(mouth.tileX - 0.08, VENT_HEIGHT, nearZ, mouth.tileX + 1.08, VENT_HEIGHT + 0.08, farZ, frame));
+    strips.push(addBoxBetween(mouth.tileX - 0.08, 0, nearZ, mouth.tileX, VENT_HEIGHT, farZ, frame));
+    strips.push(addBoxBetween(mouth.tileX + 1, 0, nearZ, mouth.tileX + 1.08, VENT_HEIGHT, farZ, frame));
   }
+  for (const strip of strips) strip.isVentFrame = true;
   // Its cover. That used to be scenery: a grille lying flat on the floor a step inside the room. It is a loose
-  // thing now (08-loose-objects.js puts it out): either still standing in the mouth, or lying where the grille lay.
+  // thing now (08-loose-objects.js puts it out): either still standing in front of the mouth, or lying where the grille lay.
   // Where that is, is still drawn here, with the numbers it always was.
   const grilleX = mouth.tileX + 0.5 - outward[0] * 1.2 + (random() - 0.5) * 0.3, grilleZ = mouth.tileZ + 0.5 - outward[1] * 1.2 + (random() - 0.5) * 0.3;
   const grilleYaw = random() * 3;

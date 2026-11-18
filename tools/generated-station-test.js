@@ -204,6 +204,9 @@ const SEEDS_PER_SIZE = Number(process.env.GENERATED_SEEDS || 40);
   await inGame(() => { const debug = window.lastReturnDebug; debug.teleport(debug.playerStart.x, debug.playerStart.z, 0); debug.simulate(0.2); });
 
   // --- vents: you only fit crouched, it is loud in there, and the Hollow crawls through ---
+  // (These checks are about the duct itself. A vent's cover may stand in front of its mouth, and you do not get
+  // past one without taking it off: the covers have their own checks, with the loose objects. So here they are cleared away.)
+  await inGame(() => window.lastReturnDebug.clearLooseObjects());
   const vent = await inGame(([describeSource]) => (0, eval)('(' + describeSource + ')')(), [String(describeFirstVent)]);
   check('a vent is crawl height and opens into a room at each end', vent.mouths.length === 2 && Math.abs(vent.headroom - vent.ventHeight) < 0.01 && vent.tileCount >= 3, vent);
   const enterVent = async (holdCrouch) => {

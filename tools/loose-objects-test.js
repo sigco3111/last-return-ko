@@ -1227,7 +1227,8 @@ function installLab() {
   // --- what a station has lying about ---
   const lyingAbout = await inGame(() => {
     const d = window.lastReturnDebug, result = {};
-    for (const station of [['classic', 0], ['generated', 7, 'medium', 'mixed', 'one'], ['generated', 99, 'large', 'mixed', 'one']]) {
+    // (The massive one has about 150 things: woken all at once, that is as many touches in one step as there ever are.)
+    for (const station of [['classic', 0], ['generated', 7, 'medium', 'mixed', 'one'], ['generated', 99, 'large', 'mixed', 'one'], ['generated', 3, 'massive', 'mixed', 'one']]) {
       d.loadStation.apply(null, station);
       d.setDebugOption('freezeCreatures', true); d.hollow.isActive = false;
       const entry = { total: d.stationLooseObjects.length, loose: d.looseObjects.length, asleep: d.looseObjects.filter((object) => object.isAsleep).length,
@@ -1376,25 +1377,35 @@ function installLab() {
   const covers = await inGame(() => {
     const d = window.lastReturnDebug, lab = window.looseLab, p = d.player, result = { wrong: [] };
     lab.reset();
-    d.loadStation('generated', 3, 'large', 'mixed', 'one');
-    d.game.flags.hasLeftLift = true; d.game.flags.powerOn = true;
-    d.setDebugOption('freezeCreatures', true); d.hollow.isActive = false;
-    const all = d.stationLooseObjects.map((item, index) => ({ item: item, object: d.looseObjects[index] })).filter((entry) => entry.item.kindKey === 'ventCover');
     const mouthOf = function (object) { return d.level.ventMouths.slice().sort((a, b) => Math.hypot(a.faceX - object.x, a.faceZ - object.z) - Math.hypot(b.faceX - object.x, b.faceZ - object.z))[0]; };
-    result.counts = { vents: d.level.ventCount, mouths: d.level.ventMouths.length, covers: all.length, standing: all.filter((entry) => entry.item.on === 'vent').length, worth: d.looseObjectKinds.ventCover.value };
-    for (const entry of all) {
-      const object = entry.object, mouth = mouthOf(object), fromMouth = Math.hypot(mouth.faceX - object.x, mouth.faceZ - object.z), up = Math.abs(object.matrix[4]);
-      const where = 'the cover at ' + object.x.toFixed(1) + ', ' + object.z.toFixed(1);
-      if (entry.item.on === 'vent') { if (!d.isVentAt(object.x, object.z) || up < 0.99 || fromMouth > 0.2) result.wrong.push(where + ' should stand upright in the mouth of its vent'); }
-      else if (d.isVentAt(object.x, object.z) || up > 0.1 || object.y - mouth.floorY > 0.12 || fromMouth > 3.2) result.wrong.push(where + ' should lie flat on the floor in front of its vent');
-    }
-    const standing = all.filter((entry) => entry.item.on === 'vent').map((entry) => entry.object);
-    if (standing.length < 3) return result;
-    const into = function (mouth, metres) { return d.castScannerRay(mouth.faceX - mouth.outwardX * 0.5, mouth.floorY + 0.6, mouth.faceZ - mouth.outwardZ * 0.5, mouth.outwardX, 0, mouth.outwardZ, metres) ? { metres: lab.round(d.rayHit.distance), colour: d.rayHit.surfaceClass, isTheCover: d.rayHit.looseObject !== null } : { metres: 99, colour: -1, isTheCover: false }; };
+    // Where something is, measured from the face of a mouth: positive inside the duct, negative out in the room.
+    const along = function (mouth, x, z) { return lab.round((x - mouth.faceX) * mouth.outwardX + (z - mouth.faceZ) * mouth.outwardZ); };
+    const sheet = d.looseObjectKinds.ventCover.parts[0].half;
+    result.size = { worth: d.looseObjectKinds.ventCover.value, width: sheet[0] * 2, height: sheet[1] * 2, mouthHeight: d.ventHeight };
+    result.counts = [];
+    // Loads a station and looks at where each of its covers is. Returns them: { item, object }.
+    const survey = function (size) {
+      d.loadStation('generated', 3, size, 'mixed', 'one');
+      d.game.flags.hasLeftLift = true; d.game.flags.powerOn = true;
+      d.setDebugOption('freezeCreatures', true); d.hollow.isActive = false;
+      const all = d.stationLooseObjects.map((item, index) => ({ item: item, object: d.looseObjects[index] })).filter((entry) => entry.item.kindKey === 'ventCover');
+      result.counts.push({ station: size, vents: d.level.ventCount, mouths: d.level.ventMouths.length, covers: all.length, standing: all.filter((entry) => entry.item.on === 'vent').length });
+      for (const entry of all) {
+        const object = entry.object, mouth = mouthOf(object), fromMouth = Math.hypot(mouth.faceX - object.x, mouth.faceZ - object.z), up = Math.abs(object.matrix[4]);
+        const where = size + ': the cover at ' + object.x.toFixed(1) + ', ' + object.z.toFixed(1);
+        if (entry.item.on === 'vent') { if (d.isVentAt(object.x, object.z) || up < 0.99 || fromMouth > 0.2 || along(mouth, object.x, object.z) > -0.05) result.wrong.push(where + ' should stand upright in front of the mouth of its vent, out in the room'); }
+        else if (d.isVentAt(object.x, object.z) || up > 0.1 || object.y - mouth.floorY > 0.12 || fromMouth > 3.2) result.wrong.push(where + ' should lie flat on the floor near its vent');
+      }
+      return all;
+    };
+    const into = function (mouth, metres) { return d.castScannerRay(mouth.faceX - mouth.outwardX * 0.7, mouth.floorY + 0.6, mouth.faceZ - mouth.outwardZ * 0.7, mouth.outwardX, 0, mouth.outwardZ, metres) ? { metres: lab.round(d.rayHit.distance), colour: d.rayHit.surfaceClass, isTheCover: d.rayHit.looseObject !== null } : { metres: 99, colour: -1, isTheCover: false }; };
 
-    // A cover that lies flat is a plate on the floor: walked over, it stays where it is and makes no sound.
-    const lying = all.filter((entry) => entry.item.on === 'floor')[0].object;
-    lab.stand(lying.x - 1.2, lying.z, Math.PI / 2);
+    // A massive station, which has covers of both sorts. One that lies flat is a plate on the floor: walked
+    // over, it stays where it is and makes no sound.
+    const lyingOnes = survey('massive').filter((entry) => entry.item.on === 'floor');
+    if (lyingOnes.length === 0) return result;
+    const lying = lyingOnes[0].object;
+    lab.stand(lying.x - 1.3, lying.z, Math.PI / 2);
     d.simulate(0.5);
     result.scanLying = d.castScannerRay(lying.x - 0.3, lying.y + 0.8, lying.z, 0.3, -0.954, 0, 3) ? { colour: d.rayHit.surfaceClass, isTheCover: d.rayHit.looseObject === lying } : { colour: -1, isTheCover: false };
     let before = lab.knocks();
@@ -1404,6 +1415,10 @@ function installLab() {
     d.input.keysDown.clear();
     d.simulate(0.5);
     result.walkedOver = { youWalked: lab.round(Math.abs(p.x - walkedFrom)), itMoved: lab.round(Math.hypot(lying.x - lyingAt.x, lying.z - lyingAt.z)), knocks: lab.since(before) };
+
+    // A large station, with five that stand, for the rest.
+    const standing = survey('large').filter((entry) => entry.item.on === 'vent').map((entry) => entry.object);
+    if (standing.length < 5) return result;
 
     // One taken off with the beam: quietly, and then the vent is open.
     let cover = standing[0], mouth = mouthOf(cover);
@@ -1415,7 +1430,7 @@ function installLab() {
     result.taken = { picked: d.pickUpLooseObject(cover, false) };
     d.simulate(1.5);
     result.taken.held = d.getHeldLooseObject() === cover; result.taken.knocks = lab.since(before); result.taken.slowsYouTo = lab.round(d.getCarrySpeedFactor()); result.taken.bulky = cover.kind.bulky;
-    // Turned away and put down behind you: now nothing stands in the mouth.
+    // Turned away and put down behind you: now nothing stands in front of the mouth.
     p.yaw += Math.PI;
     d.simulate(1.5);
     p.pitch = -1.1;
@@ -1424,13 +1439,23 @@ function installLab() {
     d.simulate(2);
     result.scanAfter = into(mouth, 3);
 
-    // One crawled into: it goes over, and that carries.
+    // One crawled into from the room: it is bigger than the mouth, and you do not get in.
     cover = standing[1]; mouth = mouthOf(cover);
     lab.stand(cover.x - mouth.outwardX * 1.5, cover.z - mouth.outwardZ * 1.5, Math.atan2(mouth.outwardX, -mouth.outwardZ));
     d.input.keysDown.add('KeyC');
     d.simulate(0.8);
+    d.input.keysDown.add('KeyW');
+    let furthestIn = -9, coverFurthestIn = -9;
+    for (let step = 0; step < 180; step++) { d.simulate(1 / 30); furthestIn = Math.max(furthestIn, along(mouth, p.x, p.z)); coverFurthestIn = Math.max(coverFurthestIn, along(mouth, cover.x, cover.z)); }
+    d.input.keysDown.clear();
+    result.fromTheRoom = { youGotAsFarAs: furthestIn, itGotAsFarAs: coverFurthestIn, youInTheVent: d.isVentAt(p.x, p.z), itInTheVent: d.isVentAt(cover.x, cover.z) };
+
+    // One crawled out through, from inside the duct: it goes over into the room, and that carries.
+    cover = standing[2]; mouth = mouthOf(cover);
+    lab.stand(mouth.faceX + mouth.outwardX * 1.3, mouth.faceZ + mouth.outwardZ * 1.3, Math.atan2(-mouth.outwardX, mouth.outwardZ));
+    d.input.keysDown.add('KeyC');
+    d.simulate(0.8);
     before = lab.knocks();
-    lab.noises.length = 0;
     let carries = 0, knockTime = d.looseState.lastKnock.time;
     d.input.keysDown.add('KeyW');
     for (let step = 0; step < 150; step++) {
@@ -1438,40 +1463,56 @@ function installLab() {
       if (d.looseState.lastKnock.time !== knockTime) { knockTime = d.looseState.lastKnock.time; carries = Math.max(carries, d.looseState.lastKnock.carries); }
     }
     d.input.keysDown.clear();
-    const alongDuct = function (x, z) { return (x - mouth.faceX) * mouth.outwardX + (z - mouth.faceZ) * mouth.outwardZ; };
-    result.crawledInto = { liesFlat: Math.abs(cover.matrix[4]) < 0.1, knocks: lab.since(before), carries: lab.round(carries), youInTheVent: d.isVentAt(p.x, p.z),
-      youAreIn: lab.round(alongDuct(p.x, p.z)), itLiesIn: lab.round(alongDuct(cover.x, cover.z)) };
+    d.simulate(1.5);
+    result.fromInside = { liesFlat: Math.abs(cover.matrix[4]) < 0.1, knocks: lab.since(before), carries: lab.round(carries), youAre: along(mouth, p.x, p.z), itLies: along(mouth, cover.x, cover.z), itInTheVent: d.isVentAt(cover.x, cover.z) };
 
-    // One the Hollow comes through: you hear that, with a direction, and it does not startle the Hollow.
-    cover = standing[2]; mouth = mouthOf(cover);
-    lab.stand(cover.x - mouth.outwardX * 6, cover.z - mouth.outwardZ * 6, 0);
-    d.simulate(4.5);
-    d.spawnHollow(cover.x - mouth.outwardX * 1.6, cover.z - mouth.outwardZ * 1.6);
-    d.hollow.graceTimer = 0; d.hollow.state = 0;
-    for (const key of ['objectKnock', 'objectCrash']) d.captionCounts[key] = 0;
-    lab.noises.length = 0;
-    before = lab.knocks();
-    const startedAt = { x: cover.x, z: cover.z };
-    for (let step = 0; step < 40; step++) { d.hollow.figure.x += mouth.outwardX * 3 / 30; d.hollow.figure.z += mouth.outwardZ * 3 / 30; d.simulate(1 / 30); }
-    result.byTheHollow = { moved: lab.round(Math.hypot(cover.x - startedAt.x, cover.z - startedAt.z)), stillUpright: Math.abs(cover.matrix[4]) > 0.9, knocks: lab.since(before),
-      said: d.captionCounts.objectKnock + d.captionCounts.objectCrash, noiseAtTheCover: lab.noises.some((noise) => Math.hypot(noise.x - startedAt.x, noise.z - startedAt.z) < 1.5) };
-    d.hollow.isActive = false;
+    // The Hollow. Walking past along the wall it leaves a cover alone. Coming out through the vent it throws
+    // the cover out across the room: you hear that, with a direction, and the noise does not startle the Hollow.
+    const hollowGoes = function (cover, mouth, fromAlong, fromAcross, stepAlong, stepAcross, steps) {
+      lab.stand(mouth.faceX - mouth.outwardX * 7, mouth.faceZ - mouth.outwardZ * 7, 0);
+      d.simulate(3);
+      // Across is along the wall.
+      d.spawnHollow(mouth.faceX + mouth.outwardX * fromAlong + mouth.outwardZ * fromAcross, mouth.faceZ + mouth.outwardZ * fromAlong - mouth.outwardX * fromAcross);
+      d.hollow.graceTimer = 0; d.hollow.state = 0;
+      d.captionCounts.hollowFling = 0;
+      lab.noises.length = 0;
+      const stoodAt = { x: cover.x, z: cover.z }, thrownBefore = d.looseState.statistics.coversThrown, knocksBefore = lab.knocks();
+      for (let step = 0; step < steps; step++) {
+        d.hollow.figure.x += (mouth.outwardX * stepAlong + mouth.outwardZ * stepAcross) / 30; d.hollow.figure.z += (mouth.outwardZ * stepAlong - mouth.outwardX * stepAcross) / 30;
+        d.simulate(1 / 30);
+      }
+      d.hollow.isActive = false;
+      for (let step = 0; step < 240 && !cover.isAsleep; step++) d.simulate(1 / 30);
+      return { thrown: d.looseState.statistics.coversThrown - thrownBefore, metres: lab.round(Math.hypot(cover.x - stoodAt.x, cover.z - stoodAt.z)), itEndedAt: along(mouth, cover.x, cover.z), itInTheVent: d.isVentAt(cover.x, cover.z),
+        knocks: lab.since(knocksBefore), said: d.captionCounts.hollowFling, startledIt: lab.noises.length };
+    };
+    cover = standing[3]; mouth = mouthOf(cover);
+    result.hollowPast = hollowGoes(cover, mouth, -0.75, -2.5, 0, 3, 50);     // along the wall, three quarters of a metre off it, past the mouth
+    result.hollowOut = hollowGoes(cover, mouth, 1.5, 0, -3, 0, 45);          // from inside the duct, out through the mouth
+    cover = standing[4]; mouth = mouthOf(cover);
+    result.hollowIn = hollowGoes(cover, mouth, -2.6, 0, 3, 0, 45);           // from the room, in through the mouth
     lab.reset();
     return result;
   });
-  check('every vent mouth has its cover: either standing upright in the mouth, or lying flat on the floor in front of it; a cover is worth something',
-    covers.counts.vents >= 2 && covers.counts.mouths === covers.counts.vents * 2 && covers.counts.covers === covers.counts.mouths && covers.counts.standing >= 3 && covers.counts.standing < covers.counts.covers &&
-    covers.counts.worth > 0 && covers.wrong.length === 0, [covers.counts, covers.wrong]);
-  check('a cover in its vent hides the vent from a scan, in the warning colour; taken off with the beam it comes quietly, is heavy to carry, and the vent is open',
-    covers.scanBefore.isTheCover && covers.scanBefore.colour === 12 && covers.scanBefore.metres < 0.7 && covers.taken.picked && covers.taken.held && covers.taken.knocks.heard === 0 && covers.taken.slowsYouTo < 0.85 && covers.taken.bulky &&
-    !covers.scanAfter.isTheCover && covers.scanAfter.metres > 1.2, [covers.scanBefore, covers.taken, covers.scanAfter]);
-  check('crawl into a cover that still stands and it goes over with a clang that carries; then it lies flat, and you crawl on over it',
-    covers.crawledInto.liesFlat && covers.crawledInto.knocks.heard >= 1 && covers.crawledInto.carries > 10 && covers.crawledInto.youInTheVent && covers.crawledInto.youAreIn > covers.crawledInto.itLiesIn + 0.5, covers.crawledInto);
+  check('every cover belongs to a vent mouth: standing upright in front of it, out in the room, or lying flat on the floor nearby; no station has more covers than mouths; a cover is bigger than the mouth, and worth something',
+    covers.counts.length === 2 && covers.counts.every((station) => station.vents >= 2 && station.mouths === station.vents * 2 && station.covers <= station.mouths && station.covers >= station.mouths / 2) &&
+    covers.counts[0].standing >= 1 && covers.counts[0].standing < covers.counts[0].covers && covers.counts[1].standing >= 5 &&
+    covers.size.width > 1 && covers.size.height > covers.size.mouthHeight && covers.size.worth > 0 && covers.wrong.length === 0, [covers.counts, covers.size, covers.wrong]);
   check('a cover that lies flat on the floor is walked over: it stays where it is, without a sound, and so a scan does not show it in the warning colour',
     covers.walkedOver.youWalked > 1.5 && covers.walkedOver.itMoved < 0.02 && covers.walkedOver.knocks.heard + covers.walkedOver.knocks.quiet === 0 &&
     covers.scanLying.isTheCover && covers.scanLying.colour !== 12, [covers.walkedOver, covers.scanLying]);
-  check('the Hollow coming through knocks a cover out of its vent: you hear that, with a direction, and it does not startle the Hollow',
-    covers.byTheHollow.moved > 0.2 && covers.byTheHollow.knocks.heard >= 1 && covers.byTheHollow.said >= 1 && !covers.byTheHollow.noiseAtTheCover, covers.byTheHollow);
+  check('a cover in front of its vent hides the vent from a scan, in the warning colour; taken off with the beam it comes quietly, is heavy to carry, and the vent is open',
+    covers.scanBefore.isTheCover && covers.scanBefore.colour === 12 && covers.scanBefore.metres < 0.7 && covers.taken.picked && covers.taken.held && covers.taken.knocks.heard === 0 && covers.taken.slowsYouTo < 0.85 && covers.taken.bulky &&
+    !covers.scanAfter.isTheCover && covers.scanAfter.metres > 1.2, [covers.scanBefore, covers.taken, covers.scanAfter]);
+  check('crawl into a cover from the room and it does not let you in: it is bigger than the mouth, and neither you nor it gets into the duct',
+    !covers.fromTheRoom.youInTheVent && !covers.fromTheRoom.itInTheVent && covers.fromTheRoom.youGotAsFarAs < 0 && covers.fromTheRoom.itGotAsFarAs < 0.05, covers.fromTheRoom);
+  check('crawl out through one from inside and it goes over into the room with a clang that carries; it lies flat out there, and you are out',
+    covers.fromInside.liesFlat && !covers.fromInside.itInTheVent && covers.fromInside.itLies < -0.3 && covers.fromInside.knocks.heard >= 1 && covers.fromInside.carries > 10 && covers.fromInside.youAre < -0.5, covers.fromInside);
+  check('the Hollow walking past a covered vent leaves the cover alone; coming out through the vent it throws the cover out across the room: you hear that, with a direction, and it does not startle the Hollow',
+    covers.hollowPast.thrown === 0 && covers.hollowPast.metres === 0 && covers.hollowOut.thrown === 1 && covers.hollowOut.metres > 0.8 && !covers.hollowOut.itInTheVent && covers.hollowOut.itEndedAt < -0.3 &&
+    covers.hollowOut.knocks.heard >= 1 && covers.hollowOut.said >= 1 && covers.hollowOut.startledIt === 0, [covers.hollowPast, covers.hollowOut]);
+  check('going into a vent from the room, it throws the cover aside along the wall, and the cover does not end up in the duct',
+    covers.hollowIn.thrown === 1 && covers.hollowIn.metres > 0.8 && !covers.hollowIn.itInTheVent && covers.hollowIn.startledIt === 0, covers.hollowIn);
 
   // --- what a knock costs ---
   const breakage = await inGame((spot) => {
