@@ -1897,9 +1897,9 @@ function auditStationLooseObjects() {
 // Salvage: the bays, and what is sealed into them
 //
 // A station may have the 'haul' quest (09-quests.js): Salvage wants a sum's worth of what lies about. It goes
-// into salvage bays: closets two tiles deep behind a door of their own, dug where a doorway was left over
-// when the station was laid out (planHaulBays in 03-levelgen.js). The first is near the lift, the rest are
-// spread through the station.
+// into salvage bays: closets two tiles deep behind a door of their own, dug into the finished station where
+// it has a doorway left over (findHaulBaySites and digHaulBay in 03-levelgen.js). The first is near the lift,
+// the rest are spread through the station.
 //
 // A bay is shut until you open it at the panel beside its door. One bay is open at a time. An open bay has a
 // lamp over its door that puts a patch of scan points on the floor in front of it about once a minute, and

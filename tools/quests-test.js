@@ -102,35 +102,70 @@ function check(description, condition, detail) {
   check('the same seed always gives the same quests in the same places, and another seed gives others', survey.sameSeedSame && survey.anotherSeedDiffers, [survey.sameSeedSame, survey.anotherSeedDiffers]);
   check('Kessel-9 asks for the spools and nothing else', survey.classic.join() === 'spools', survey.classic);
 
-  // --- the quests that were jobs before this system existed are where they were then ---
-  // These places were read off the game as it was before the quest system, for three stations. They must
-  // never change by accident: a seed someone was given has to keep building the station they were given.
-  // (Changing a size or a room on purpose changes the stations that have it. Then the record is read off
-  // again, and that is the only time it is.)
-  const asBefore = await inGame(() => {
-    const d = window.lastReturnDebug, lab = window.lab, result = {};
-    const before = {
-      // Read off again after the pump hall was changed (its pipes now stop you, and it has a metal wall: commit
-      // d399598). The pump hall is in every station, and where the fuel cans go depends on the free floor in and
-      // round it, so the cans (13, 40, 41) moved in every generated station. The generators (30, 31) did not.
-      'medium 9 mixed one': '13:77.5:49.5 30:63.5:44.5 31:61.5:64.5 40:81.5:50.5 41:77.5:41.5',
-      'large 7 sparse one': '13:118.5:47.5 30:42.5:40.5 31:100.5:42.5 41:125.5:45.5',
-      // The massive one was also read off again after the massive size itself was made bigger (more side rooms,
-      // loops and vents, a longer spine: commit 890b194), which changed every massive station.
-      'massive 12 tight two': '13:88.5:51.5 14:62.5:115.5 30:140.5:21.5 40:128.5:19.5'
-    };
-    const oldNumbers = [13, 14, 20, 21, 22, 23, 24, 25, 30, 31, 32, 40, 41, 42];
-    for (const name in before) {
-      const parts = name.split(' ');
-      lab.fresh('generated', Number(parts[1]), parts[0], parts[2], parts[3]);
-      const now = d.interactables.filter((thing) => oldNumbers.indexOf(thing.objectId) >= 0).sort((a, b) => a.objectId - b.objectId)
-        .map((thing) => thing.objectId + ':' + thing.x + ':' + thing.z).join(' ');
-      result[name] = { same: now === before[name], now: now };
+  // --- the map and the quests are kept apart ---
+  // The same seed, built with other numbers for its quests, is the same map: not a tile, a prop, a door, a hatch,
+  // a loud patch of floor or a loose thing is anywhere else, and the quests have altered nothing of it.
+  const apart = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.lab, result = { stations: 0, mapsThatDiffer: [], touched: [], cannotBeFinished: [], questsDiffered: 0, withAndWithoutSalvage: 0 };
+    for (const size of ['small', 'medium', 'large', 'massive']) {
+      for (let seed = 1; seed <= 5; seed++) {
+        const station = ['generated', seed, size, ['mixed', 'tight', 'sprawling', 'sparse'][seed % 4], seed % 2 ? 'one' : 'two'], name = size + ' ' + seed;
+        const builds = [undefined, seed + 1000, seed + 2000, seed + 3000].map((questSeed) => {
+          d.loadStation.apply(null, station.concat([questSeed]));
+          d.game.flags.hasLeftLift = true; d.hollow.isActive = false;
+          const audit = d.auditMapApartFromQuests(), found = d.auditLayout().concat(d.auditProgression()).concat(d.auditHollowRoutes()).concat(d.auditNoisyFloor()).concat(d.auditStationLooseObjects());
+          if (audit.length) result.touched.push(name + ' (quests ' + questSeed + '): ' + audit[0]);
+          if (found.length) result.cannotBeFinished.push(name + ' (quests ' + questSeed + '): ' + found[0]);
+          return { map: d.level.mapFingerprint, questSeed: d.level.questSeed, quests: lab.describeQuests(''), hasSalvage: d.findQuest('haul') !== null };
+        });
+        result.stations++;
+        if (builds.some((build) => build.map !== builds[0].map)) result.mapsThatDiffer.push(name);
+        if (builds[0].questSeed !== seed) result.mapsThatDiffer.push(name + ': left to itself, a station takes its quests from its own seed');
+        if (builds.some((build) => build.quests !== builds[0].quests)) result.questsDiffered++;
+        if (builds.some((build) => build.hasSalvage) && builds.some((build) => !build.hasSalvage)) result.withAndWithoutSalvage++;
+      }
     }
     return result;
   });
-  check('the fuel cans, core samples, breakers and generators of three stations are exactly where they were before the quest system',
-    Object.keys(asBefore).every((name) => asBefore[name].same), asBefore);
+  check('the map and the quests are apart: twenty stations, each built four times with different quests, give the same map every time, and no quest has altered any of it',
+    apart.stations === 20 && apart.mapsThatDiffer.length === 0 && apart.touched.length === 0 && apart.cannotBeFinished.length === 0, apart);
+  check('and those were different quests: most of the twenty got other quests or other places for them, some of them salvage bays in one build and none in another',
+    apart.questsDiffered >= 15 && apart.withAndWithoutSalvage >= 5, [apart.questsDiffered, apart.withAndWithoutSalvage]);
+
+  // --- three stations, as they were when this was last read off ---
+  // Two records, because the map and the quests are two things. The first is one number for each station's whole
+  // map (and, to say what moved if it does, the number as it stood after each part of the map). The second is
+  // where each quest's things are. Neither may change by accident: a seed someone was given has to keep building
+  // what they were given. Changing the map on purpose (a room, a size, the furniture) changes the first; changing
+  // a quest on purpose changes the second, and only the second. Then that record is read off again, and that is
+  // the only time it is.
+  const asBefore = await inGame(() => {
+    const d = window.lastReturnDebug, lab = window.lab, result = {};
+    const before = {
+      // Read off when the map and the quests were taken apart. Until then the first four quests drew their
+      // numbers from the station's own sequence, so taking them out of it changed the furniture, the quests and
+      // what lies about in every generated station, once. The rooms, corridors, doors and vents did not change.
+      'medium 9 mixed one': { map: 1574309035,
+        quests: '3:63.7:42 4:95:83.5 5:130.55:65.5 20:40.5:52.5 21:70.5:81.5 22:94.5:65.5 23:63.5:44.5 30:60.5:88.5' },
+      'large 7 sparse one': { map: 3054155276,
+        quests: '3:85.4:41.7 4:40:73.5 5:143.5:81.55 13:121.5:45.5 30:106.5:27.5 40:120.5:50.5 50:100.5:43.5 180:92.5:16.5 181:116.5:41.5 220:67.28:48.03 221:147.28:56.03 222:112.03:10.72' },
+      'massive 12 tight two': { map: 204994769,
+        quests: '3:107.2:53.4 4:82.5:14 5:37.45:108.5 13:94.5:48.5 14:96.5:9.5 30:70.5:116.5 31:114.5:18.5 32:91.5:69.5 42:92.5:36.5 50:77.5:78.5 180:61.5:91.5 181:90.5:43.5 200:62.5:115.5 201:107.5:10.5 220:81.72:57.97 221:126.03:27.72 222:89.72:109.97' }
+    };
+    for (const name in before) {
+      const parts = name.split(' ');
+      lab.fresh('generated', Number(parts[1]), parts[0], parts[2], parts[3]);
+      const mapParts = {}; d.computeMapFingerprint(mapParts);
+      const quests = d.interactables.filter((thing) => d.level.quests.some((quest) => quest.objects.some((object) => object.objectId === thing.objectId || object.itemObjectId === thing.objectId)))
+        .sort((a, b) => a.objectId - b.objectId).map((thing) => thing.objectId + ':' + thing.x + ':' + thing.z).join(' ');
+      result[name] = { sameMap: d.level.mapFingerprint === before[name].map, sameQuests: quests === before[name].quests, mapNow: d.level.mapFingerprint, questsNow: quests, mapPartByPart: mapParts };
+    }
+    return result;
+  });
+  check('the maps of three stations are what they were when they were last read off',
+    Object.keys(asBefore).every((name) => asBefore[name].sameMap), Object.keys(asBefore).map((name) => name + ': ' + asBefore[name].mapNow + ' ' + JSON.stringify(asBefore[name].mapPartByPart)));
+  check('and so are the places of their quests\' things',
+    Object.keys(asBefore).every((name) => asBefore[name].sameQuests), Object.keys(asBefore).map((name) => name + ': ' + asBefore[name].questsNow));
 
   // --- adding a quest moves nothing else ---
   const added = await inGame(() => {
@@ -234,7 +269,8 @@ function check(description, condition, detail) {
   });
   check('salvage: about half the stations have it; each asks for a round sum that is no more than what lies within walking reach, and has as many bays as its size allows: two tiles each behind a shut door of their own, a panel beside it, empty, and well apart',
     salvagePlaces.withIt >= 6 && salvagePlaces.withIt <= salvagePlaces.stations - 6 && salvagePlaces.wrong.length === 0, salvagePlaces);
-  check('salvage: a station with it has the same rooms, the same other doors and the same other quests as the same station without it', salvagePlaces.moved.length === 0, [salvagePlaces.moved, salvagePlaces.alsoTheSame]);
+  check('salvage: a station with it is the same station without it, plus its bays: the same rooms and other doors, and to the tile the same hatches, loud floor, loose things and other quests\' things',
+    salvagePlaces.moved.length === 0 && ['otherQuestsToTheTile', 'hatches', 'noisyFloor', 'looseThings'].every((what) => salvagePlaces.alsoTheSame[what] === salvagePlaces.withIt), [salvagePlaces.moved, salvagePlaces.alsoTheSame, salvagePlaces.withIt]);
 
   const salvage = await inGame(async () => {
     const d = window.lastReturnDebug, lab = window.lab, result = {};
@@ -432,8 +468,20 @@ function check(description, condition, detail) {
     result.told = { tooSoon: tooSoon, known: quest.isKnown, marked: quest.objects.every((object) => d.findInteractable(object.objectId).isDiscovered),
       radio: /isolation valves on your level have to be shut/.test(lab.messages()), objective: d.game.objectiveText, chip: d.getQuestChips().join(' · '), wantedOnMap: d.isInteractableWantedNow(thing) };
     // Shutting one squeals. The Hollow ten metres off, unaware, comes to look at that valve.
-    const stand = d.findWalkableSpotNear(first.x, first.z), far = d.findWalkableSpotNear(first.x + 10, first.z);
+    const stand = d.findWalkableSpotNear(first.x, first.z);
     d.teleport(stand.x, stand.z, 0); d.simulate(0.1);
+    // Somewhere to stand, eight to twelve metres from the valve as the crow flies and out of your sight. (Ten
+    // metres east of the valve may be rock, and the nearest floor to that may be four metres off in plain view.)
+    let far = null;
+    for (let ring = 10; ring >= 8 && !far; ring--) {
+      for (let turn = 0; turn < 24 && !far; turn++) {
+        const spot = d.findWalkableSpotNear(first.x + Math.cos(turn / 24 * Math.PI * 2) * ring, first.z + Math.sin(turn / 24 * Math.PI * 2) * ring);
+        if (!spot) continue;
+        const metres = Math.hypot(spot.x - first.x, spot.z - first.z);
+        if (metres >= 8 && metres <= 12 && !d.canPlayerSeePoint(spot.x, d.getFloorHeightAt(spot.x, spot.z) + 1.3, spot.z)) far = spot;
+      }
+    }
+    if (!far) far = d.findWalkableSpotNear(first.x + 10, first.z);
     d.spawnHollow(far.x, far.z); d.hollow.graceTimer = 0; d.hollow.state = 0;
     d.use(first.objectId);
     result.loud = { hollowMetres: Math.round(Math.hypot(far.x - first.x, far.z - first.z) * 10) / 10, heardFromMetres: d.tuning.noiseRadiusValve * d.game.difficulty.hearingFactor,

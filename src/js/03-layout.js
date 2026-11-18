@@ -653,7 +653,7 @@ function buildFacilityLayout() {
 
   computeNavigationGrid();
   computeLevelBounds();
-  addAlwaysQuests(); // Kessel-9 asks for nothing but power, its three spools and the lift
+  // (Its quests, which are only the ones every station has, are added by buildStation in 03-levelgen.js.)
 }
 
 // Main corridor A (classic station only).

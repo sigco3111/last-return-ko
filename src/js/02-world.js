@@ -171,7 +171,10 @@ const level = {
   boundsMinimumX: 0, boundsMinimumZ: 0, boundsMaximumX: GRID_WIDTH, boundsMaximumZ: GRID_DEPTH,
   roomCount: 0,
   noisyFloorCount: 0,     // patches of floor that are loud to walk on (see 03-noisy-floor.js)
-  ventMouths: [],         // where each vent opens into a room, and where its cover would lie if it has come off (03-levelgen.js)
+  ventMouths: [],
+  questTiles: [],       // the tiles a quest has dug into the finished map (its salvage bays): everything else is the map's
+  questSeed: 0,         // the numbers the quests were drawn from: the station's seed, unless something else was asked for
+  mapFingerprint: 0,    // one number from everything that is the map's, as it was when it was finished (03-levelgen.js)         // where each vent opens into a room, and where its cover would lie if it has come off (03-levelgen.js)
   hatchCount: 0,          // ceiling hatches of the Hollow's crawlspace (see 08-crawlspace.js)
   description: 'Kessel-9 (classic)'
 };
@@ -276,6 +279,7 @@ function resetWorldForNewLevel() {
   tileIsWalkable.fill(0);
   tilePropLists.fill(null); tileSignLists.fill(null);
   level.ventMouths.length = 0;
+  level.questTiles.length = 0;
   worldProps.length = 0; dynamicBoxProps.length = 0; doors.length = 0; interactables.length = 0;
   clearLooseObjects();
   roamingWaypoints.length = 0;

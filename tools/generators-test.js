@@ -140,9 +140,20 @@ function check(description, condition, detail) {
       result.liftRefuses = { started: flags.uploadStarted, uploaded: flags.spoolsUploaded, said: /winch supply low\. Generators running: 1 of/.test(messages()) };
 
       // Starting one is loud. The Hollow, standing twelve metres off and unaware, comes to look at the generator.
-      const far = d.findWalkableSpotNear(ready.x + 12, ready.z);
       const stand = d.findWalkableSpotNear(ready.x, ready.z);
       d.teleport(stand.x, stand.z, 0); d.simulate(0.1);
+      // Somewhere for it to stand: nine to fourteen metres from the generator as the crow flies, and out of your
+      // sight. (Twelve metres east of the generator may be rock, with no floor near it at all.)
+      let far = null;
+      for (let ring = 12; ring >= 9 && !far; ring--) {
+        for (let turn = 0; turn < 24 && !far; turn++) {
+          const spot = d.findWalkableSpotNear(ready.x + Math.cos(turn / 24 * Math.PI * 2) * ring, ready.z + Math.sin(turn / 24 * Math.PI * 2) * ring);
+          if (!spot) continue;
+          const metres = Math.hypot(spot.x - ready.x, spot.z - ready.z);
+          if (metres >= 9 && metres <= 14 && !d.canPlayerSeePoint(spot.x, d.getFloorHeightAt(spot.x, spot.z) + 1.3, spot.z)) far = spot;
+        }
+      }
+      if (!far) far = d.findWalkableSpotNear(ready.x + 12, ready.z) || stand;
       d.spawnHollow(far.x, far.z); d.hollow.graceTimer = 0; d.hollow.state = 0;
       const hollowMetres = Math.hypot(far.x - ready.x, far.z - ready.z);
       d.use(ready.objectId);

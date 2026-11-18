@@ -175,8 +175,10 @@ function resetWorldState() {
 // Builds a station and hands it to everything that keeps its own picture of the world.
 // kind is 'classic' or 'generated'; the rest only matter for generated stations.
 // Returns false if a generated station could not be planned (the classic one is loaded instead).
-function loadStation(kind, seed, sizeKey, layoutKey, levelsKey) {
-  const wasBuiltAsAsked = buildStation(kind, seed, sizeKey, layoutKey, levelsKey);
+// `questSeed` is left out in play: the quests then come from the station's own seed. Given, the same map gets
+// other quests (the tests and debug mode use that; the map does not change by it).
+function loadStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed) {
+  const wasBuiltAsAsked = buildStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed);
   uploadWorldOccluderMesh(buildWorldOccluderVertices());
   if (debugHooks.stationLoaded) debugHooks.stationLoaded();
   moveMachinerySoundsToLevel();
@@ -860,7 +862,8 @@ function startApplication() {
     auditLayout: auditFacilityLayout,
     auditProgression: auditLevelProgression,
     level: level, interactables: interactables, zoneNames: ZONE_NAMES,
-    loadStation: function (kind, seed, sizeKey, layoutKey, levelsKey) { const result = loadStation(kind, seed, sizeKey, layoutKey, levelsKey); resetWorldState(); return result; },
+    loadStation: function (kind, seed, sizeKey, layoutKey, levelsKey, questSeed) { const result = loadStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed); resetWorldState(); return result; },
+    auditMapApartFromQuests: auditMapApartFromQuests, computeMapFingerprint: computeMapFingerprint, planQuests: planQuests,
     getFloorHeightAt: getFloorHeightAt,
     getHeadroomAt: getHeadroomAt,
     isVentAt: function (x, z) { return (getTileFlagsAtPosition(x, z) & TILE_FLAG_VENT) !== 0; },

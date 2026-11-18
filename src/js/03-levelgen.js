@@ -713,18 +713,16 @@ function tryPlanDuct(plan, blocked, first, second, isVent) {
 }
 
 // Salvage bays, for a station that has the salvage quest (09-quests.js): each is two tiles dug into the rock
-// behind a doorway that nothing else used, with a door of its own kind in the doorway. The first is as near
-// the lift as there is room for one; each one after that is as far from all the others as it can be.
-// They are planned last, with numbers of their own, so that everything else is where it would be without them.
-// A station with no room for even one bay does not get the quest.
+// behind a doorway that the station left unused, with a door of its own kind in the doorway.
+//
+// The station is built without them. The quest digs them afterwards (placeQuests), in the finished station,
+// where there is a doorway nothing used with rock behind it and bare floor in front. So a station with the
+// quest is the station without it, plus its bays: nothing else is anywhere else.
+// The first is as near the lift as there is room for one; each one after that is as far from all the others
+// as it can be. A station with no room for even one bay does not get the quest.
 const HAUL_BAY_DEPTH = 2;            // tiles into the rock
 const HAUL_BAYS_LEAST_TILES_APART = 10;
-function planHaulBays(plan, seed, size) {
-  plan.bays = [];
-  if (!plan.quests.haul) return;
-  const random = createQuestRandom(seed, 'salvage bays');
-  const range = size.salvageBays || [1, 1];
-  const wanted = range[0] + Math.floor(random() * (range[1] - range[0] + 1));
+function findHaulBaySites(plan, wanted, random) {
   const blocked = createDuctBlockGrid(plan);
   const lobby = plan.rooms.find(function (room) { return room.key === 'liftLobby'; });
   const lobbyX = (lobby.startX + lobby.endX) / 2, lobbyZ = (lobby.startZ + lobby.endZ) / 2;
@@ -734,12 +732,22 @@ function planHaulBays(plan, seed, size) {
     if (['calibrationStore', 'stairwell', 'shaftChamber'].indexOf(socket.owner.key) >= 0 || socket.owner.isDuct || socket.owner.isVent) continue;
     const step = WALL_DIRECTIONS[socket.wall], tiles = [];
     let isRock = true;
-    for (let depth = 1; depth <= HAUL_BAY_DEPTH + 1 && isRock; depth++) {
+    for (let depth = 0; depth <= HAUL_BAY_DEPTH + 1 && isRock; depth++) {
       const tileX = socket.tileX + step[0] * depth, tileZ = socket.tileZ + step[1] * depth;
-      if (tileX < 4 || tileZ < 4 || tileX >= GRID_WIDTH - 4 || tileZ >= GRID_DEPTH - 4 || blocked[tileIndexAt(tileX, tileZ)]) isRock = false;
-      else if (depth <= HAUL_BAY_DEPTH) tiles.push([tileX, tileZ]);
+      // Rock as the station was planned, and rock as it was built (the doorway itself, depth 0, included).
+      if (tileX < 4 || tileZ < 4 || tileX >= GRID_WIDTH - 4 || tileZ >= GRID_DEPTH - 4 || isTileOpenAt(tileX, tileZ)) isRock = false;
+      else if (depth >= 1 && blocked[tileIndexAt(tileX, tileZ)]) isRock = false;
+      else if (depth >= 1 && depth <= HAUL_BAY_DEPTH) tiles.push([tileX, tileZ]);
     }
     if (!isRock) continue;
+    // The floor in front of the doorway, on the room's side: it has to be there, at the doorway's height, and bare.
+    const stepX = socket.tileX - step[0], stepZ = socket.tileZ - step[1];
+    if (!isWalkableAt(stepX, stepZ) || Math.abs(tileFloorHeight[tileIndexAt(stepX, stepZ)] - socket.floorY) > 0.01) continue;
+    if ((tileFlags[tileIndexAt(stepX, stepZ)] & (TILE_FLAG_DOOR | TILE_FLAG_VENT | TILE_FLAG_PIT | TILE_FLAG_WATER)) || !isTileFreeForAQuest(stepX, stepZ, 1.1)) continue;
+    const propsOnStep = tilePropLists[tileIndexAt(stepX, stepZ)];
+    let isBare = true;
+    for (const prop of propsOnStep || []) if (!prop.isRemoved && prop.minimumY < socket.floorY + 2.1) isBare = false; // something stands, lies or hangs in the way
+    if (!isBare) continue;
     candidates.push({ socket: socket, tiles: tiles, draw: random(), fromLobby: Math.abs(socket.tileX - lobbyX) + Math.abs(socket.tileZ - lobbyZ) });
   }
   const tilesApart = function (first, second) { return Math.abs(first.socket.tileX - second.socket.tileX) + Math.abs(first.socket.tileZ - second.socket.tileZ); };
@@ -764,22 +772,42 @@ function planHaulBays(plan, seed, size) {
     if (best === null) break;
     chosen.push(best);
   }
-  if (chosen.length === 0) { delete plan.quests.haul; return; }
-  for (const candidate of chosen) {
+  return chosen.map(function (candidate) {
     const socket = candidate.socket, tiles = candidate.tiles;
-    const bay = {
-      key: 'bay', name: 'SALVAGE BAY', tier: socket.owner.tier, isCorridor: true, isBay: true,
+    return {
+      key: 'bay', name: 'SALVAGE BAY', tier: socket.owner.tier, isCorridor: true, isBay: true, owner: socket.owner,
       route: tiles.map(function (tile) { return tileIndexAt(tile[0], tile[1]); }),
       startX: Math.min(tiles[0][0], tiles[tiles.length - 1][0]), endX: Math.max(tiles[0][0], tiles[tiles.length - 1][0]) + 1,
       startZ: Math.min(tiles[0][1], tiles[tiles.length - 1][1]), endZ: Math.max(tiles[0][1], tiles[tiles.length - 1][1]) + 1,
       floorY: socket.floorY, ceiling: 2.4, zone: 0,
       doorTileX: socket.tileX, doorTileZ: socket.tileZ, wall: socket.wall
     };
-    plan.rooms.push(bay);
-    plan.doors.push({ tileX: socket.tileX, tileZ: socket.tileZ, kind: DOOR_KIND_BAY, cardLevel: 0, roomA: socket.owner, roomB: bay });
-    socket.isUsed = true;
-    plan.bays.push(bay);
+  });
+}
+
+// Digs one bay into the finished station: its two tiles, its doorway and door, and the lettering beside the door.
+// `number` is which bay of the station it is, from 1. The tiles it opens are noted in level.questTiles.
+function digHaulBay(bay, number) {
+  bay.name = number > 1 ? 'SALVAGE BAY ' + number : 'SALVAGE BAY';
+  bay.zone = ZONE_NAMES.length;
+  ZONE_NAMES.push(bay.name);
+  level.unlabelledZones.push(bay.zone);
+  clearPlacement();
+  placement.isGenerating = true;
+  placement.zone = bay.zone;
+  placement.offsetY = bay.floorY;
+  for (const index of bay.route) {
+    const tileX = index % GRID_WIDTH, tileZ = (index - tileX) / GRID_WIDTH;
+    carveRoom(tileX, tileZ, tileX + 1, tileZ + 1, bay.ceiling, ZONE_GENERATED_ROOM);
+    level.questTiles.push(index);
   }
+  clearPlacement();
+  placement.isGenerating = true;
+  addDoor(bay.doorTileX, bay.doorTileZ, DOOR_KIND_BAY, 0);
+  level.questTiles.push(tileIndexAt(bay.doorTileX, bay.doorTileZ));
+  addDoorLabels(bay.doorTileX, bay.doorTileZ);
+  clearPlacement();
+  placement.isGenerating = false;
 }
 
 // `isVent` plans vents instead of service ducts (see tryPlanDuct). `isLessPicky` accepts pairs that are only two
@@ -947,10 +975,8 @@ function planStation(seed, sizeKey, layoutKey, levelsKey, attempt) {
   plan.ventCount = planLoops(plan, size.vents || 0, true, false);
   if (plan.ventCount < (size.vents || 0)) plan.ventCount += planLoops(plan, size.vents - plan.ventCount, true, true);
   plan.loopCount = planLoops(plan, size.loops, false);
-  // The quests, drawn last so that nothing about them changes the rooms and corridors a seed gives.
+  // (No quests here. They are put into the finished station afterwards: see buildStation, and 09-quests.js.)
   plan.seed = seed;
-  plan.quests = planQuests(seed, size, random);
-  planHaulBays(plan, seed, size);
   return plan;
 }
 
@@ -1018,6 +1044,22 @@ function addCorridorWallSign(corridor, wall, firstTile, tilesUsed, text, options
   else addWallSign(text, wall === WALL_WEST ? corridor.startX : corridor.endX - 1, tile, wall, options);
 }
 
+// A quest's thing is put into a station that is already finished, and has to leave it as it is. So it keeps off:
+//   - floor that is loud to walk on, and heaps of cans, within `quietMetres`: nothing you have to use has those
+//     under your feet (the noisy floor used to keep away from the quests' things; now it is the other way round);
+//   - anything that lies loose on the floor near the tile, which it would be standing on;
+//   - a ceiling hatch of the Hollow's, which opens onto that floor;
+//   - a place the Hollow walks to, which has to stay floor.
+function isTileFreeForAQuest(tileX, tileZ, quietMetres) {
+  const x = tileX + 0.5, z = tileZ + 0.5;
+  for (const patch of noisyFloorPatches) if (distanceBetweenPoints(patch.x, patch.z, x, z) < quietMetres) return false;
+  for (const heap of noisyFloorCanHeaps) if (distanceBetweenPoints(heap.x, heap.z, x, z) < quietMetres) return false;
+  for (const thing of stationLooseObjects) if (thing.on !== 'surface' && Math.abs(thing.x - x) < 1.1 && Math.abs(thing.z - z) < 1.1) return false;
+  for (const hatch of hollowHatches) if (Math.abs(hatch.x - x) < 1.1 && Math.abs(hatch.z - z) < 1.1) return false;
+  for (const waypoint of roamingWaypoints) if (Math.abs(waypoint[0] - x) < 0.6 && Math.abs(waypoint[1] - z) < 0.6) return false;
+  return true;
+}
+
 // A place in a room to stand something on: floor that can be walked on, with walkable floor on all eight sides
 // (so whatever is put there blocks no path) and no door within two tiles. Returns [x, z] or null.
 function findDropSpot(room, random, takenSpots) {
@@ -1035,6 +1077,8 @@ function findDropSpot(room, random, takenSpots) {
         }
       }
       for (const taken of takenSpots) if (Math.abs(taken[0] - tileX - 0.5) < 3 && Math.abs(taken[1] - tileZ - 0.5) < 3) isClear = false;
+      // Nor where the station already has something that the thing put here would spoil: see isTileFreeForAQuest.
+      if (isClear && !isTileFreeForAQuest(tileX, tileZ, 1.6)) isClear = false;
       // Nothing may already stand or lie on the tile itself, not even something low enough to walk over
       // (a pallet, a heap of planks): the thing put here would be standing in it. What hangs overhead is fine.
       const propsOnTile = tilePropLists[tileIndexAt(tileX, tileZ)];
@@ -1058,7 +1102,7 @@ function addCorridorDirectionSigns(plan) {
   computeDistanceField(fieldToPumpHall, findNearestWalkableTileIndex((pumpHall.startX + pumpHall.endX) / 2, (pumpHall.startZ + pumpHall.endZ) / 2), 0, null);
   computeDistanceField(fieldToShaft, findNearestWalkableTileIndex(SHAFT_POSITION.x, SHAFT_POSITION.z), 0, null);
   for (const corridor of plan.rooms) {
-    if (!corridor.isCorridor || corridor.isDuct || corridor.isBay) continue;
+    if (!corridor.isCorridor || corridor.isDuct) continue;
     const length = corridor.runsAlongX ? corridor.endX - corridor.startX : corridor.endZ - corridor.startZ;
     if (length < 6) continue;
     // The sign goes on the south wall (corridors running east-west) or the east wall (north-south).
@@ -1091,7 +1135,6 @@ function addCorridorDirectionSigns(plan) {
 function furnishGeneratedCorridor(corridor, random) {
   const startX = corridor.startX, startZ = corridor.startZ, endX = corridor.endX, endZ = corridor.endZ;
   const ceiling = corridor.ceiling;
-  if (corridor.isBay) return; // a salvage bay is bare: what goes in it, you bring
   if (corridor.isFlooded) setTileFlagInRectangle(startX, startZ, endX, endZ, TILE_FLAG_WATER);
   if (corridor.isVent) {
     // A vent: nothing in it but the seams of the sheet metal, one every other tile, so a scan has something to
@@ -1160,6 +1203,10 @@ function addBeamsToLargeRoom(room) {
 }
 
 // Builds a station from a seed. Returns true, or false if no workable plan was found (the map is left empty).
+// The plan of the generated station that was built last, or null: what the quests need to know of it (its rooms
+// and which ring each is in, its doorways).
+let generatedStationPlan = null;
+
 function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   if (!GENERATED_SIZE_PRESETS[sizeKey]) sizeKey = 'medium';
   if (!GENERATED_LAYOUT_PRESETS[layoutKey]) layoutKey = 'mixed';
@@ -1282,21 +1329,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   }
 
   // Every door is labelled, on each side, with the name of what is behind it.
-  for (const door of plan.doors) {
-    for (let side = 0; side < 4; side++) {
-      const step = WALL_DIRECTIONS[side];
-      const standX = door.tileX + step[0], standZ = door.tileZ + step[1];
-      const beyondX = door.tileX - step[0], beyondZ = door.tileZ - step[1];
-      if (!isTileOpenAt(standX, standZ) || !isTileOpenAt(beyondX, beyondZ)) continue;
-      const standIndex = tileIndexAt(standX, standZ);
-      if (tileFlags[standIndex] & TILE_FLAG_DOOR) continue;
-      if (tileCeilingHeight[standIndex] - tileFloorHeight[standIndex] < 2.62) continue;
-      const beyondName = ZONE_NAMES[tileZone[tileIndexAt(beyondX, beyondZ)]];
-      if (!beyondName) continue;
-      placement.zone = tileZone[standIndex];
-      addWallSign(beyondName, standX, standZ, (side + 2) % 4, { width: 0.96, height: beyondName.length > 12 ? 0.13 : 0.18, centerY: 2.47 });
-    }
-  }
+  for (const door of plan.doors) addDoorLabels(door.tileX, door.tileZ);
   clearPlacement();
 
   // The Stills may walk in their store and in whatever is outside its door.
@@ -1320,12 +1353,11 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   placement.isGenerating = false;
   computeNavigationGrid();
   computeLevelBounds();
-  placeQuests(plan, random);
   addCorridorDirectionSigns(plan);
 
   // Places for the Hollow to wander between: the middle of every room and corridor.
   for (const room of plan.rooms) {
-    if (room.key === 'calibrationStore' || room.isVent || room.isBay) continue; // a vent is a way through, not somewhere to wander to; nor is a salvage bay
+    if (room.key === 'calibrationStore' || room.isVent) continue; // a vent is a way through, not somewhere to wander to
     if (room.route) {
       const middle = room.route[Math.floor(room.route.length / 2)];
       roamingWaypoints.push([middle % GRID_WIDTH + 0.5, Math.floor(middle / GRID_WIDTH) + 0.5]);
@@ -1334,10 +1366,28 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
     const index = findNearestWalkableTileIndex((room.startX + room.endX) / 2, (room.startZ + room.endZ) / 2);
     if (index >= 0) roamingWaypoints.push([index % GRID_WIDTH + 0.5, Math.floor(index / GRID_WIDTH) + 0.5]);
   }
-  level.roomCount = plan.rooms.length - plan.bays.length; // (how much lies about a station goes by this: the bays are not rooms to litter)
+  level.roomCount = plan.rooms.length; // (how much lies about a station goes by this)
   level.loopCount = plan.loopCount;
   level.ventCount = plan.ventCount;
+  generatedStationPlan = plan; // the quests are put into it afterwards (buildStation)
   return true;
+}
+
+// Letters a door, on each side, with the name of what is behind it (where the wall over it is high enough).
+function addDoorLabels(doorTileX, doorTileZ) {
+  for (let side = 0; side < 4; side++) {
+    const step = WALL_DIRECTIONS[side];
+    const standX = doorTileX + step[0], standZ = doorTileZ + step[1];
+    const beyondX = doorTileX - step[0], beyondZ = doorTileZ - step[1];
+    if (!isTileOpenAt(standX, standZ) || !isTileOpenAt(beyondX, beyondZ)) continue;
+    const standIndex = tileIndexAt(standX, standZ);
+    if (tileFlags[standIndex] & TILE_FLAG_DOOR) continue;
+    if (tileCeilingHeight[standIndex] - tileFloorHeight[standIndex] < 2.62) continue;
+    const beyondName = ZONE_NAMES[tileZone[tileIndexAt(beyondX, beyondZ)]];
+    if (!beyondName) continue;
+    placement.zone = tileZone[standIndex];
+    addWallSign(beyondName, standX, standZ, (side + 2) % 4, { width: 0.96, height: beyondName.length > 12 ? 0.13 : 0.18, centerY: 2.47 });
+  }
 }
 
 function pushPhantom(x, z, yaw, triggerZone, onlyBeforePower) {
@@ -1346,18 +1396,119 @@ function pushPhantom(x, z, yaw, triggerZone, onlyBeforePower) {
 }
 
 // Empties the map and builds either the classic station or a generated one.
-function buildStation(kind, seed, sizeKey, layoutKey, levelsKey) {
+//
+// A station is built in two parts that are kept apart.
+//   THE MAP is everything a seed gives: rooms, corridors, doors, vents, furniture, signs, the Hollow's hatches,
+//   the floor that is loud to walk on, and everything that lies loose. Nothing in it knows what a quest is.
+//   THE QUESTS are put into the finished map afterwards (09-quests.js), from numbers of their own (`questSeed`,
+//   which is the station's seed unless something else is asked for). They take places the map has free, and dig
+//   their salvage bays into rock behind doorways it left unused. They move nothing and remove nothing.
+// So the same seed gives the same map whatever quests it has, and a quest that is added or changed later
+// alters no map. recordMapAsBuilt and auditMapApartFromQuests below are how that is checked.
+function buildStation(kind, seed, sizeKey, layoutKey, levelsKey, questSeed) {
+  generatedStationPlan = null;
   const wasBuiltAsAsked = buildStationRooms(kind, seed, sizeKey, layoutKey, levelsKey);
-  releaseDuctRouteScratch(); // the 24 megabytes the ducts were routed with are not needed again until the next station
-  // Last of all, the ceiling hatches of the Hollow's crawlspace: they depend on where the locked doors ended up.
+  releaseDuctRouteScratch(); // the megabytes the ducts were routed with are not needed again until the next station
+  // The ceiling hatches of the Hollow's crawlspace: they depend on where the locked doors ended up.
   placeHollowHatches();
-  // And the loose things on the floor that are loud to walk on. After the hatches, so that none lies under one.
+  // The loose things on the floor that are loud to walk on. After the hatches, so that none lies under one.
   placeNoisyFloor();
-  // And everything that lies loose: the cans, the litter, and the things worth carrying out.
+  // And everything that lies loose: the cans, the litter, and the things worth carrying out. (Where they lie
+  // is decided here; they are put out below, once the quests have dug what they dig.)
   planStationLooseObjects();
+  recordMapAsBuilt();
+
+  // The quests. Kessel-9 asks for nothing but power, its three spools and the lift.
+  level.questSeed = generatedStationPlan ? (questSeed === undefined || questSeed === null ? level.seed : questSeed) : 0;
+  if (generatedStationPlan) placeQuests(generatedStationPlan, level.questSeed, GENERATED_SIZE_PRESETS[level.sizeKey]);
+  else addAlwaysQuests();
+
   spawnStationLooseObjects();
   settleHaulTarget(); // what Salvage asks for, if this station has that quest, now that it is known what lies about
   return wasBuiltAsAsked;
+}
+
+// ---------------------------------------------------------------------------
+// Keeping the map apart from the quests: the proof
+// ---------------------------------------------------------------------------
+
+// What the map was when it was finished and before any quest touched it: how much of each list was the map's,
+// and one number worked out from all of it.
+const mapAsBuilt = { fingerprint: 0, parts: {}, propCount: 0, doorCount: 0, interactableCount: 0, zoneCount: 0,
+  boundsMinimumX: 0, boundsMinimumZ: 0, boundsMaximumX: 0, boundsMaximumZ: 0 };
+
+function recordMapAsBuilt() {
+  level.questTiles.length = 0;
+  mapAsBuilt.propCount = worldProps.length; mapAsBuilt.doorCount = doors.length;
+  mapAsBuilt.interactableCount = interactables.length; mapAsBuilt.zoneCount = ZONE_NAMES.length;
+  mapAsBuilt.boundsMinimumX = level.boundsMinimumX; mapAsBuilt.boundsMinimumZ = level.boundsMinimumZ;
+  mapAsBuilt.boundsMaximumX = level.boundsMaximumX; mapAsBuilt.boundsMaximumZ = level.boundsMaximumZ;
+  mapAsBuilt.parts = {};
+  mapAsBuilt.fingerprint = computeMapFingerprint(mapAsBuilt.parts);
+  level.mapFingerprint = mapAsBuilt.fingerprint;
+}
+
+// One number from everything that is the map's: every tile within its bounds (a tile a quest has dug counts as the rock it was),
+// every prop, door, zone, thing to use, hatch, loud patch of floor, loose thing, and place the Hollow or an
+// apparition goes. Two maps with the same number are, to all intents, the same map.
+// `parts`, if given, is filled with the number as it stood after each of those, by name: to say which differs.
+function computeMapFingerprint(parts) {
+  let hash = 2166136261;
+  const add = function (value) { hash = Math.imul(hash ^ (Math.round(value * 1000) | 0), 16777619); };
+  const addText = function (text) { for (let index = 0; index < text.length; index++) hash = Math.imul(hash ^ text.charCodeAt(index), 16777619); };
+  const done = function (name) { if (parts) parts[name] = hash >>> 0; };
+  const dug = new Set(level.questTiles);
+  for (let tileZ = mapAsBuilt.boundsMinimumZ; tileZ < mapAsBuilt.boundsMaximumZ; tileZ++) {
+    for (let tileX = mapAsBuilt.boundsMinimumX; tileX < mapAsBuilt.boundsMaximumX; tileX++) {
+      const index = tileIndexAt(tileX, tileZ);
+      // A tile a quest has dug was rock when the map was finished, and is read as that rock.
+      if (dug.has(index)) { add(0); add(0); add(0); add(0); add(0); continue; }
+      add(tileIsOpen[index]); add(tileFloorHeight[index]); add(tileCeilingHeight[index]); add(tileFlags[index]); add(tileZone[index]);
+      if (parts && parts.tiles) parts.tiles.push(tileX, tileZ, tileIsOpen[index], tileFloorHeight[index], tileCeilingHeight[index], tileFlags[index], tileZone[index]);
+    }
+  }
+  done('the tiles');
+  for (let index = 0; index < mapAsBuilt.propCount && index < worldProps.length; index++) {
+    const prop = worldProps[index];
+    add(prop.kind); add(prop.centerX); add(prop.centerY); add(prop.centerZ); add(prop.boundsHalfX); add(prop.boundsHalfZ); add(prop.minimumY); add(prop.maximumY);
+    add(prop.surfaceClass); add(prop.objectId); add(prop.blocksMovement ? 1 : 0); add(prop.isRemoved ? 1 : 0);
+  }
+  done('the props');
+  for (let index = 0; index < mapAsBuilt.doorCount && index < doors.length; index++) { add(doors[index].tileX); add(doors[index].tileZ); add(doors[index].kind); add(doors[index].cardLevel || 0); }
+  done('the doors');
+  for (let index = 0; index < mapAsBuilt.interactableCount && index < interactables.length; index++) { add(interactables[index].objectId); add(interactables[index].x); add(interactables[index].z); }
+  done('the things to use');
+  for (let index = 0; index < mapAsBuilt.zoneCount && index < ZONE_NAMES.length; index++) addText(ZONE_NAMES[index]);
+  done('the names of the rooms');
+  for (const hatch of hollowHatches) { add(hatch.x); add(hatch.z); add(hatch.ceilingY); }
+  done('the hatches');
+  for (const patch of noisyFloorPatches) { if (!patch.isFromPlay) { add(patch.x); add(patch.z); addText(patch.kind); } }
+  for (const heap of noisyFloorCanHeaps) { add(heap.x); add(heap.z); }
+  done('the floor that is loud to walk on');
+  for (const thing of stationLooseObjects) { addText(thing.kindKey); add(thing.x); add(thing.y); add(thing.z); for (const part of thing.orientation) add(part); }
+  done('the things that lie loose');
+  for (const waypoint of roamingWaypoints) { add(waypoint[0]); add(waypoint[1]); }
+  for (const phantom of phantomDefinitions) { add(phantom.x); add(phantom.z); add(phantom.triggerZone); }
+  for (const mouth of level.ventMouths) { add(mouth.faceX); add(mouth.faceZ); }
+  done('the places the Hollow and the apparitions go');
+  return hash >>> 0;
+}
+
+// Has anything of the map been moved, removed or altered since it was finished? Returns what is wrong: nothing,
+// if the quests kept to their own. (Run on a station that has just been built: playing leaves marks too.)
+function auditMapApartFromQuests() {
+  const problems = [];
+  if (worldProps.length < mapAsBuilt.propCount) problems.push('props of the map have gone: ' + worldProps.length + ' of ' + mapAsBuilt.propCount);
+  if (doors.length < mapAsBuilt.doorCount) problems.push('doors of the map have gone');
+  if (interactables.length < mapAsBuilt.interactableCount) problems.push('things to use that were the map\'s have gone');
+  const now = {};
+  if (computeMapFingerprint(now) !== mapAsBuilt.fingerprint) {
+    // The first part whose number is not what it was is where the map was touched.
+    let touched = 'something';
+    for (const name in mapAsBuilt.parts) if (now[name] !== mapAsBuilt.parts[name]) { touched = name; break; }
+    problems.push('the map is not as it was built: ' + touched + ' have been altered since');
+  }
+  return problems;
 }
 
 function buildStationRooms(kind, seed, sizeKey, layoutKey, levelsKey) {

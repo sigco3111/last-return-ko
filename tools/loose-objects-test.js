@@ -839,7 +839,13 @@ function installLab() {
       let seed = 12345 + station[1] * 977;
       const chance = function () { seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
       const places = [];
-      for (let z = 2; z < 300; z++) for (let x = 2; x < 300; x++) if (d.isSpaceOpenAt(x + 0.5, 1, z + 0.5) && !(d.getTileFlagsAt(x + 0.5, z + 0.5) & d.tileFlagPit)) places.push([x + 0.5, z + 0.5]);
+      // Anywhere there is floor to stand on. (Not simply any open tile: one with a pump or a cabinet on it would
+      // start a thing off inside the machine, which is not throwing it, and it is squeezed down into the floor.)
+      for (let z = 2; z < 300; z++) for (let x = 2; x < 300; x++) {
+        if (!d.isSpaceOpenAt(x + 0.5, 1, z + 0.5) || (d.getTileFlagsAt(x + 0.5, z + 0.5) & d.tileFlagPit)) continue;
+        const spot = d.findWalkableSpotNear(x + 0.5, z + 0.5);
+        if (spot && spot.x === x + 0.5 && spot.z === z + 0.5) places.push([x + 0.5, z + 0.5]);
+      }
       const kinds = Object.keys(d.looseObjectKinds), thrown = [];
       const statistics = d.looseState.statistics, lostBefore = statistics.lostDownThePit, putBackBefore = statistics.putBack;
       const started = performance.now();

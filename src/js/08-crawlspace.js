@@ -572,6 +572,16 @@ function shutHollowHatches() {
   }
 }
 
+// Works out again which floor belongs to which part, for a station whose hatches are already in place: something
+// has been stood on the floor since (a quest's crate, which is no longer floor the Hollow walks on). The hatches
+// stay where they are; each is told afresh which part it is in, since the parts may be numbered differently.
+function refreshHollowParts() {
+  if (hollowHatches.length === 0) return;
+  findHollowParts();
+  for (const hatch of hollowHatches) hatch.part = tileHollowPart[hatch.index];
+  refreshHollowDoorBlocks();
+}
+
 // Gives every part of the station at least one hatch, and the larger parts more, spread out.
 // Nothing here is left to chance: the same station always gets the same hatches.
 function placeHollowHatches() {

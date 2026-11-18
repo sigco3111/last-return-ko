@@ -16,8 +16,8 @@
 //
 //   'haul'      Nothing of its own lies anywhere. It asks for a sum's worth of the loose things a station
 //               has lying about anyway, sealed into bays that it opens one at a time. Its things are the
-//               panels of those bays; the bays themselves are planned with the station (planHaulBays in
-//               03-levelgen.js) and run by 08-loose-objects.js.                               (salvage)
+//               panels of those bays; the bays themselves are dug into the finished station (findHaulBaySites
+//               and digHaulBay in 03-levelgen.js) and run by 08-loose-objects.js.              (salvage)
 //
 // And a quest holds up one of three moments (`blocks`):
 //   'mains'     Generator 2 will not start until it is done.
@@ -58,10 +58,15 @@
 //   text           every sentence it uses. {done}, {total} and {name} are filled in. See the entries below
 //                  for which sentences each kind uses; one that is left out is simply not said.
 //
-// Every quest draws its random numbers from a sequence of its own, started from the station's seed and the
-// quest's key. So adding a quest, or changing one, never moves anything else in any station.
-// (The first four below were written before this file was. They draw their numbers the way they always
-// did, which is what `legacy` on them says, so that every seed still builds the station it used to.)
+// QUESTS AND THE MAP ARE KEPT APART
+// A station's map is finished before any quest is thought of (buildStation in 03-levelgen.js), and nothing in
+// it knows what a quest is. The quests are then put into it: which ones, and where their things go, from
+// sequences of random numbers that are theirs alone, one for each quest, started from the quest seed (the
+// station's seed, unless another is asked for) and the quest's key. A quest takes places the map has free
+// (findDropSpot), and the salvage quest digs its bays into rock behind doorways the map left unused. It moves
+// nothing and removes nothing of the map.
+// So adding a quest, or changing one, never alters any station's map, and never moves another quest's things
+// except where they would have wanted the same place.
 // ---------------------------------------------------------------------------
 
 // Things you carry for a quest. Any one of a kind does for any machine that needs that kind.
@@ -81,7 +86,7 @@ const QUEST_ITEMS = {
 // The draws that decide which quests a station has. A pool gives a station some of its quests, not all:
 // how many is the [fewest, most] pair named `sizeField` in GENERATED_SIZE_PRESETS (03-levelgen.js).
 const QUEST_POOLS = {
-  jobs: { sizeField: 'extraJobs', legacy: true },
+  jobs: { sizeField: 'extraJobs' },
   errands: { sizeField: 'errands' }
 };
 
@@ -113,7 +118,7 @@ const QUESTS = [
 
   // ---- fuel for Generator 2 ----
   {
-    key: 'fuel', kind: 'supply', blocks: 'mains', pool: 'jobs', legacy: { reservesASpot: true, placeNumbers: 'machines', placeRank: 1 },
+    key: 'fuel', kind: 'supply', blocks: 'mains', pool: 'jobs',
     requires: { item: 'fuel', objectId: OBJECT_FUEL_CAN },
     target: function () { return GENERATOR_POSITION; },
     text: {
@@ -125,7 +130,7 @@ const QUESTS = [
 
   // ---- core samples ----
   {
-    key: 'cores', kind: 'collect', blocks: 'upload', pool: 'jobs', legacy: { placeNumbers: 'station', placeRank: 2 },
+    key: 'cores', kind: 'collect', blocks: 'upload', pool: 'jobs',
     count: [2, 4], fewest: 2, most: MAXIMUM_CORE_SAMPLES, firstObjectId: OBJECT_CORE_FIRST,
     tiers: [0, 'beforeLast'],
     build: function (objectId, x, z, random) { addCoreSample(objectId, x, z, random() * 3); },
@@ -141,7 +146,7 @@ const QUESTS = [
 
   // ---- more generators: Generator 1, 3 and 4 ----
   {
-    key: 'generators', kind: 'activate', blocks: 'upload', legacy: { planNumbers: [0x9e3779b1, 0x6e3a7011], placeNumbers: 'machines', placeRank: 4 },
+    key: 'generators', kind: 'activate', blocks: 'upload',
     countFromSize: 'extraGenerators', most: MAXIMUM_EXTRA_GENERATORS, firstObjectId: OBJECT_EXTRA_GENERATOR_FIRST,
     tiers: [0, 'beforeLast'],
     names: EXTRA_GENERATOR_NUMBERS.map(function (number) { return 'Generator ' + number; }),
@@ -226,7 +231,7 @@ const QUESTS = [
 
   // ---- the winch breaker ----
   {
-    key: 'breaker', kind: 'activate', blocks: 'lift', pool: 'jobs', legacy: { placeNumbers: 'station', placeRank: 3 },
+    key: 'breaker', kind: 'activate', blocks: 'lift', pool: 'jobs',
     count: 1, firstObjectId: OBJECT_WINCH_BREAKER,
     tiers: [1, 1],
     names: ['Winch breaker'],
@@ -275,7 +280,7 @@ function createQuestRandom(seed, name) {
 }
 
 // ---------------------------------------------------------------------------
-// Which quests a station has (decided while it is planned)
+// Which quests a station has
 // ---------------------------------------------------------------------------
 
 // How many things a quest has in this station, and which of them need an item brought first.
@@ -292,26 +297,25 @@ function planOneQuest(definition, size, random) {
   return { count: count, needsItem: needsItem };
 }
 
-// Returns { questKey: { count, needsItem } } for the quests this station is to have.
-// `stationRandom` is the station's own sequence, which the quests written first still draw from.
-function planQuests(seed, size, stationRandom) {
+// Returns { questKey: { count, needsItem } } for the quests a station of this size is to have, by this seed.
+function planQuests(seed, size) {
   const planned = {};
   for (const poolKey in QUEST_POOLS) {
     const pool = QUEST_POOLS[poolKey];
     const members = QUESTS.filter(function (definition) { return definition.pool === poolKey; });
     if (members.length === 0) continue;
-    const random = pool.legacy ? stationRandom : createQuestRandom(seed, 'pool ' + poolKey);
+    const random = createQuestRandom(seed, 'pool ' + poolKey);
     const range = size[pool.sizeField] || [0, 0];
     const wanted = Math.min(members.length, range[0] + Math.floor(random() * (range[1] - range[0] + 1)));
-    const chosen = members.map(function (definition) { return [random(), definition]; }).sort(function (a, b) { return a[0] - b[0]; })
-      .slice(0, wanted).map(function (pair) { return pair[1]; });
-    for (const definition of members) if (chosen.indexOf(definition) >= 0) planned[definition.key] = planOneQuest(definition, size, random);
+    // Which of the pool: each member has a draw of its own, named after it, so that a quest joining the pool
+    // later does not change which of the others a seed picks any more than it has to.
+    const chosen = members.map(function (definition) { return [createQuestRandom(seed, 'pick ' + definition.key)(), definition]; })
+      .sort(function (a, b) { return a[0] - b[0]; }).slice(0, wanted).map(function (pair) { return pair[1]; });
+    for (const definition of members) if (chosen.indexOf(definition) >= 0) planned[definition.key] = planOneQuest(definition, size, createQuestRandom(seed, 'plan ' + definition.key));
   }
   for (const definition of QUESTS) {
     if (definition.pool) continue;
-    const numbers = definition.legacy && definition.legacy.planNumbers;
-    const random = numbers ? createSeededRandomGenerator((Math.imul(seed + 1, numbers[0]) ^ numbers[1]) >>> 0) : createQuestRandom(seed, 'plan ' + definition.key);
-    const one = planOneQuest(definition, size, random);
+    const one = planOneQuest(definition, size, createQuestRandom(seed, 'plan ' + definition.key));
     if (one.count > 0 || definition.always) planned[definition.key] = one;
   }
   return planned;
@@ -373,8 +377,12 @@ function addAlwaysQuests() {
   registerQuests();
 }
 
-function placeQuests(plan, stationRandom) {
+// Puts the quests into a station that is finished. `plan` is the plan it was built from (its rooms, which ring
+// each is in, and its doorways); `seed` is what the quests' numbers come from; `size` is the entry of
+// GENERATED_SIZE_PRESETS. Nothing of the map is moved or removed (see the top of this file).
+function placeQuests(plan, seed, size) {
   clearQuests();
+  const wantedQuests = planQuests(seed, size);
   const takenSpots = [];
   const lastRing = plan.finalTier - 1;
   const resolveTier = function (tier) { return tier === 'beforeLast' ? lastRing : (tier === 'last' ? plan.finalTier : tier); };
@@ -420,47 +428,29 @@ function placeQuests(plan, stationRandom) {
     for (const pair of others) if (pair[0] > QUEST_ITEM_NEAR_STEPS && placeInRoom(pair[1], random, place)) return true;
     return false;
   };
-  // The sequences of random numbers. The quests written first share two: the station's own, and one for the
-  // machines and their fuel. Every other quest has one to itself.
-  const sharedMachines = createSeededRandomGenerator((Math.imul(plan.seed + 1, 0x85ebca6b) ^ 0x2f6b3d01) >>> 0);
-  const randomFor = function (definition) {
-    const name = definition.legacy && definition.legacy.placeNumbers;
-    if (name === 'station') return stationRandom;
-    if (name === 'machines') return sharedMachines;
-    return createQuestRandom(plan.seed, 'place ' + definition.key);
-  };
+  // Every quest has a sequence of random numbers to itself.
+  const randomFor = function (definition) { return createQuestRandom(seed, 'place ' + definition.key); };
 
-  // The order things are put out in. The quests written first keep the order they were written in, because
-  // where each one's things end up depends on what was put out before it; the rest follow in the order of QUESTS.
-  const planned = QUESTS.filter(function (definition) { return plan.quests[definition.key] !== undefined; });
-  const rankOf = function (definition) {
-    if (definition.legacy && definition.legacy.placeRank) return definition.legacy.placeRank;
-    return (definition.placeLast ? 1000 : 100) + QUESTS.indexOf(definition);
-  };
-  const usesStation = function (definition) { return Boolean(definition.legacy && definition.legacy.placeNumbers === 'station'); };
-  const inOrder = planned.slice().sort(function (a, b) { return rankOf(a) - rankOf(b); });
-
-  // First: the fuel can for Generator 2 used to be put in any room you can reach without power. The old
-  // choice is still made, and its place kept free, only so that the station's own numbers are drawn as they
-  // always were and the core samples and the breaker stay where they were for every seed.
-  for (const definition of inOrder) {
-    if (!(definition.legacy && definition.legacy.reservesASpot)) continue;
-    for (const room of shuffledRooms(0, 0, stationRandom)) {
-      const oldSpot = findDropSpot(room, stationRandom, takenSpots);
-      if (oldSpot) { takenSpots.push(oldSpot); break; }
-    }
-  }
+  // The order things are put out in: the order of QUESTS, with those marked `placeLast` after the rest, and
+  // the salvage bays dug last of all, so that no other quest's thing is anywhere else for a bay being there.
+  const rankOf = function (definition) { return (definition.kind === 'haul' ? 2000 : (definition.placeLast ? 1000 : 0)) + QUESTS.indexOf(definition); };
+  const inOrder = QUESTS.filter(function (definition) { return wantedQuests[definition.key] !== undefined; })
+    .sort(function (a, b) { return rankOf(a) - rankOf(b); });
 
   const placed = {};
   const placeOne = function (definition) {
-    const wanted = plan.quests[definition.key], random = randomFor(definition), instance = createQuestInstanceWithFixedThings(definition);
+    const wanted = wantedQuests[definition.key], random = randomFor(definition), instance = createQuestInstanceWithFixedThings(definition);
     const fixedCount = instance.objects.length;
     if (definition.kind === 'haul') {
-      // Its things are the panels of the bays that were planned with the station.
-      if (!plan.bays || plan.bays.length === 0) return;
-      plan.bays.forEach(function (planned, index) {
+      // Its things are the panels of its bays, which are dug now, into the station as it stands. A station
+      // with no place for even one bay does not have the quest.
+      const range = size.salvageBays || [1, 1];
+      const bays = findHaulBaySites(plan, range[0] + Math.floor(random() * (range[1] - range[0] + 1)), random);
+      if (bays.length === 0) return;
+      bays.forEach(function (bay, index) {
+        digHaulBay(bay, index + 1);
         const objectId = getQuestObjectId(definition, index, false);
-        const panel = buildHaulBay(planned, objectId, index);
+        const panel = buildHaulBay(bay, objectId, index);
         instance.objects.push({ objectId: objectId, index: index, name: definition.names[index], x: panel.x, z: panel.z, needsItem: false, itemObjectId: 0, isSupplied: false, isDone: false });
       });
       instance.total = instance.objects.length;
@@ -508,14 +498,16 @@ function placeQuests(plan, stationRandom) {
     }
     placed[definition.key] = instance;
   };
-  for (const definition of inOrder) if (usesStation(definition)) placeOne(definition);
-  for (const definition of inOrder) if (!usesStation(definition)) placeOne(definition);
+  for (const definition of inOrder) placeOne(definition);
 
   // The station's quests, in the order of QUESTS: the order the objective and the terminal speak of them in.
   for (const definition of QUESTS) if (placed[definition.key]) level.quests.push(placed[definition.key]);
   registerQuests();
-  // Crates, cabinets and machines stand on the floor: work out again where things can walk.
+  // Crates, cabinets and machines stand on the floor, and a bay is new floor: work out again where things can
+  // walk, and how far the station reaches.
   computeNavigationGrid();
+  computeLevelBounds();
+  refreshHollowParts(); // which floor the Hollow can walk on in each part of the station (08-crawlspace.js)
 }
 
 // ---------------------------------------------------------------------------

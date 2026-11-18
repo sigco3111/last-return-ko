@@ -435,6 +435,18 @@ function debugPutLooseObjectAhead(kindKey) {
   return object;
 }
 
+// Builds the station that is loaded again, with its quests drawn from other numbers, and starts a new descent
+// into it. A station's map comes from its seed alone and its quests are put in afterwards (buildStation in
+// 03-levelgen.js), so everything but the quests is where it was.
+function debugLoadOtherQuests() {
+  if (level.kind !== 'generated') { showMessage('Kessel-9 has its own quests and no others.', 3, 'info'); return; }
+  const mapBefore = level.mapFingerprint, questSeed = 1 + Math.floor(Math.random() * 999999);
+  loadStation('generated', level.seed, level.sizeKey, level.layoutKey, level.levelsKey, questSeed);
+  resetWorldState();
+  const names = level.quests.map(function (quest) { return quest.key + (quest.total > 0 ? ' ' + quest.total : ''); }).join(', ');
+  showMessage((level.mapFingerprint === mapBefore ? 'The same station' : 'NOT the same station') + ', other quests (numbers ' + questSeed + '): ' + names + '.', 7, level.mapFingerprint === mapBefore ? 'info' : 'warning');
+}
+
 function debugRemoveLooseObjects() {
   markDebugUsed();
   while (looseObjects.length > 0) removeLooseObject(looseObjects[looseObjects.length - 1]); // one by one, so that each takes its points with it
@@ -618,6 +630,12 @@ function initializeDebugMode() {
     haulButton.blur();
   });
   looseGrid.appendChild(haulButton);
+  // The same station again with other quests. The map does not change by it: that is the point of the button.
+  const otherQuestsButton = createDebugElement('button', 'button-quiet', 'Other quests, same station');
+  otherQuestsButton.type = 'button';
+  otherQuestsButton.id = 'debug-other-quests';
+  otherQuestsButton.addEventListener('click', function () { debugLoadOtherQuests(); otherQuestsButton.blur(); });
+  looseGrid.appendChild(otherQuestsButton);
   panel.appendChild(looseGrid);
 
   // Apparitions: call one up of a chosen kind, now, whatever the phantom director thinks of it.
