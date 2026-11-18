@@ -946,12 +946,18 @@ function borrowTileField(name) {
 
 // Flood-fills walking distance (in tiles) outward from a target tile.
 // `forbiddenZone` lets a walker refuse to enter one zone; `allowedZones` restricts it to a set.
+// `targetIndex` may be a list of tiles instead of one: the distance is then to whichever of them is nearest
+// (that is how it is measured from several players at once).
 function computeDistanceField(field, targetIndex, forbiddenZone, allowedZones) {
   field.fill(NAVIGATION_UNREACHABLE);
-  if (targetIndex < 0) return;
+  const isList = typeof targetIndex !== 'number';
   let queueHead = 0, queueTail = 0;
-  field[targetIndex] = 0;
-  navigationQueue[queueTail++] = targetIndex;
+  for (let position = 0; position < (isList ? targetIndex.length : 1); position++) {
+    const startIndex = isList ? targetIndex[position] : targetIndex;
+    if (startIndex < 0 || field[startIndex] === 0) continue;
+    field[startIndex] = 0;
+    navigationQueue[queueTail++] = startIndex;
+  }
   while (queueHead < queueTail) {
     const index = navigationQueue[queueHead++];
     const nextDistance = field[index] + 1;

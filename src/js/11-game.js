@@ -514,6 +514,12 @@ function completeLiftArrival(radioKey) {
 // Death and retry
 // ---------------------------------------------------------------------------
 
+// Something has got hold of one of `players`. If that is you, it is your death. Anybody else is not this
+// game's to kill.
+function catchPlayer(caught, kind, figure) {
+  if (caught === player) triggerPlayerDeath(kind, figure);
+}
+
 function triggerPlayerDeath(kind, figure) {
   if (game.mode !== 'playing') return;
   if (debugState.options.invulnerable || debugState.options.flyMode) return;
@@ -878,7 +884,7 @@ function startApplication() {
   showOnlyScreen('screen-title');
 
   window.lastReturnDebug = {
-    game: game, player: player, hollow: hollow, renderer: renderer, renderCamera: renderCamera, audio: audio,
+    game: game, player: player, players: players, hollow: hollow, renderer: renderer, renderCamera: renderCamera, audio: audio,
     playHollowRoar: playHollowRoar, playHollowSnarl: playHollowSnarl, playHollowLostHiss: playHollowLostHiss, playHollowSniff: playHollowSniff, playHollowCuriousTrill: playHollowCuriousTrill,
     playStinger: playStinger, playSweepSound: playSweepSound, playInterfaceBlip: playInterfaceBlip, playRadioBlip: playRadioBlip, playDeniedSound: playDeniedSound, stills: stills, doors: doors, pointCloud: pointCloud, settings: settings,
     beamLines: beamLines,

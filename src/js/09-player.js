@@ -57,6 +57,12 @@ const player = {
   isPainting: false
 };
 
+// Everyone in the station. On your own that is you, and nothing else is ever in this list. In a shared descent
+// the others are added to it: each a record with the fields of `player` that the station itself reads (x, z,
+// velocityX, velocityZ, audibleRadius). What hunts you and what opens for you ask this list and not `player`,
+// so that they treat everybody alike. What only you see and hear (the HUD, captions, apparitions) asks `player`.
+const players = [player];
+
 const settings = {
   sensitivity: 1.0,
   volume: 0.8,

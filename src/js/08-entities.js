@@ -62,6 +62,26 @@ let stillDistanceFieldAge = 99;
 
 
 // ---------------------------------------------------------------------------
+// Everyone in the station (`players`, 09-player.js): who is nearest, and the tiles they stand on
+// ---------------------------------------------------------------------------
+
+// Whoever of `among` (everyone, if left out) is nearest to a place in a straight line. `among` is never empty.
+function findNearestPlayer(x, z, among) {
+  among = among || players;
+  let nearest = among[0], nearestDistance = Infinity;
+  for (const one of among) {
+    const distance = distanceBetweenPoints(x, z, one.x, one.z);
+    if (distance < nearestDistance) { nearestDistance = distance; nearest = one; }
+  }
+  return nearest;
+}
+
+// The tile under each of them, for a distance field that is to be measured from whoever is nearest.
+function findPlayerTileIndexes(among) {
+  return among.map(function (one) { return findNearestWalkableTileIndex(one.x, one.z); });
+}
+
+// ---------------------------------------------------------------------------
 // Noise: anything loud the player does is reported here
 // ---------------------------------------------------------------------------
 
@@ -143,13 +163,16 @@ function updateDoors(dt) {
     } else if (door.forcedState !== null) {
       wantsOpen = door.forcedState;
     } else {
-      // TWEAK: doors notice you from 1.9 m away.
+      // TWEAK: doors notice you from 1.9 m away. They open for whoever is there; being told that one will not
+      // open is for you alone, when it is you standing at it.
+      const nearestPlayer = findNearestPlayer(door.centerX, door.centerZ);
+      const isSomeoneNear = distanceBetweenPoints(nearestPlayer.x, nearestPlayer.z, door.centerX, door.centerZ) < 1.9;
       const isPlayerNear = distanceBetweenPoints(player.x, player.z, door.centerX, door.centerZ) < 1.9;
       door.deniedMessageCooldown -= dt;
-      if (isPlayerNear) {
+      if (isSomeoneNear) {
         if (canPlayerOpenDoor(door)) {
           wantsOpen = true; openedByPlayer = true;
-        } else if (door.deniedMessageCooldown <= 0) {
+        } else if (isPlayerNear && door.deniedMessageCooldown <= 0) {
           door.deniedMessageCooldown = 5;
           playDeniedSound();
           if (door.kind === DOOR_KIND_KEYCARD && game.flags.powerOn) {
@@ -232,8 +255,9 @@ function deactivateHollow() {
   setFigureRaycastable(hollow.figure, false);
 }
 
+// Walking distance to the nearest of `players`, from everywhere.
 function refreshPlayerDistanceField() {
-  computeDistanceField(playerDistanceField, findNearestWalkableTileIndex(player.x, player.z), 0, null);
+  computeDistanceField(playerDistanceField, findPlayerTileIndexes(players), 0, null);
   playerDistanceFieldAge = 0;
 }
 
@@ -412,7 +436,8 @@ function relocateHollowAwayFromPlayer(graceSeconds) {
 function beginHollowHunt(x, z) {
   hollow.lastKnownPlayerX = x; hollow.lastKnownPlayerZ = z;
   hollow.timeSinceSensed = 0;
-  hollow.lastKnownVelocityX = player.velocityX; hollow.lastKnownVelocityZ = player.velocityZ;
+  const quarry = findNearestPlayer(x, z); // whoever it sensed there: the one standing nearest to the place
+  hollow.lastKnownVelocityX = quarry.velocityX; hollow.lastKnownVelocityZ = quarry.velocityZ;
   hollow.doubleBackTimer = 0;
   if (hollow.state !== HOLLOW_STATE_HUNT) {
     hollow.state = HOLLOW_STATE_HUNT;
@@ -541,7 +566,8 @@ function updateHollow(dt) {
   if (isHollowInCrawlspace()) { updateHollowInCrawlspace(dt); return; }
   // Standing at a door, pounding on it: the same.
   if (hollow.doorBang && hollow.doorBang.isPounding) { updateHollowDoorBang(dt); return; }
-  const distanceToPlayer = distanceBetweenPoints(figure.x, figure.z, player.x, player.z);
+  const nearestPlayer = findNearestPlayer(figure.x, figure.z);
+  const distanceToPlayer = distanceBetweenPoints(figure.x, figure.z, nearestPlayer.x, nearestPlayer.z);
   const beamHits = figure.hitsThisFrame;
   figure.hitsThisFrame = 0;
   const canSense = hollow.graceTimer <= 0 && !debugState.options.creaturesIgnorePlayer;
@@ -563,15 +589,19 @@ function updateHollow(dt) {
   // That is you, when it is your scanner. Something else that scans (a scan grenade) draws it to itself.
   const beamSourceX = figure.beamSourceX === undefined ? player.x : figure.beamSourceX;
   const beamSourceZ = figure.beamSourceZ === undefined ? player.z : figure.beamSourceZ;
-  let isHeard = false, isLightFollowed = false;
+  let heardPlayer = null, heardDistance = Infinity, isLightFollowed = false;
   if (canSense) {
     if (isInBeam && hollow.anger >= TUNING.hollowAngerNoticeLevel) isLightFollowed = true;
-    const proximityRadius = player.audibleRadius * game.difficulty.hearingFactor * getHollowHearingBoost();
-    if (distanceToPlayer < proximityRadius &&
-        (distanceToPlayer < 1.6 || hasClearWalkingLine(figure.x, figure.z, player.x, player.z))) isHeard = true;
-    if (hollow.knowsPlayerPositionAlways) isHeard = true;
+    // Of everyone it can hear, it goes for the nearest.
+    for (const one of players) {
+      const distance = distanceBetweenPoints(figure.x, figure.z, one.x, one.z);
+      const proximityRadius = one.audibleRadius * game.difficulty.hearingFactor * getHollowHearingBoost();
+      if (distance < proximityRadius && distance < heardDistance &&
+          (distance < 1.6 || hasClearWalkingLine(figure.x, figure.z, one.x, one.z))) { heardPlayer = one; heardDistance = distance; }
+    }
+    if (!heardPlayer && hollow.knowsPlayerPositionAlways) heardPlayer = nearestPlayer;
   }
-  if (isHeard) beginHollowHunt(player.x, player.z);
+  if (heardPlayer) beginHollowHunt(heardPlayer.x, heardPlayer.z);
   else if (isLightFollowed) beginHollowHunt(beamSourceX, beamSourceZ);
   else hollow.timeSinceSensed += dt;
 
@@ -713,7 +743,7 @@ function updateHollow(dt) {
     stepHollowOnNoisyFloor(figure.x, figure.z, isHunting); // glass and loose plates give it away as they would you
   }
 
-  if (distanceToPlayer < TUNING.hollowKillDistance && hollow.graceTimer <= 0) triggerPlayerDeath('hollow', figure);
+  if (distanceToPlayer < TUNING.hollowKillDistance && hollow.graceTimer <= 0) catchPlayer(nearestPlayer, 'hollow', figure);
 }
 
 // Sets the Hollow's pose from what it is doing. `creature` is the Hollow, or a stand-in with the same fields
@@ -809,8 +839,8 @@ function awakenStills() {
   for (const still of stills) {
     if (still.isLateArrival && !still.isPresent) {
       still.isPresent = true;
-      const towardPlayer = Math.atan2(player.x - still.figure.x, -(player.z - still.figure.z));
-      still.figure.yaw = towardPlayer;
+      const nearestPlayer = findNearestPlayer(still.figure.x, still.figure.z);
+      still.figure.yaw = Math.atan2(nearestPlayer.x - still.figure.x, -(nearestPlayer.z - still.figure.z));
       still.figure.lastScannedTime = -999;
       updateFigureCapsules(still.figure);
       setFigureRaycastable(still.figure, true);
@@ -832,31 +862,37 @@ function isPositionCrowdedByOtherStill(still, x, z) {
 
 function updateStills(dt) {
   if (!game.difficulty.stillsEnabled) return;
-  const playerZone = getZoneAtPosition(player.x, player.z);
-  const isPlayerInStore = playerZone === level.storeZone;
-  const isPlayerInReach = level.stillZones.indexOf(playerZone) >= 0;
-  if (!isPlayerInReach || debugState.options.creaturesIgnorePlayer) return;
+  // They only stir for those who are in the rooms they keep to. Each goes for whoever of those is nearest to it.
+  let isPlayerInStore = false;
+  const playersInReach = [];
+  for (const one of players) {
+    const zone = getZoneAtPosition(one.x, one.z);
+    if (zone === level.storeZone) isPlayerInStore = true;
+    if (level.stillZones.indexOf(zone) >= 0) playersInReach.push(one);
+  }
+  if (playersInReach.length === 0 || debugState.options.creaturesIgnorePlayer) return;
   stillDistanceFieldAge += dt;
   if (stillsAreHunting && stillDistanceFieldAge > 0.3) {
-    computeDistanceField(stillDistanceField, findNearestWalkableTileIndex(player.x, player.z), 0, level.stillZones);
+    computeDistanceField(stillDistanceField, findPlayerTileIndexes(playersInReach), 0, level.stillZones);
     stillDistanceFieldAge = 0;
   }
   for (const still of stills) {
     if (!still.isPresent) continue;
     const figure = still.figure;
     const isObserved = game.time - figure.lastScannedTime < TUNING.stillObservedHoldSeconds;
-    const distanceToPlayer = distanceBetweenPoints(figure.x, figure.z, player.x, player.z);
+    const quarry = findNearestPlayer(figure.x, figure.z, playersInReach);
+    const distanceToPlayer = distanceBetweenPoints(figure.x, figure.z, quarry.x, quarry.z);
 
     if (!stillsAreHunting) {
       // Not hostile yet. They just never stand quite where you left them.
       still.restlessCooldown -= dt;
       if (!isPlayerInStore || isObserved || still.restlessCooldown > 0 || game.time - figure.lastScannedTime < 3.5) continue;
       still.restlessCooldown = randomBetween(4, 10); // TWEAK: seconds between a dormant dummy's small shifts
-      figure.yaw = Math.atan2(player.x - figure.x, -(player.z - figure.z));
+      figure.yaw = Math.atan2(quarry.x - figure.x, -(quarry.z - figure.z));
       if (Math.random() < 0.4 && distanceToPlayer > 4.2) {
         const shift = randomBetween(0.4, 0.9);
-        const newX = figure.x + (player.x - figure.x) / distanceToPlayer * shift;
-        const newZ = figure.z + (player.z - figure.z) / distanceToPlayer * shift;
+        const newX = figure.x + (quarry.x - figure.x) / distanceToPlayer * shift;
+        const newZ = figure.z + (quarry.z - figure.z) / distanceToPlayer * shift;
         if (isWalkableAt(Math.floor(newX), Math.floor(newZ)) && !isPositionCrowdedByOtherStill(still, newX, newZ) &&
             getZoneAtPosition(newX, newZ) === level.storeZone) {
           figure.x = newX; figure.z = newZ;
@@ -866,13 +902,17 @@ function updateStills(dt) {
       continue;
     }
 
-    if (distanceToPlayer < TUNING.stillKillDistance) { triggerPlayerDeath('still', figure); return; }
+    if (distanceToPlayer < TUNING.stillKillDistance) {
+      catchPlayer(quarry, 'still', figure);
+      if (quarry === player) return; // your death: nothing moves on
+      continue;                      // somebody else's: the others keep coming
+    }
     if (still.wakeDelay > 0) { still.wakeDelay -= dt; continue; }
     if (isObserved) continue;
 
     // Unobserved: walk toward the player along the flood-filled distance field.
-    let goalX = player.x, goalZ = player.z;
-    if (!(distanceToPlayer < 6 && hasClearWalkingLine(figure.x, figure.z, player.x, player.z))) {
+    let goalX = quarry.x, goalZ = quarry.z;
+    if (!(distanceToPlayer < 6 && hasClearWalkingLine(figure.x, figure.z, quarry.x, quarry.z))) {
       const tileX = Math.floor(figure.x), tileZ = Math.floor(figure.z);
       let bestValue = NAVIGATION_UNREACHABLE, bestX = -1, bestZ = -1;
       for (let offsetZ = -1; offsetZ <= 1; offsetZ++) {
@@ -894,7 +934,7 @@ function updateStills(dt) {
     const newX = figure.x + deltaX / goalDistance * step, newZ = figure.z + deltaZ / goalDistance * step;
     if (isPositionCrowdedByOtherStill(still, newX, newZ)) continue;
     figure.x = newX; figure.z = newZ;
-    figure.yaw = Math.atan2(player.x - figure.x, -(player.z - figure.z));
+    figure.yaw = Math.atan2(quarry.x - figure.x, -(quarry.z - figure.z));
     poseAdvancingStill(figure, distanceToPlayer);
     updateFigureCapsules(figure);
     still.distanceMovedSinceSound += step;
