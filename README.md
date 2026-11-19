@@ -1,4 +1,4 @@
-# 라스트 리턴 (Last Return) — 한국어판
+# 라스트 리턴 (Last Return) 한국어판
 
 [StefanKnol/Last-Return](https://github.com/StefanKnol/Last-Return)의 한국어 로컬라이제이션입니다.
 
@@ -46,6 +46,6 @@ node build.js   # src/를 묶어 자급자족 index.html 하나로 빌드
 ## 라이선스와 원작
 
 - 원작: [Last Return](https://github.com/StefanKnol/Last-Return) by Stefan Knol
-- 원작 라이선스: MIT — `LICENSE` 파일을 그대로 유지합니다.
+- 원작 라이선스: MIT. `LICENSE` 파일을 그대로 유지합니다.
 - 이 한국어판도 같은 MIT 라이선스를 따릅니다.
 - 원작에 포함된 라디오 음성 파일은 별도의 라이선스 조건이 있는 자산으로, 이 저장소에 포함하지 않습니다. 음성이 없는 대사는 자막으로만 표시됩니다(원작이 음성 파일이 없는 대사를 그렇게 처리합니다).
