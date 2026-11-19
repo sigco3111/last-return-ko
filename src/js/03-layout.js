@@ -48,14 +48,14 @@ let liftDoor = null;
 
 function addNote(objectId, x, y, z, yaw) {
   const paper = addBoxProp(x, y, z, 0.11, 0.008, 0.15, { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(objectId, x, y, z, 'Read the note', [paper], { mapLabel: 'NOTE' });
+  registerInteractable(objectId, x, y, z, '쪽지 읽기', [paper], { mapLabel: '노트' });
 }
 
 function addSurveySpool(objectId, x, y, z, label) {
   const reelCore = addBoxProp(x, y + 0.07, z, 0.1, 0.07, 0.1, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const reelBase = addBoxProp(x, y + 0.005, z, 0.14, 0.012, 0.14, { yaw: 0.78, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const reelCap = addBoxProp(x, y + 0.15, z, 0.14, 0.012, 0.14, { yaw: 0.78, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(objectId, x, y + 0.08, z, 'Take survey spool', [reelCore, reelBase, reelCap], { removeWhenUsed: true, mapLabel: label });
+  registerInteractable(objectId, x, y + 0.08, z, '측량 스풀 줍기', [reelCore, reelBase, reelCap], { removeWhenUsed: true, mapLabel: label });
 }
 
 
@@ -64,8 +64,8 @@ function addKeycard(x, y, z, cardLevel) {
   cardLevel = cardLevel || 1;
   const keycard = addBoxProp(x, y, z, 0.07, 0.01, 0.045, { yaw: 0.5, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const keycardLanyard = addBoxProp(x + 0.15, y - 0.003, z + 0.1, 0.1, 0.006, 0.012, { yaw: 1.1, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  const cardName = level.keycardCount > 1 ? 'keycard ' + cardLevel : 'keycard';
-  registerInteractable(KEYCARD_OBJECT_IDS[cardLevel], x, y + 0.025, z, 'Take ' + cardName, [keycard, keycardLanyard], { removeWhenUsed: true, mapLabel: cardName.toUpperCase() });
+  const cardName = level.keycardCount > 1 ? '키카드 ' + cardLevel : '키카드';
+  registerInteractable(KEYCARD_OBJECT_IDS[cardLevel], x, y + 0.025, z, cardName + ' 줍기', [keycard, keycardLanyard], { removeWhenUsed: true, mapLabel: cardName });
 }
 
 // ---- Things for the extra jobs. Each stands on a spot the planner has checked is clear all round. ----
@@ -75,7 +75,7 @@ function addFuelCan(x, z, objectId) {
   addBoxBetween(x - 0.3, 0, z - 0.3, x + 0.3, 0.3, z + 0.3);
   const body = addBoxProp(x, 0.3 + 0.19, z, 0.16, 0.19, 0.11, { yaw: 0.4, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const spout = addBoxProp(x + 0.07, 0.3 + 0.42, z + 0.03, 0.03, 0.04, 0.03, { yaw: 0.4, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(objectId || OBJECT_FUEL_CAN, x, 0.55, z, 'Take the fuel can', [body, spout], { removeWhenUsed: true, mapLabel: 'FUEL' });
+  registerInteractable(objectId || OBJECT_FUEL_CAN, x, 0.55, z, '연료통 줍기', [body, spout], { removeWhenUsed: true, mapLabel: '연료' });
 }
 
 // One of the generators a station has besides Generator 2: a set on a skid, small enough to stand in any room.
@@ -89,7 +89,7 @@ function addExtraGenerator(objectId, number, x, z) {
   addBoxBetween(x - 0.4, 0.95, z + 0.02, x - 0.1, 1.12, z + 0.22, { surfaceClass: SURFACE_METAL, blocksMovement: false }); // the tank on top
   const panel = addBoxBetween(x - 0.3, 0.45, z + 0.26, x + 0.02, 0.85, z + 0.31, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const panelBack = addBoxBetween(x - 0.3, 0.45, z - 0.31, x + 0.02, 0.85, z - 0.26, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(objectId, x, 0.65, z, 'Start generator ' + number, [panel, panelBack], { mapLabel: 'GENERATOR ' + number });
+  registerInteractable(objectId, x, 0.65, z, '발전기 ' + number + ' 가동', [panel, panelBack], { mapLabel: '발전기 ' + number });
 }
 
 // A core sample: a grey tube as long as your forearm, lying in a cradle.
@@ -97,7 +97,7 @@ function addCoreSample(objectId, x, z, yaw) {
   addBoxBetween(x - 0.28, 0, z - 0.28, x + 0.28, 0.42, z + 0.28);
   const tube = addBoxProp(x, 0.42 + 0.06, z, 0.22, 0.05, 0.05, { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const cap = addBoxProp(x, 0.42 + 0.06, z, 0.03, 0.065, 0.065, { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(objectId, x, 0.5, z, 'Take the core sample', [tube, cap], { removeWhenUsed: true, mapLabel: 'CORE' });
+  registerInteractable(objectId, x, 0.5, z, '코어 시료 줍기', [tube, cap], { removeWhenUsed: true, mapLabel: '코어' });
 }
 
 // The winch breaker: a floor-standing cabinet with one big handle.
@@ -105,13 +105,13 @@ function addWinchBreaker(x, z) {
   addBoxBetween(x - 0.3, 0, z - 0.2, x + 0.3, 1.75, z + 0.2, { surfaceClass: SURFACE_METAL });
   const handle = addBoxBetween(x - 0.05, 1.05, z + 0.2, x + 0.05, 1.4, z + 0.27, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const handleBack = addBoxBetween(x - 0.05, 1.05, z - 0.27, x + 0.05, 1.4, z - 0.2, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(OBJECT_WINCH_BREAKER, x, 1.2, z, 'Close the winch breaker', [handle, handleBack], { mapLabel: 'WINCH BREAKER' });
+  registerInteractable(OBJECT_WINCH_BREAKER, x, 1.2, z, '윈치 차단기 올리기', [handle, handleBack], { mapLabel: '윈치 차단기' });
 }
 
 // A survey spool that is not one of the three with a room of its own: left on a low crate.
 function addLooseSpool(objectId, x, z) {
   addBoxBetween(x - 0.28, 0, z - 0.28, x + 0.28, 0.3, z + 0.28);
-  addSurveySpool(objectId, x, 0.3, z, 'SPOOL');
+  addSurveySpool(objectId, x, 0.3, z, '스풀');
 }
 
 // A crew badge: a hard hat left on a low crate, with the badge clipped to its brim. The badge is what you take.
@@ -123,7 +123,7 @@ function addCrewBadge(objectId, x, z, yaw) {
     { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const clip = addBoxProp(x + Math.cos(yaw) * 0.16, 0.34 + 0.045, z + Math.sin(yaw) * 0.16, 0.012, 0.012, 0.012,
     { yaw: yaw, surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(objectId, x, 0.42, z, 'Take the crew badge', [badge, clip], { removeWhenUsed: true, mapLabel: 'BADGE' });
+  registerInteractable(objectId, x, 0.42, z, '크루 배지 줍기', [badge, clip], { removeWhenUsed: true, mapLabel: '배지' });
 }
 
 // An isolation valve: a stub of pipe coming up out of the floor, the valve body on it, and the box of the
@@ -135,7 +135,7 @@ function addIsolationValve(objectId, letter, x, z) {
   addBoxBetween(x - 0.16, 1.0, z - 0.16, x + 0.16, 1.32, z + 0.16, { surfaceClass: SURFACE_METAL });                   // the actuator
   const panel = addBoxBetween(x - 0.1, 1.06, z + 0.16, x + 0.1, 1.26, z + 0.2, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
   const panelBack = addBoxBetween(x - 0.1, 1.06, z - 0.2, x + 0.1, 1.26, z - 0.16, { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(objectId, x, 1.16, z, 'Shut isolation valve ' + letter, [panel, panelBack], { mapLabel: 'VALVE ' + letter });
+  registerInteractable(objectId, x, 1.16, z, '차단 밸브 ' + letter + ' 잠그기', [panel, panelBack], { mapLabel: '밸브 ' + letter });
 }
 
 // A generated station may move the first spool or the keycard out of its usual room (see 03-levelgen.js).
@@ -254,7 +254,7 @@ function furnishLiftLobby(random) {
   addBoxBetween(9.0, 0, 55.0, 9.34, 1.35, 55.6, { surfaceClass: SURFACE_METAL });
   const terminalScreen = addBoxBetween(9.34, 0.95, 55.08, 9.39, 1.3, 55.52,
     { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(OBJECT_LIFT_TERMINAL, 9.4, 1.15, 55.3, 'Use lift terminal', [terminalScreen], { mapLabel: 'LIFT' });
+  registerInteractable(OBJECT_LIFT_TERMINAL, 9.4, 1.15, 55.3, '리프트 단말기 사용', [terminalScreen], { mapLabel: '리프트' });
   // reception desk, a U shape open to the south
   addBoxBetween(12.1, 0, 52.8, 14.9, 1.05, 53.3);
   addBoxBetween(12.1, 0, 53.3, 12.5, 1.05, 54.6);
@@ -275,8 +275,8 @@ function furnishLiftLobby(random) {
   addBoxProp(16.3, 0.06, 51.5, 0.6, 0.05, 0.1, { yaw: 0.55, blocksMovement: false });
   addCrate(10.1, 57.3, 0.28, 0.3, 0);
   addBoxProp(10.2, 0.2, 56.5, 0.32, 0.2, 0.12, { yaw: 1.2, blocksMovement: false });
-  addWallSign('KESSEL-9 · INTAKE LEVEL', 13, 49, WALL_NORTH, { width: 5.2, height: 0.46, centerY: 2.98 });
-  addWallSign('LIFT', 9, 53, WALL_WEST, { width: 0.95, height: 0.36, centerY: 2.78 });
+  addWallSign('KESSEL-9 · 투입층', 13, 49, WALL_NORTH, { width: 5.2, height: 0.46, centerY: 2.98 });
+  addWallSign('리프트', 9, 53, WALL_WEST, { width: 0.95, height: 0.36, centerY: 2.78 });
 }
 
 // Security office.
@@ -293,7 +293,7 @@ function furnishSecurityOffice(random) {
   addBoxProp(11.0, 1.5, 47.94, 0.3, 0.3, 0.05, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   addCeilingLamp(13, 45.5, 2.8, false);
   addNote(OBJECT_NOTE_SECURITY, 14.75, 0.77, 46.2, 0.3);
-  addWallSign('SECURITY', 13, 49, WALL_NORTH, { width: 1.1, height: 0.2, centerY: 2.52, alongOffset: 0 });
+  addWallSign('보안실', 13, 49, WALL_NORTH, { width: 1.1, height: 0.2, centerY: 2.52, alongOffset: 0 });
 }
 
 // Locker room.
@@ -375,10 +375,10 @@ function furnishPumpHall(random) {
   addCylinderProp(AXIS_X, 62.2, 0.27, 56.2, 0.29, 0.44, { surfaceClass: SURFACE_METAL });
   addBoxProp(58.2, 0.16, 52.6, 0.5, 0.05, 0.35, { yaw: -0.5, blocksMovement: false });
   addBoxBetween(47.0, 0, 55.6, 47.5, 1.6, 57.0, { surfaceClass: SURFACE_METAL });
-  if (!placement.isGenerating) addWallSign('GENERATOR 2', 65, 47, WALL_EAST, { width: 2.6, height: 0.42, centerY: 2.95 });
-  if (!placement.isGenerating) addWallSign('CONTROL ROOM', 54, 38, WALL_NORTH, { width: 2.6, height: 0.4, centerY: 2.95 });
-  addWallSign('PUMP HALL B', 47, 52, WALL_WEST, { width: 4.4, height: 0.7, centerY: 3.7, alongOffset: 0.5 });
-  addWallSign('DANGER · FLOODED BELOW THIS LINE', 60, 57, WALL_SOUTH, { width: 5.5, height: 0.3, centerY: 1.4 });
+  if (!placement.isGenerating) addWallSign('발전기 2', 65, 47, WALL_EAST, { width: 2.6, height: 0.42, centerY: 2.95 });
+  if (!placement.isGenerating) addWallSign('제어실', 54, 38, WALL_NORTH, { width: 2.6, height: 0.4, centerY: 2.95 });
+  addWallSign('펌프 홀 B', 47, 52, WALL_WEST, { width: 4.4, height: 0.7, centerY: 3.7, alongOffset: 0.5 });
+  addWallSign('위험 · 이 선 아래 침수', 60, 57, WALL_SOUTH, { width: 5.5, height: 0.3, centerY: 1.4 });
 }
 
 // Generator room.
@@ -389,7 +389,7 @@ function furnishGeneratorRoom(random) {
   addCylinderProp(AXIS_X, 70.6, 1.95, 47.5, 0.25, 0.5, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   const generatorPanel = addBoxBetween(69.82, 0.9, 47.15, 69.9, 1.5, 47.85,
     { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true });
-  registerInteractable(OBJECT_GENERATOR, 69.8, 1.2, 47.5, 'Start the generator', [generatorPanel], { mapLabel: 'GENERATOR' });
+  registerInteractable(OBJECT_GENERATOR, 69.8, 1.2, 47.5, '발전기 가동', [generatorPanel], { mapLabel: '발전기' });
   addBarrel(67.45, 44.45);
   addBarrel(68.15, 44.45);
   addBarrel(67.45, 45.2);
@@ -399,8 +399,8 @@ function furnishGeneratorRoom(random) {
   addBoxProp(69.1, 0.95, 50.5, 0.25, 0.1, 0.14, { yaw: 0.2, surfaceClass: SURFACE_METAL, blocksMovement: false });
   addBoxBetween(67.0, 2.8, 44.0, 74.0, 2.9, 44.3, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   addCeilingLamp(70.5, 47.5, 3.5, true);
-  addWallSign('DO NOT START IT', 70, 44, WALL_NORTH, { width: 3.6, height: 0.55, centerY: 1.6, alongOffset: 0.5, isScrawled: true });
-  addWallSign('GENERATOR 2 · 400 V', 72, 50, WALL_SOUTH, { width: 2.4, height: 0.26, centerY: 2.2 });
+  addWallSign('시동하지 마라', 70, 44, WALL_NORTH, { width: 3.6, height: 0.55, centerY: 1.6, alongOffset: 0.5, isScrawled: true });
+  addWallSign('발전기 2 · 400 V', 72, 50, WALL_SOUTH, { width: 2.4, height: 0.26, centerY: 2.2 });
 }
 
 // Control room.
@@ -416,9 +416,9 @@ function furnishControlRoom(random) {
   addBoxBetween(57.3, 0, 32.2, 57.95, 1.9, 33.4, { surfaceClass: SURFACE_METAL });
   addBoxProp(57.94, 1.5, 34.6, 0.04, 0.4, 0.6, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   addCeilingLamp(53.5, 34.5, 2.8, true);
-  if (isObjectivePlacedInItsUsualRoom('spool1')) addSurveySpool(OBJECT_SPOOL_1, 53.0, 0.77, 34.3, 'SPOOL');
-  addWallSign('PUMP CONTROL', 53, 32, WALL_NORTH, { width: 2.4, height: 0.3, centerY: 2.2 });
-  if (!placement.isGenerating) addWallSign('DEEP CORRIDOR', 56, 32, WALL_NORTH, { width: 0.95, height: 0.16, centerY: 2.5 });
+  if (isObjectivePlacedInItsUsualRoom('spool1')) addSurveySpool(OBJECT_SPOOL_1, 53.0, 0.77, 34.3, '스풀');
+  addWallSign('펌프 제어', 53, 32, WALL_NORTH, { width: 2.4, height: 0.3, centerY: 2.2 });
+  if (!placement.isGenerating) addWallSign('심층 복도', 56, 32, WALL_NORTH, { width: 0.95, height: 0.16, centerY: 2.5 });
 }
 
 // Laboratory.
@@ -443,7 +443,7 @@ function furnishLaboratory(random) {
   addCeilingLamp(13.5, 32.5, 3.0, true);
   addNote(OBJECT_NOTE_LAB, 13.0, 0.91, 30.6, 0.2);
   if (isObjectivePlacedInItsUsualRoom('keycard')) addKeycard(17.3, 0.775, 33.4);
-  addWallSign('LABORATORY 2', 12, 34, WALL_SOUTH, { width: 0.95, height: 0.18, centerY: 2.6 });
+  addWallSign('연구실 2', 12, 34, WALL_SOUTH, { width: 0.95, height: 0.18, centerY: 2.6 });
 }
 
 // Cold room.
@@ -459,7 +459,7 @@ function furnishColdRoom(random) {
     }
   }
   addCeilingLamp(13, 21.5, 2.6, false);
-  addWallSign('COLD STORE', 13, 26, WALL_NORTH, { width: 0.95, height: 0.18, centerY: 2.6 });
+  addWallSign('냉장 저장고', 13, 26, WALL_NORTH, { width: 0.95, height: 0.18, centerY: 2.6 });
 }
 
 // Archive.
@@ -478,10 +478,10 @@ function furnishArchive(random) {
   addBoxProp(25.1, 0.02, 30.4, 0.15, 0.01, 0.11, { yaw: 0.8, blocksMovement: false });
   addBoxProp(28.2, 0.02, 30.7, 0.15, 0.01, 0.11, { yaw: -0.3, blocksMovement: false });
   for (let lampX = 22; lampX < 42; lampX += 6) addCeilingLamp(lampX, 30.5, 3.2, true);
-  addWallSign('COUNT THEM', 35, 24, WALL_NORTH, { width: 2.8, height: 0.55, centerY: 1.55, isScrawled: true });
-  if (!placement.isGenerating) addWallSign('CALIBRATION STORE C4', 32, 24, WALL_NORTH, { width: 2.6, height: 0.3, centerY: 2.75 });
-  if (!placement.isGenerating) addWallSign('DEEP CORRIDOR · KEYCARD', 41, 30, WALL_EAST, { width: 2.8, height: 0.26, centerY: 2.72 });
-  addWallSign('RECORDS 1961–1987', 26, 36, WALL_SOUTH, { width: 3.0, height: 0.3, centerY: 2.1 });
+  addWallSign('세어라', 35, 24, WALL_NORTH, { width: 2.8, height: 0.55, centerY: 1.55, isScrawled: true });
+  if (!placement.isGenerating) addWallSign('교정 저장고 C4', 32, 24, WALL_NORTH, { width: 2.6, height: 0.3, centerY: 2.75 });
+  if (!placement.isGenerating) addWallSign('심층 복도 · 키카드', 41, 30, WALL_EAST, { width: 2.8, height: 0.26, centerY: 2.72 });
+  addWallSign('기록 1961–1987', 26, 36, WALL_SOUTH, { width: 3.0, height: 0.3, centerY: 2.1 });
 }
 
 // Calibration store C4, home of the Stills.
@@ -499,11 +499,11 @@ function furnishCalibrationStore(random) {
   addTripod(30.4, 14.2);
   addTripod(35.1, 20.6);
   addBoxBetween(31.7, 0, 11.2, 32.3, 0.9, 11.8);
-  addSurveySpool(OBJECT_SPOOL_2, 32.0, 0.9, 11.5, 'SPOOL');
+  addSurveySpool(OBJECT_SPOOL_2, 32.0, 0.9, 11.5, '스풀');
   addCrate(38.6, 21.9, 0.35, 0.2, 0);
   addCrate(25.0, 21.6, 0.35, -0.3, 0);
   addBoxProp(34.4, 0.03, 13.4, 0.9, 0.02, 0.6, { yaw: 0.4, blocksMovement: false });
-  addWallSign('C4 · CALIBRATION DUMMIES · QTY 9', 36, 22, WALL_SOUTH, { width: 4.8, height: 0.34, centerY: 2.0 });
+  addWallSign('C4 · 교정 더미 · 수량 9', 36, 22, WALL_SOUTH, { width: 4.8, height: 0.34, centerY: 2.0 });
   pushPlacedPoints(stillSpawnPoints,
     [27.5, 19.5], [30.5, 20.5], [34.5, 19.5], [37.5, 18.5], [26.5, 15.5],
     [31.5, 16.5], [36.5, 14.5], [28.5, 12.5], [35.5, 12.5]);
@@ -525,7 +525,7 @@ function furnishShaftChamber(random) {
   addPipeAlongZ(7, 10, 1.05, 58.03, 0.022);
   addPipeAlongZ(7, 10, 1.05, 60.97, 0.022);
   addBoxProp(59.5, 0.25, 7.45, 0.3, 0.25, 0.2, { surfaceClass: SURFACE_METAL });
-  addSurveySpool(OBJECT_SPOOL_3, 59.5, 0.5, 7.45, 'SPOOL');
+  addSurveySpool(OBJECT_SPOOL_3, 59.5, 0.5, 7.45, '스풀');
   addTripod(58.6, 7.7);
   addCylinderProp(AXIS_X, 51.4, 0.6, 12.6, 0.6, 0.35);
   addCylinderProp(AXIS_X, 51.4, 0.6, 12.6, 0.2, 0.45, CLUTTER);
@@ -533,8 +533,8 @@ function furnishShaftChamber(random) {
   addBarrel(50.0, 3.0);
   addBarrel(50.75, 3.1);
   addBoxBetween(66.0, 0, 2.4, 68.4, 1.1, 3.4, { surfaceClass: SURFACE_METAL });
-  addWallSign('SHAFT 9 · DEPTH UNSURVEYED', 59, 2, WALL_NORTH, { width: 7.2, height: 0.58, centerY: 2.9, alongOffset: 0 });
-  addWallSign('NO RETURN BELOW 40 m', 59, 2, WALL_NORTH, { width: 5.2, height: 0.42, centerY: 2.15, alongOffset: 0 });
+  addWallSign('샤프트 9 · 깊이 미측량', 59, 2, WALL_NORTH, { width: 7.2, height: 0.58, centerY: 2.9, alongOffset: 0 });
+  addWallSign('40m 아래 반사 없음', 59, 2, WALL_NORTH, { width: 5.2, height: 0.42, centerY: 2.15, alongOffset: 0 });
 }
 
 // ---------------------------------------------------------------------------
@@ -556,7 +556,7 @@ function buildFacilityLayout() {
   const random = createSeededRandomGenerator(90210);
   level.kind = 'classic';
   level.description = 'Kessel-9 (classic)';
-  level.keycardRoomText = 'the laboratory';
+  level.keycardRoomText = '연구실';
   level.keycardCount = 1;
   clearQuests();
   level.stillZones.length = 0;
@@ -666,11 +666,11 @@ function furnishClassicMainCorridor(random) {
   addCylinderProp(AXIS_Y, 22.5, 0.55, 53.9, 0.07, 0.25, CLUTTER);
   addCrate(36.4, 53.65, 0.2, 0.4, 0);
   addBoxProp(34.2, 0.03, 52.6, 0.3, 0.02, 0.2, { yaw: 0.9, blocksMovement: false });
-  addWallSign('← LIFT    PUMP HALL B →', 20, 52, WALL_NORTH, { width: 3.6, height: 0.3, centerY: 1.9, alongOffset: 0.5 });
-  addWallSign('ARCHIVE · LABORATORY →', 29, 52, WALL_NORTH, { width: 2.8, height: 0.26, centerY: 1.9 });
-  addWallSign('PUMP HALL B →', 37, 52, WALL_NORTH, { width: 2.4, height: 0.3, centerY: 1.9 });
-  addWallSign('LOCKERS', 25, 53, WALL_SOUTH, { width: 0.95, height: 0.2, centerY: 2.52 });
-  addWallSign('MESS', 26, 52, WALL_NORTH, { width: 0.8, height: 0.2, centerY: 2.52 });
+  addWallSign('← 리프트    펌프 홀 B →', 20, 52, WALL_NORTH, { width: 3.6, height: 0.3, centerY: 1.9, alongOffset: 0.5 });
+  addWallSign('기록실 · 연구실 →', 29, 52, WALL_NORTH, { width: 2.8, height: 0.26, centerY: 1.9 });
+  addWallSign('펌프 홀 B →', 37, 52, WALL_NORTH, { width: 2.4, height: 0.3, centerY: 1.9 });
+  addWallSign('탈의실', 25, 53, WALL_SOUTH, { width: 0.95, height: 0.2, centerY: 2.52 });
+  addWallSign('식당', 26, 52, WALL_NORTH, { width: 0.8, height: 0.2, centerY: 2.52 });
 }
 
 // Archive access corridor, pump hall vestibule and west service passage (classic station only).
@@ -678,13 +678,13 @@ function furnishClassicConnections(random) {
   addPipeAlongZ(38, 52, 2.5, 31.22, 0.08);
   addCeilingLamp(32, 45, 2.8, false);
   addCrate(32.65, 41.5, 0.24, 0.2, 0);
-  addWallSign('ARCHIVE', 32, 38, WALL_NORTH, { width: 0.9, height: 0.24, centerY: 1.9 });
-  addWallSign('MAINS POWER DOOR', 32, 38, WALL_NORTH, { width: 0.9, height: 0.12, centerY: 1.62 });
+  addWallSign('기록실', 32, 38, WALL_NORTH, { width: 0.9, height: 0.24, centerY: 1.9 });
+  addWallSign('주전원 문', 32, 38, WALL_NORTH, { width: 0.9, height: 0.12, centerY: 1.62 });
   addCrateStack(41.7, 50.7, random);
   addBarrel(45.3, 54.4);
   addBarrel(44.55, 54.5);
   addCeilingLamp(43.5, 52.5, 3.0, true);
-  addWallSign('PUMP HALL B', 45, 50, WALL_EAST, { width: 1.8, height: 0.34, centerY: 2.0, alongOffset: 0.5 });
+  addWallSign('펌프 홀 B', 45, 50, WALL_EAST, { width: 1.8, height: 0.34, centerY: 2.0, alongOffset: 0.5 });
   addPipeAlongZ(36, 42, 2.3, 13.78, 0.09);
   addCrate(13.6, 39.2, 0.22, 0.3, 0);
 }
@@ -697,9 +697,9 @@ function furnishClassicDeepCorridor(random) {
   addCrate(51.5, 30.7, 0.2, 0.5, 0);
   addBoxProp(47.2, 0.05, 30.5, 0.35, 0.03, 0.05, { yaw: 0.6, blocksMovement: false });
   addBoxProp(47.3, 0.12, 30.3, 0.1, 0.1, 0.13, { yaw: 0.2, surfaceClass: SURFACE_METAL, blocksMovement: false });
-  addWallSign('IT FEELS THE LIGHT', 48, 29, WALL_NORTH, { width: 4.6, height: 0.55, centerY: 1.45, alongOffset: 0.5, isScrawled: true });
-  addWallSign('TURN IT OFF', 58, 22, WALL_WEST, { width: 2.8, height: 0.5, centerY: 1.4, isScrawled: true });
-  addWallSign('SHAFT 9 →', 55, 30, WALL_SOUTH, { width: 1.4, height: 0.26, centerY: 1.9, alongOffset: -1.5 });
+  addWallSign('그것은 빛을 느낀다', 48, 29, WALL_NORTH, { width: 4.6, height: 0.55, centerY: 1.45, alongOffset: 0.5, isScrawled: true });
+  addWallSign('꺼라', 58, 22, WALL_WEST, { width: 2.8, height: 0.5, centerY: 1.4, isScrawled: true });
+  addWallSign('샤프트 9 →', 55, 30, WALL_SOUTH, { width: 1.4, height: 0.26, centerY: 1.9, alongOffset: -1.5 });
 }
 
 // Reports anything the walking creatures could not reach. Used by the automated checks.

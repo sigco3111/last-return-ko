@@ -156,7 +156,7 @@ const level = {
   levelsKey: 'two',
   stairCount: 0,          // flights of stairs between the levels (0 in a one-level station)
   ventCount: 0,           // crawl-height vents (generated stations only)
-  keycardRoomText: 'the laboratory', // filled into the security office note
+  keycardRoomText: '연구실', // filled into the security office note
   // Extra jobs on top of "power, three spools, lift". Kessel-9 has none; a generated station may have some.
   // The quests of this station: the spools, and whatever else it asks of you before the lift. See 09-quests.js.
   quests: [],
@@ -178,7 +178,7 @@ const level = {
   questSeed: 0,         // the numbers the quests were drawn from: the station's seed, unless something else was asked for
   mapFingerprint: 0,    // one number from everything that is the map's, as it was when it was finished (03-levelgen.js)         // where each vent opens into a room, and where its cover would lie if it has come off (03-levelgen.js)
   hatchCount: 0,          // ceiling hatches of the Hollow's crawlspace (see 08-crawlspace.js)
-  description: 'Kessel-9 (classic)'
+  description: 'Kessel-9 (클래식)'
 };
 
 function tileIndexAt(tileX, tileZ) {
@@ -671,7 +671,7 @@ function renderSignBitmap(text, widthMetres, heightMetres, isScrawled) {
   context.strokeStyle = '#fff';
   context.textBaseline = 'middle';
   const fontSize = Math.round(pixelHeight * (isScrawled ? 0.78 : 0.82));
-  context.font = (isScrawled ? '' : 'bold ') + fontSize + 'px "Arial Narrow", "Helvetica Neue", Arial, sans-serif';
+  context.font = (isScrawled ? '' : 'bold ') + fontSize + 'px "Arial Narrow", "Helvetica Neue", Arial, "Noto Sans KR", sans-serif';
   const measuredWidth = context.measureText(text).width || 1;
   const horizontalScale = Math.min(1, (pixelWidth - 6) / measuredWidth);
   if (isScrawled) {

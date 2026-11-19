@@ -83,11 +83,11 @@
 const QUEST_ITEMS = {
   fuel: {
     carryMost: 1,
-    chip: 'FUEL CAN',
+    chip: '연료통',
     build: function (objectId, x, z) { addFuelCan(x, z, objectId); },
-    taken: 'Fuel can taken.',
-    alreadyCarrying: 'You are already carrying a fuel can.',
-    used: 'Fuel can emptied into the day tank.',
+    taken: '연료통을 주웠다.',
+    alreadyCarrying: '이미 연료통을 들고 있다.',
+    used: '연료통을 데이 탱크에 부었다.',
     line: 'generatorNoFuel'   // Dispatch says this once a descent, the first time something will not run for want of one
   }
 };
@@ -97,26 +97,26 @@ const QUEST_ITEMS = {
 // TWEAK: `intro` is the line on the way down; `report` is what you are told to do when it is all done;
 // `manifest` is what the ending screen says came up with you.
 const WORK_ORDERS = [
-  { key: 'survey', label: 'Survey', quests: ['spools'],
-    blurb: 'Bring back the survey spools Crew 2 left. The deeper ones are behind keycard doors.',
-    intro: function () { return 'Work order 4471-B: recover ' + (level.spoolCount === 3 ? 'three' : 'the ' + level.spoolCount) + ' survey spools left by Crew 2.'; },
+  { key: 'survey', label: '측량', quests: ['spools'],
+    blurb: '크루 2가 남긴 측량 스풀을 가져온다. 깊은 곳의 것들은 키카드 문 뒤에 있다.',
+    intro: function () { return '작업 지시서 4471-B: 크루 2가 남긴 측량 스풀 ' + (level.spoolCount === 3 ? '3' : level.spoolCount) + '개를 회수하라.'; },
     report: OBJECTIVE_TEXT.returnToLift,
-    manifest: function () { return level.spoolCount + ' spools'; } },
-  { key: 'recovery', label: 'Recovery', quests: ['badges', 'cores'],
-    blurb: 'Bring back the badges of Crew 2 and the core samples they pulled.',
-    intro: function () { return 'Work order 4471-C: recover the badges of Crew 2 and their core samples.'; },
+    manifest: function () { return '스풀 ' + level.spoolCount + '개'; } },
+  { key: 'recovery', label: '회수', quests: ['badges', 'cores'],
+    blurb: '크루 2의 배지와 그들이 뽑은 코어 시료를 가져온다.',
+    intro: function () { return '작업 지시서 4471-C: 크루 2의 배지와 코어 시료를 회수하라.'; },
     report: OBJECTIVE_TEXT.returnToLiftWithManifest,
-    manifest: function () { return countQuestThings('badges') + ' crew badges, ' + countQuestThings('cores') + ' core samples'; } },
-  { key: 'salvage', label: 'Salvage', quests: ['haul'],
-    blurb: 'Seal a sum\'s worth of what lies about into the salvage bays.',
-    intro: function () { return 'Work order 4471-D: salvage. Fill the bays.'; },
+    manifest: function () { return '크루 배지 ' + countQuestThings('badges') + '개, 코어 시료 ' + countQuestThings('cores') + '개'; } },
+  { key: 'salvage', label: '인양', quests: ['haul'],
+    blurb: '널려 있는 것들을 요구한 만큼의 가치어치 인양 베이에 밀봉한다.',
+    intro: function () { return '작업 지시서 4471-D: 인양. 베이를 채워라.'; },
     report: OBJECTIVE_TEXT.returnToLiftWithManifest,
-    manifest: function () { return 'salvage to the worth of ' + countQuestThings('haul') + ', sealed in ' + (findQuest('haul') ? findQuest('haul').total : 0) + ' bays'; } },
-  { key: 'restart', label: 'Restart', quests: ['generators', 'valves'],
-    blurb: 'Get every generator running and shut the isolation valves.',
-    intro: function () { return 'Work order 4471-E: restart the plant. Generators on, isolation valves shut.'; },
+    manifest: function () { return countQuestThings('haul') + ' 가치의 인양물, 베이 ' + (findQuest('haul') ? findQuest('haul').total : 0) + '개에 밀봉'; } },
+  { key: 'restart', label: '재가동', quests: ['generators', 'valves'],
+    blurb: '모든 발전기를 돌리고 차단 밸브를 잠근다.',
+    intro: function () { return '작업 지시서 4471-E: 플랜트 재가동. 발전기 가동, 차단 밸브 잠금.'; },
     report: OBJECTIVE_TEXT.returnToLiftWithManifest,
-    manifest: function () { return countQuestThings('generators') + ' generators running, ' + countQuestThings('valves') + ' isolation valves shut'; } }
+    manifest: function () { return '가동 중인 발전기 ' + countQuestThings('generators') + '기, 잠긴 차단 밸브 ' + countQuestThings('valves') + '개'; } }
 ];
 
 // What may come on top of any work order: how many is the [fewest, most] pair `complications` in
@@ -140,7 +140,7 @@ function describeUploadManifest() {
   const order = findWorkOrder(level.workOrder) || WORK_ORDERS[0];
   let text = order.manifest();
   const held = game.flags.spoolsCollected;
-  if (!areSpoolsOnTheOrder() && held > 0) text += '. Not on the work order: ' + held + (held === 1 ? ' survey spool' : ' survey spools');
+  if (!areSpoolsOnTheOrder() && held > 0) text += '. 작업 지시 외: 측량 스풀 ' + held + '개';
   return text;
 }
 
@@ -171,7 +171,7 @@ const QUESTS = [
     text: {
       objective: function () { return level.spoolCount === 3 ? OBJECTIVE_TEXT.collectSpools : OBJECTIVE_TEXT.collectSpoolsOfMany; },
       chip: '', // the spools have a place of their own on screen, beside the mains and the keycards
-      refused: 'LIFT CONTROL: upload locked. Survey spools loaded: {done} of {total}.'
+      refused: '리프트 제어: 업로드 잠김. 적재된 측량 스풀: {total}개 중 {done}개.'
     }
   },
 
@@ -181,7 +181,7 @@ const QUESTS = [
     requires: { item: 'fuel', objectId: OBJECT_FUEL_CAN },
     target: function () { return GENERATOR_POSITION; },
     text: {
-      refused: 'GENERATOR 2: day tank empty. It will not start without fuel.',
+      refused: '발전기 2: 데이 탱크가 비어 있다. 연료 없이는 돌아가지 않는다.',
       objective: OBJECTIVE_TEXT.findFuel,        // once you know the tank is empty
       carrying: OBJECTIVE_TEXT.bringFuel         // once you have a can
     }
@@ -195,11 +195,11 @@ const QUESTS = [
     build: function (objectId, x, z, random) { addCoreSample(objectId, x, z, random() * 3); },
     tell: { line: 'coresWanted', after: 'leftLift', seconds: 30 }, // after the line about the badges, which are the same order's
     text: {
-      objective: 'Dispatch also wants the core samples.',
-      objectiveAlone: 'Dispatch still wants the core samples.',
-      chip: 'CORES {done}/{total}',
-      taken: 'Core sample {done} of {total}.',
-      refused: 'LIFT CONTROL: manifest incomplete. Core samples loaded: {done} of {total}.'
+      objective: '디스패치가 코어 시료도 원한다.',
+      objectiveAlone: '디스패치가 아직 코어 시료를 원한다.',
+      chip: '코어 {done}/{total}',
+      taken: '코어 시료 {total}개 중 {done}개.',
+      refused: '리프트 제어: 목록 미완료. 적재된 코어 시료: {total}개 중 {done}개.'
     }
   },
 
@@ -208,7 +208,7 @@ const QUESTS = [
     key: 'generators', kind: 'activate', blocks: 'upload',
     countFromSize: 'extraGenerators', most: MAXIMUM_EXTRA_GENERATORS, firstObjectId: OBJECT_EXTRA_GENERATOR_FIRST,
     tiers: [0, 'beforeLast'],
-    names: EXTRA_GENERATOR_NUMBERS.map(function (number) { return 'Generator ' + number; }),
+    names: EXTRA_GENERATOR_NUMBERS.map(function (number) { return '발전기 ' + number; }),
     build: function (objectId, x, z, random, index) { addExtraGenerator(objectId, EXTRA_GENERATOR_NUMBERS[index], x, z); },
     needsPower: true,
     requires: { item: 'fuel', chance: 0.5, firstObjectId: OBJECT_EXTRA_FUEL_CAN_FIRST }, // TWEAK: 0.5 = half of them have an empty tank
@@ -221,12 +221,12 @@ const QUESTS = [
     text: {
       objective: OBJECTIVE_TEXT.startGenerators.replace('{running}', '{done}'),
       carrying: OBJECTIVE_TEXT.fuelForGenerator,
-      chip: 'GENERATORS {done}/{total}',
-      noPower: '{NAME}: no control power. It needs the mains. Start Generator 2 first.',
-      noItem: '{NAME}: day tank empty. There is a fuel can not far from it.',
-      activated: '{name} running. Generators running: {done} of {total}.',
-      activatedLast: '{name} running. That is all of them: the winch has its power.',
-      refused: 'LIFT CONTROL: winch supply low. Generators running: {done} of {total}. All must run.'
+      chip: '발전기 {done}/{total}',
+      noPower: '{NAME}: 제어 전원이 없다. 주전원이 필요하다. 발전기 2를 먼저 돌려라.',
+      noItem: '{NAME}: 데이 탱크가 비어 있다. 가까운 곳에 연료통이 있다.',
+      activated: '{name} 가동. 가동 중인 발전기: {total}기 중 {done}기.',
+      activatedLast: '{name} 가동. 전부다: 윈치에 전원이 들어왔다.',
+      refused: '리프트 제어: 윈치 전원 부족. 가동 중인 발전기: {total}기 중 {done}기. 전부 돌아가야 한다.'
     }
   },
 
@@ -238,11 +238,11 @@ const QUESTS = [
     build: function (objectId, x, z, random) { addCrewBadge(objectId, x, z, random() * TWO_PI); },
     tell: { line: 'badgesWanted', after: 'leftLift', seconds: 14 },
     text: {
-      objective: 'Personnel also wants the badges of Crew 2.',
-      objectiveAlone: 'Personnel wants the badges of Crew 2 brought back.',
-      chip: 'BADGES {done}/{total}',
-      taken: 'Crew badge {done} of {total}.',
-      refused: 'LIFT CONTROL: manifest incomplete. Crew badges loaded: {done} of {total}.'
+      objective: '인사팀이 크루 2의 배지도 원한다.',
+      objectiveAlone: '인사팀이 크루 2의 배지 회수를 원한다.',
+      chip: '배지 {done}/{total}',
+      taken: '크루 배지 {total}개 중 {done}개.',
+      refused: '리프트 제어: 목록 미완료. 적재된 크루 배지: {total}개 중 {done}개.'
     }
   },
 
@@ -251,7 +251,7 @@ const QUESTS = [
     key: 'valves', kind: 'activate', blocks: 'upload',
     count: [2, 3], fewest: 2,
     tiers: [1, 'beforeLast'],
-    names: ['Isolation valve A', 'Isolation valve B', 'Isolation valve C'],
+    names: ['차단 밸브 A', '차단 밸브 B', '차단 밸브 C'],
     build: function (objectId, x, z, random, index) { addIsolationValve(objectId, 'ABC'.charAt(index), x, z); },
     needsPower: true,
     noise: function () { return TUNING.noiseRadiusValve; },
@@ -259,12 +259,12 @@ const QUESTS = [
     hideUntilTold: true,
     tell: { line: 'valvesWanted', after: 'mainsOn', seconds: 34, secondsWithoutHollow: 24, marksOnMap: true }, // after the line about the generators
     text: {
-      objective: 'The isolation valves have to be shut before the lift will come: {done} of {total} so far. They are marked on the map.',
-      chip: 'VALVES {done}/{total}',
-      noPower: '{NAME}: actuator dead. It needs the mains.',
-      activated: '{name} shut. Valves shut: {done} of {total}.',
-      activatedLast: '{name} shut. That is all of them.',
-      refused: 'LIFT CONTROL: line pressure high. Isolation valves shut: {done} of {total}. All must be shut.'
+      objective: '리프트가 오려면 차단 밸브를 잠가야 한다: 현재 {total}개 중 {done}개. 지도에 표시돼 있다.',
+      chip: '밸브 {done}/{total}',
+      noPower: '{NAME}: 액추에이터가 죽어 있다. 주전원이 필요하다.',
+      activated: '{name} 잠금. 잠긴 밸브: {total}개 중 {done}개.',
+      activatedLast: '{name} 잠금. 전부다.',
+      refused: '리프트 제어: 배관 압력 높음. 잠긴 차단 밸브: {total}개 중 {done}개. 전부 잠가야 한다.'
     }
   },
 
@@ -276,15 +276,15 @@ const QUESTS = [
     key: 'haul', kind: 'haul', blocks: 'upload',
     count: 1,
     tiers: [0, 'beforeLast'],
-    names: ['Salvage bay 1', 'Salvage bay 2', 'Salvage bay 3', 'Salvage bay 4'],
+    names: ['인양 베이 1', '인양 베이 2', '인양 베이 3', '인양 베이 4'],
     progress: function () { return getHaulProgress(); },
     reset: function () { resetHaulBays(); },
     tell: { line: 'salvageWanted', after: 'leftLift', seconds: 16 },
     text: {
-      objective: 'Salvage also wants {total} worth of what lies about, sealed into its bays: {done} so far.',
-      objectiveAlone: 'Salvage wants {total} worth of what lies about, sealed into its bays: {done} so far.',
-      chip: 'SALVAGE {done}/{total}',
-      refused: 'LIFT CONTROL: manifest short. Salvage in the bays: {done} of {total}.'
+      objective: '인양팀도 널려 있는 것 중 {total} 가치어치를 베이에 밀봉하길 원한다: 현재 {done}.',
+      objectiveAlone: '인양팀이 널려 있는 것 중 {total} 가치어치를 베이에 밀봉하길 원한다: 현재 {done}.',
+      chip: '인양 {done}/{total}',
+      refused: '리프트 제어: 목록 부족. 베이 속 인양물: {total} 중 {done}.'
     }
   },
 
@@ -293,7 +293,7 @@ const QUESTS = [
     key: 'breaker', kind: 'activate', blocks: 'lift',
     count: 1, firstObjectId: OBJECT_WINCH_BREAKER,
     tiers: [1, 1],
-    names: ['Winch breaker'],
+    names: ['윈치 차단기'],
     build: function (objectId, x, z) { addWinchBreaker(x, z); },
     needsPower: true,
     noise: function () { return TUNING.noiseRadiusDoor * 1.5; }, noiseAtPlayer: true,
@@ -302,11 +302,11 @@ const QUESTS = [
     releasedLine: 'breakerClosed',
     text: {
       objective: OBJECTIVE_TEXT.closeBreaker,
-      chipWhileHolding: 'BREAKER OPEN',
-      noPower: 'WINCH BREAKER: no mains power. It will not hold.',
-      activated: 'Winch breaker closed.',
-      activatedReleases: 'Winch breaker closed. The lift is coming.',
-      holding: 'LIFT CONTROL: upload received. Car not responding: winch breaker open.'
+      chipWhileHolding: '차단기 열림',
+      noPower: '윈치 차단기: 주전원이 없다. 유지되지 않는다.',
+      activated: '윈치 차단기를 올렸다.',
+      activatedReleases: '윈치 차단기를 올렸다. 리프트가 오고 있다.',
+      holding: '리프트 제어: 업로드 받음. 차가 응답하지 않음: 윈치 차단기 열림.'
     }
   }
 ];

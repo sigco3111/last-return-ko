@@ -11,9 +11,9 @@
   --text-dim: #8d99a5;
   --alarm: #ff4a36;
   --clear: #5fe0a0;
-  --font-display: 'Big Shoulders Display', 'Big Shoulders', 'Arial Narrow', Impact, sans-serif;
-  --font-body: 'B612', 'Segoe UI', system-ui, sans-serif;
-  --font-data: 'B612 Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+  --font-display: 'Big Shoulders Display', 'Big Shoulders', 'Arial Narrow', Impact, 'Noto Sans KR', sans-serif;
+  --font-body: 'B612', 'Segoe UI', system-ui, 'Noto Sans KR', sans-serif;
+  --font-data: 'B612 Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Noto Sans KR', monospace;
   --gutter-left: max(16px, env(safe-area-inset-left, 0px));
   --gutter-right: max(16px, env(safe-area-inset-right, 0px));
   color-scheme: dark;

@@ -27,10 +27,10 @@ const GENERATED_SIZE_PRESETS = {
   // keycards: 1 to 3. Each card opens one more ring of doors, and the next card is somewhere inside that ring;
   //           Shaft 9 is behind the last. The third number of "fillers" is shared out between the rings.
   // salvageBays: the fewest and the most bays it has on a Salvage order.
-  small: { label: 'Small', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, complications: [0, 1], extraGenerators: [0, 1], extraSpools: [0, 0], salvageBays: [1, 2], spineLength: [10, 14] },
-  medium: { label: 'Medium', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, complications: [0, 2], extraGenerators: [0, 2], extraSpools: [0, 0], salvageBays: [2, 2], spineLength: [13, 18] },
-  large: { label: 'Large', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, complications: [1, 2], extraGenerators: [1, 2], extraSpools: [0, 1], salvageBays: [2, 3], spineLength: [16, 22] },
-  massive: { label: 'Massive', fillers: [15, 8, 6], loops: 8, vents: 14, keycards: 3, complications: [1, 3], extraGenerators: [1, 3], extraSpools: [0, 2], salvageBays: [3, 4], spineLength: [15, 28] },
+  small: { label: '소형', fillers: [2, 1, 0], loops: 2, vents: 1, keycards: 1, complications: [0, 1], extraGenerators: [0, 1], extraSpools: [0, 0], salvageBays: [1, 2], spineLength: [10, 14] },
+  medium: { label: '중형', fillers: [4, 2, 1], loops: 3, vents: 2, keycards: 1, complications: [0, 2], extraGenerators: [0, 2], extraSpools: [0, 0], salvageBays: [2, 2], spineLength: [13, 18] },
+  large: { label: '대형', fillers: [7, 4, 2], loops: 5, vents: 3, keycards: 2, complications: [1, 2], extraGenerators: [1, 2], extraSpools: [0, 1], salvageBays: [2, 3], spineLength: [16, 22] },
+  massive: { label: '초대형', fillers: [15, 8, 6], loops: 8, vents: 14, keycards: 3, complications: [1, 3], extraGenerators: [1, 3], extraSpools: [0, 2], salvageBays: [3, 4], spineLength: [15, 28] },
 };
 
 // TWEAK: how spread out a station is.
@@ -38,21 +38,21 @@ const GENERATED_SIZE_PRESETS = {
 //   corridorLength  shortest and longest such corridor, in metres
 //   spread          how far from the lift rooms are happy to be, in metres (smaller = packed closer)
 const GENERATED_LAYOUT_PRESETS = {
-  tight: { label: 'Tight', corridorChance: 0.3, corridorLength: [3, 6], spread: 14 },
-  mixed: { label: 'Mixed', corridorChance: 0.55, corridorLength: [3, 9], spread: 24 },
-  sprawling: { label: 'Sprawling', corridorChance: 0.7, corridorLength: [5, 12], spread: 60 },
-  sparse: { label: 'Sparse', corridorChance: 0.8, corridorLength: [7, 16], spread: 70 },
+  tight: { label: '좁게', corridorChance: 0.3, corridorLength: [3, 6], spread: 14 },
+  mixed: { label: '섞임', corridorChance: 0.55, corridorLength: [3, 9], spread: 24 },
+  sprawling: { label: '넓게', corridorChance: 0.7, corridorLength: [5, 12], spread: 60 },
+  sparse: { label: '드문드문', corridorChance: 0.8, corridorLength: [7, 16], spread: 70 },
 };
 
 
 // How many levels a station has. With two, everything behind the keycard (Shaft 9 included) is down a flight of stairs.
 const GENERATED_LEVEL_PRESETS = {
-  one: { label: 'One level', hasLowerLevel: false },
-  two: { label: 'Two levels', hasLowerLevel: true }
+  one: { label: '1개 층', hasLowerLevel: false },
+  two: { label: '2개 층', hasLowerLevel: true }
 };
 
 // TWEAK: things scratched on corridor walls in generated stations.
-const CORRIDOR_SCRAWLS = ['IT FEELS THE LIGHT', 'TURN IT OFF', 'DO NOT RUN', 'COUNT THEM AGAIN', 'IT IS LISTENING', 'WE SHOWED IT THE WAY', 'STAND STILL', 'WE WOKE IT', 'DO NOT R', 'IT IS OUR FAULT'];
+const CORRIDOR_SCRAWLS = ['그것은 빛을 느낀다', '꺼라', '달리지 마라', '다시 세어라', '듣고 있다', '우리가 길을 보여줬다', '가만히 서 있어라', '우리가 깨웠다', '달리지 마', '우리 탓이다'];
 
 const WALL_DIRECTIONS = [[0, -1], [1, 0], [0, 1], [-1, 0]]; // north, east, south, west as [x, z] steps
 
@@ -244,7 +244,7 @@ function furnishBatteryRoom(random, roomName) {
   addBoxProp(4.4, 1.0, 5.7, 0.1, 0.1, 0.08, { surfaceClass: SURFACE_METAL, blocksMovement: false });
   addCeilingLamp(3.5, 2.5, 2.8, true);
   addWallSign(roomName || 'BATTERY ROOM', 0, 4, WALL_WEST, { width: 1.8, height: 0.26, centerY: 2.3 });
-  addWallSign('NO NAKED FLAME', 0, 4, WALL_WEST, { width: 1.8, height: 0.2, centerY: 1.95 });
+  addWallSign('화기 엄금', 0, 4, WALL_WEST, { width: 1.8, height: 0.2, centerY: 1.95 });
 }
 
 // A waterproof suit on a hook. Scanned in the dark it is the height and shape of a person. It can be walked through.
@@ -292,7 +292,7 @@ function furnishOldWorkings(random, roomName) {
   addBoxBetween(0.0, 0, 0.3, 0.5, 1.0, 2.5);
   addBarrel(1.2, 6.3);
   setTileFlagInRectangle(6, 3, 10, 5, TILE_FLAG_HAZARD);
-  addWallSign('NO FURTHER', 2, 0, WALL_NORTH, { width: 2.6, height: 0.5, centerY: 1.4, alongOffset: 0.5, isScrawled: true });
+  addWallSign('더 이상 앞으로', 2, 0, WALL_NORTH, { width: 2.6, height: 0.5, centerY: 1.4, alongOffset: 0.5, isScrawled: true });
 }
 
 // Stairs down to the lower level: a landing, some steps, a landing. The top is at the north end.
@@ -1227,8 +1227,8 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   level.layoutKey = layoutKey;
   level.levelsKey = levelsKey;
   level.stairCount = plan.stairCount;
-  level.description = 'Generated · ' + GENERATED_SIZE_PRESETS[sizeKey].label.toLowerCase() + ', ' +
-    GENERATED_LAYOUT_PRESETS[layoutKey].label.toLowerCase() + ', ' + GENERATED_LEVEL_PRESETS[levelsKey].label.toLowerCase() + ' · seed ' + seed;
+  level.description = '생성 · ' + GENERATED_SIZE_PRESETS[sizeKey].label + ', ' +
+    GENERATED_LAYOUT_PRESETS[layoutKey].label + ', ' + GENERATED_LEVEL_PRESETS[levelsKey].label + ' · 시드 ' + seed;
   level.storeZone = 0;
   level.stillZones.length = 0;
   level.unlabelledZones.length = 0;
@@ -1266,7 +1266,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
   relocatedObjectives.spool1 = spoolHost !== null;
   relocatedObjectives.keycard = keycardHost !== null;
   // The security office note says where the card is kept, so it has to name the right room.
-  level.keycardRoomText = keycardHost ? 'the ' + keycardHost.name.toLowerCase() : 'the laboratory';
+  level.keycardRoomText = keycardHost ? koZoneName(keycardHost.name) : '연구실';
   level.keycardCount = plan.cardCount;
 
   const placeRoom = function (room) {
@@ -1313,7 +1313,7 @@ function buildGeneratedStation(seed, sizeKey, layoutKey, levelsKey) {
     placeRoom(room);
     const definition = ROOM_CATALOGUE[room.key];
     definition.furnish(random, room.name);
-    if (room === spoolHost) addSurveySpool(OBJECT_SPOOL_1, definition.itemSpot[0], definition.itemSpot[1], definition.itemSpot[2], 'SPOOL');
+    if (room === spoolHost) addSurveySpool(OBJECT_SPOOL_1, definition.itemSpot[0], definition.itemSpot[1], definition.itemSpot[2], '스풀');
     if (room === keycardHost) addKeycard(definition.itemSpot[0], definition.itemSpot[1] + 0.005, definition.itemSpot[2], 1);
     // Card 2 is left in the ring that card 1 opens (tier 2), card 3 in the ring that card 2 opens.
     if (room.tier >= 2 && plan.cardHosts[room.tier] === room) addKeycard(definition.itemSpot[0], definition.itemSpot[1] + 0.005, definition.itemSpot[2], room.tier);
@@ -1388,7 +1388,8 @@ function addDoorLabels(doorTileX, doorTileZ) {
     const beyondName = ZONE_NAMES[tileZone[tileIndexAt(beyondX, beyondZ)]];
     if (!beyondName) continue;
     placement.zone = tileZone[standIndex];
-    addWallSign(beyondName, standX, standZ, (side + 2) % 4, { width: 0.96, height: beyondName.length > 12 ? 0.13 : 0.18, centerY: 2.47 });
+    const beyondLabel = koZoneName(beyondName);
+    addWallSign(beyondLabel, standX, standZ, (side + 2) % 4, { width: 0.96, height: beyondLabel.length > 12 ? 0.13 : 0.18, centerY: 2.47 });
   }
 }
 

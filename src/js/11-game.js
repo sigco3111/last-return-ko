@@ -256,8 +256,8 @@ function finishIntro() {
   refreshObjective();
   focusGameView();
   showMessage(input.isTouchDevice
-    ? 'Hold SCAN and drag to paint the dark with returns.'
-    : 'Hold the left mouse button (or Space) to scan.', 9, 'info');
+    ? '스캔을 홀드하고 드래그해 어둠을 반사점으로 칠해라.'
+    : '좌클릭(또는 Space)을 홀드해 스캔해라.', 7, 'info');
 }
 
 function focusGameView() {
@@ -323,8 +323,8 @@ function pauseGame() {
   setScannerSound(0);
   closeMapOverlay();
   interfaceState.elements['pause-objective'].textContent = game.objectiveText;
-  interfaceState.elements['pause-station'].textContent = 'Station: ' + level.description + ' · Work order: ' + (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label;
-  interfaceState.elements['pause-build'].textContent = 'Version: ' + describeBuild();
+  interfaceState.elements['pause-station'].textContent = '스테이션: ' + level.description + ' · 작업 지시: ' + (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label;
+  interfaceState.elements['pause-build'].textContent = '버전: ' + describeBuild();
   interfaceState.elements['link-report-problem'].href = buildReportProblemAddress();
   interfaceState.refreshSettingControls();
   showOnlyScreen('screen-pause');
@@ -389,11 +389,11 @@ function collectSpool(interactable) {
   saveCheckpoint();
   refreshObjective();
   // Ripley numbered hers "of 3". In a station with more spools than that, the heading counts them all.
-  openReader(log, level.spoolCount === 3 ? '' : log.heading.replace(' of 3', ' of ' + level.spoolCount));
+  openReader(log, level.spoolCount === 3 ? '' : log.heading.replace('/3', '/' + level.spoolCount));
   const collected = game.flags.spoolsCollected;
   if (!areSpoolsOnTheOrder()) {
     // Not what this descent is for: it is yours if you want it, and Dispatch does not count it.
-    if (collected === 1) showMessage('A survey spool. It is not on this work order.', 4, 'info');
+    if (collected === 1) showMessage('측량 스풀이다. 이번 작업 지시에는 없는 물건이다.', 4, 'info');
   } else if (collected >= level.spoolCount) fireGameEvent('allSpools');
   else if (collected === 1) fireGameEvent('firstSpool');
   // The spool in the calibration store wakes the Stills of that room. What Dispatch says then goes with that
@@ -408,15 +408,15 @@ function useInteractable(interactable) {
     case OBJECT_LIFT_TERMINAL:
       if (!flags.powerOn) {
         playDeniedSound();
-        showMessage('LIFT CONTROL: no mains power. Generator 2 is in Pump Hall B.', 5, 'warning');
+        showMessage('리프트 제어: 주전원 없음. 발전기 2는 펌프 홀 B에 있다.', 5, 'warning');
       } else if (doQuestsHoldTheTerminal()) {
         // A quest refused the upload, or took it and is holding the lift. It has said why.
       } else if (!flags.uploadStarted) {
         startLiftCall('uploadStarted');
       } else if (!flags.liftArrived) {
-        showMessage('LIFT CONTROL: car descending.', 3, 'info');
+        showMessage('리프트 제어: 차가 내려오는 중.', 3, 'info');
       } else {
-        showMessage('LIFT CONTROL: car at this level. Doors open.', 3, 'info');
+        showMessage('리프트 제어: 차가 이 층에 도착. 문이 열린다.', 3, 'info');
       }
       break;
     case OBJECT_GENERATOR:
@@ -432,7 +432,7 @@ function useInteractable(interactable) {
       setKeycardLevel(Math.max(flags.keycardLevel, cardLevel));
       playPickupSound();
       saveCheckpoint();
-      showMessage(level.keycardCount > 1 ? 'Keycard ' + cardLevel + ' taken.' : 'Keycard taken.', 3, 'info');
+      showMessage(level.keycardCount > 1 ? '키카드 ' + cardLevel + ' 획득.' : '키카드 획득.', 3, 'info');
       // The last card is the one that opens the way to the shaft; an earlier one only gets you further in.
       const isLastCard = cardLevel >= level.keycardCount;
       fireGameEvent(isLastCard ? 'lastKeycard' : 'lowerKeycard');
@@ -453,7 +453,7 @@ function startGenerator(interactable) {
   startGeneratorSound();
   saveCheckpoint();
   refreshObjective();
-  showMessage('Generator 2 running. Mains restored.', 4, 'info');
+  showMessage('발전기 2 가동. 주전원 복구.', 4, 'info');
   fireGameEvent('mainsOn');
   if (game.difficulty.hollowEnabled) {
     scheduleEvent(TUNING.hollowWakeDelaySeconds, function () {
@@ -468,8 +468,8 @@ function startGenerator(interactable) {
 // descent's own, and a generated station adds its seed.
 function getIntroLines() {
   const order = findWorkOrder(level.workOrder) || WORK_ORDERS[0];
-  const introLines = INTRO_LINES.map(function (line) { return line.indexOf('Work order') === 0 ? order.intro() : line; });
-  if (level.kind === 'generated') introLines.push('No drawings survive for this annex. Survey reference ' + level.seed + '.');
+  const introLines = INTRO_LINES.map(function (line) { return line.indexOf('작업 지시서') === 0 ? order.intro() : line; });
+  if (level.kind === 'generated') introLines.push('이 별관의 도면은 남아 있지 않다. 측량 참조 번호 ' + level.seed + '.');
   return introLines;
 }
 
@@ -594,7 +594,7 @@ function retryFromCheckpoint() {
   game.mode = 'playing';
   focusGameView();
   requestPointerLockOnCanvas();
-  showMessage('Scanner restarted from the last checkpoint.', 5, 'info');
+  showMessage('마지막 체크포인트에서 스캐너를 재시작했다.', 5, 'info');
 }
 
 // ---------------------------------------------------------------------------
@@ -660,7 +660,7 @@ function updateGameProgress(dt) {
 
   if (hollow.isActive && !game.hasShownHollowHint && hollow.figure.totalHits > 30) {
     game.hasShownHollowHint = true;
-    showMessage('The beam slows it and angers it. Hold it too long and it knows exactly where you are.', 7, 'warning');
+    showMessage('빔은 그것을 늦추고 화나게 한다. 너무 오래 비추면 네가 어디 있는지 정확히 안다.', 7, 'warning');
   }
 }
 
@@ -866,7 +866,7 @@ function startApplication() {
   const canvas = document.getElementById('view-canvas');
   let isRendererReady = false;
   try { isRendererReady = initializeRenderer(canvas); }
-  catch (error) { showFatalError('The scanner cannot start: ' + error.message); return; }
+  catch (error) { showFatalError('스캐너를 시작할 수 없습니다: ' + error.message); return; }
   if (!isRendererReady) { showFatalError(null); return; }
 
   if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches && settings.quality === 'high') settings.quality = 'medium';

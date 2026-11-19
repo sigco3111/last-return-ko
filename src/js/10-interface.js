@@ -58,7 +58,7 @@ function initializeInterface() {
   elements['button-begin'].addEventListener('click', function () { beginNewGame(); });
   // Which build this is, and "Report a problem", on the title screen and the pause screen. The address is worked
   // out at the moment the link is reached for, so it carries the settings as they are then.
-  elements['title-build'].textContent = 'Version: ' + describeBuild();
+  elements['title-build'].textContent = '버전: ' + describeBuild();
   for (const link of [elements['link-report-problem-title'], elements['link-report-problem']]) {
     for (const eventName of ['pointerdown', 'focus', 'click']) {
       link.addEventListener(eventName, function () { link.href = buildReportProblemAddress(); });
@@ -107,9 +107,9 @@ function initializeInterface() {
   interfaceState.refreshSettingControls = refreshSettingControls;
 
   const difficultyDescriptions = {
-    survey: 'Nothing hunts you. Walk the station, map it, read what the last crew left.',
-    standard: 'It is blind. It hears running, sweeps and doors. The beam slows it, and angers it.',
-    nightmare: 'It is faster and hears further. The emitter overheats sooner.'
+    survey: '아무것도 너를 사냥하지 않는다. 스테이션을 걸으며 지도를 그리고, 지난 크루가 남긴 것을 읽어라.',
+    standard: '그것은 눈이 멀었다. 달리기, 스윕, 문 소리를 듣는다. 빔은 그것을 늦추고, 화나게 한다.',
+    nightmare: '더 빠르고 더 멀리 듣는다. 에미터는 더 빨리 과열된다.'
   };
   const difficultyInputs = document.querySelectorAll('input[name="difficulty"]');
   const refreshDifficulty = function () {
@@ -165,14 +165,14 @@ function initializeInterface() {
     elements['work-order-options'].hidden = !isGenerated;
     for (const input of workOrderInputs) input.checked = settings.workOrders[input.value] !== false;
     let description = isGenerated
-      ? 'No drawings exist. Different on every descent; the same seed gives the same station. (The game is still being built: after an update, a seed may give a different station than it did before.)'
-      : 'The annex as it was built. The same every time.';
+      ? '도면이 남아 있지 않다. 하강마다 다르다. 같은 시드는 같은 스테이션을 준다. (이 게임은 아직 만들어지는 중이다: 업데이트 뒤에는 같은 시드가 이전과 다른 스테이션을 줄 수 있다.)'
+      : '지어진 그대로의 별관. 언제나 같다.';
     // After a run in a generated station, say which one it was, so it can be visited again.
     if (isGenerated) {
       const allowed = getAllowedWorkOrders();
-      description += ' A descent has one work order' + (allowed.length === 1 ? ': ' + findWorkOrder(allowed[0]).label + '. ' + findWorkOrder(allowed[0]).blurb : ', one of those ticked.');
+      description += ' 하강에는 작업 지시가 하나 있다' + (allowed.length === 1 ? ': ' + findWorkOrder(allowed[0]).label + '. ' + findWorkOrder(allowed[0]).blurb : ', 체크한 것 중 하나다.');
     }
-    if (isGenerated && level.kind === 'generated') description += ' Last descent: seed ' + level.seed + ' (' + (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label + ').';
+    if (isGenerated && level.kind === 'generated') description += ' 지난 하강: 시드 ' + level.seed + ' (' + (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label + ').';
     elements['station-description'].textContent = description;
   };
   for (const radio of stationInputs) {
@@ -447,7 +447,7 @@ function drawFullMap() {
     level.boundsMinimumX * MAP_PIXELS_PER_METRE, level.boundsMinimumZ * MAP_PIXELS_PER_METRE,
     viewWidth * MAP_PIXELS_PER_METRE, viewDepth * MAP_PIXELS_PER_METRE,
     toCanvasX(level.boundsMinimumX), toCanvasY(level.boundsMinimumZ), viewWidth * scale, viewDepth * scale);
-  context.font = '11px "B612 Mono", ui-monospace, monospace';
+  context.font = '11px "B612 Mono", "Noto Sans KR", ui-monospace, monospace';
   context.textAlign = 'center';
   // Zone labels appear once you have stood in the zone.
   const labelPositions = {};
@@ -462,7 +462,7 @@ function drawFullMap() {
   context.fillStyle = 'rgba(163, 122, 54, 0.95)';
   for (const zone in labelPositions) {
     const label = labelPositions[zone];
-    context.fillText(ZONE_NAMES[zone] || '', toCanvasX(label.sumX / label.count), toCanvasY(label.sumZ / label.count) + 4);
+    context.fillText(koZoneName(ZONE_NAMES[zone] || ''), toCanvasX(label.sumX / label.count), toCanvasY(label.sumZ / label.count) + 4);
   }
   context.textAlign = 'left';
   for (const interactable of interactables) {
@@ -505,7 +505,7 @@ function showMessage(text, seconds, style) {
   if (style === 'radio') {
     const speaker = document.createElement('span');
     speaker.className = 'message-speaker';
-    speaker.textContent = 'DISPATCH · SURFACE';
+    speaker.textContent = '디스패치 · 지상';
     element.appendChild(speaker);
   }
   element.appendChild(document.createTextNode(text));
@@ -546,11 +546,11 @@ function isCaptionLevelShown(level) {
 function describeCaptionSource(source) {
   const offsetX = source.x - player.x, offsetZ = source.z - player.z;
   const metres = Math.hypot(offsetX, offsetZ);
-  if (metres < 1.2) return { eighth: -1, word: 'right here' };
+  if (metres < 1.2) return { eighth: -1, word: '바로 여기' };
   const ahead = offsetX * Math.sin(player.yaw) - offsetZ * Math.cos(player.yaw);
   const toTheRight = offsetX * Math.cos(player.yaw) + offsetZ * Math.sin(player.yaw);
   const eighth = (Math.round(Math.atan2(toTheRight, ahead) / (Math.PI / 4)) + 8) % 8;
-  return { eighth: eighth, word: metres < TUNING.captionCloseMetres ? 'close' : (metres < TUNING.captionNearMetres ? 'near' : 'far') };
+  return { eighth: eighth, word: metres < TUNING.captionCloseMetres ? '가까움' : (metres < TUNING.captionNearMetres ? '근처' : '멀리') };
 }
 
 function removeCaptionLine(line) {
@@ -652,8 +652,8 @@ function clearMessages() {
 
 // "NO KEYCARD" or "KEYCARD" in a station with one card; "KEYCARDS 1/2" where there are more.
 function getKeycardStatusText() {
-  if (level.keycardCount > 1) return 'KEYCARDS ' + game.flags.keycardLevel + '/' + level.keycardCount;
-  return game.flags.hasKeycard ? 'KEYCARD' : 'NO KEYCARD';
+  if (level.keycardCount > 1) return '키카드 ' + game.flags.keycardLevel + '/' + level.keycardCount;
+  return game.flags.hasKeycard ? '키카드' : '키카드 없음';
 }
 
 // What the extra jobs of this station want shown: "FUEL CAN", "CORES 1/3", "BREAKER OPEN". Empty when there is nothing to say.
@@ -766,7 +766,7 @@ function updateHud(realDt) {
     interfaceState.textRefreshTimer -= realDt;
     if (interfaceState.textRefreshTimer <= 0) {
       interfaceState.textRefreshTimer = 0.12;
-      elements['title-range'].textContent = game.attract.centerRange >= 0 ? game.attract.centerRange.toFixed(2) + ' m' : 'NO RETURN';
+      elements['title-range'].textContent = game.attract.centerRange >= 0 ? game.attract.centerRange.toFixed(2) + ' m' : '반사 없음';
       elements['title-returns'].textContent = formatWithThousandsSeparators(pointCloud.totalReturns);
     }
     return;
@@ -830,9 +830,9 @@ function updateHud(realDt) {
     // the place is empty until you take one anyway, and then says how many you hold and no more.
     const spools = game.flags.spoolsCollected, areWanted = areSpoolsOnTheOrder();
     elements['chip-spools'].hidden = !areWanted && spools === 0;
-    elements['chip-spools'].textContent = areWanted ? 'SPOOLS ' + spools + '/' + level.spoolCount : 'SPOOLS ' + spools;
+    elements['chip-spools'].textContent = areWanted ? '스풀 ' + spools + '/' + level.spoolCount : '스풀 ' + spools;
     elements['chip-spools'].classList.toggle('is-on', areWanted && spools >= level.spoolCount);
-    elements['chip-power'].textContent = game.flags.powerOn ? 'MAINS ON' : 'MAINS OFF';
+    elements['chip-power'].textContent = game.flags.powerOn ? '주전원 켜짐' : '주전원 차단';
     elements['chip-power'].classList.toggle('is-on', game.flags.powerOn);
     elements['chip-keycard'].textContent = getKeycardStatusText();
     elements['chip-keycard'].classList.toggle('is-on', game.flags.hasKeycard);
@@ -841,7 +841,7 @@ function updateHud(realDt) {
     elements['chip-extra'].textContent = extraText;
     const carried = getHeldLooseObject();
     elements['chip-carrying'].hidden = carried === null;
-    if (carried !== null) elements['chip-carrying'].textContent = 'CARRYING: ' + getLooseObjectLabel(carried).toUpperCase() + (getLooseObjectWorth(carried) > 0 ? ' · ' + getLooseObjectWorth(carried) : '');
+    if (carried !== null) elements['chip-carrying'].textContent = '휴대: ' + getLooseObjectLabel(carried).toUpperCase() + (getLooseObjectWorth(carried) > 0 ? ' · ' + getLooseObjectWorth(carried) : '');
     // On a phone held sideways the captions hang under the work order (see style.css), and the work order
     // is as tall as its sentence is long: the stylesheet is told where it ends.
     const workOrderBlock = elements['hud-block-objective'];
@@ -853,12 +853,12 @@ function updateHud(realDt) {
 
     const zone = getZoneAtPosition(player.x, player.z);
     if (zone) interfaceState.visitedZones.add(zone);
-    elements['hud-location'].textContent = ZONE_NAMES[zone] || ZONE_NAMES[0];
+    elements['hud-location'].textContent = koZoneName(ZONE_NAMES[zone] || ZONE_NAMES[0]);
     // The map screen always carries the objective and where things stand, whatever the screen setting.
     if (interfaceState.isMapOverlayOpen) {
       elements['map-objective'].textContent = game.objectiveText;
-      elements['map-status'].textContent = 'SPOOLS ' + spools + '/3 · ' + (game.flags.powerOn ? 'MAINS ON' : 'MAINS OFF') + ' · ' +
-        getKeycardStatusText() + (extraText ? ' · ' + extraText : '') + ' · ' + (ZONE_NAMES[zone] || ZONE_NAMES[0]);
+      elements['map-status'].textContent = '스풀 ' + spools + '/3 · ' + (game.flags.powerOn ? '주전원 켜짐' : '주전원 차단') + ' · ' +
+        getKeycardStatusText() + (extraText ? ' · ' + extraText : '') + ' · ' + koZoneName(ZONE_NAMES[zone] || ZONE_NAMES[0]);
     }
 
     const rangeElement = elements['readout-range'];
@@ -867,7 +867,7 @@ function updateHud(realDt) {
       rangeElement.classList.remove('is-no-return');
       elements['readout-flight'].textContent = (player.centerRange * 2 / 0.299792458).toFixed(1) + ' ns';
     } else {
-      rangeElement.textContent = 'NO RETURN';
+      rangeElement.textContent = '반사 없음';
       rangeElement.classList.add('is-no-return');
       elements['readout-flight'].textContent = '--- ns';
     }
@@ -877,9 +877,9 @@ function updateHud(realDt) {
     elements['readout-heading'].innerHTML = String(heading).padStart(3, '0') + '&deg;';
 
     let stance = '';
-    if (player.isInVent) stance = player.isMoving ? 'IN A VENT · LOUD' : 'IN A VENT · STILL';
-    else if (player.isCrouching) stance = player.isMoving ? 'CROUCHED · QUIET' : 'CROUCHED · STILL · NEARLY SILENT';
-    else if (player.isSprinting) stance = 'SPRINTING · LOUD';
+    if (player.isInVent) stance = player.isMoving ? '환기구 안 · 시끄러움' : '환기구 안 · 정지';
+    else if (player.isCrouching) stance = player.isMoving ? '웅크림 · 조용' : '웅크림 · 정지 · 거의 무음';
+    else if (player.isSprinting) stance = '달리는 중 · 시끄러움';
     elements['hud-stance'].textContent = stance;
 
     const prompt = elements['hud-prompt'];
@@ -890,27 +890,27 @@ function updateHud(realDt) {
     const carriedButton = document.getElementById('touch-use-carried');
     if (carriedButton) {
       carriedButton.hidden = !(input.isTouchDevice && canSetOffCarried);
-      if (canSetOffCarried) carriedButton.textContent = heldLooseObject.kind.use.button || 'USE IT';
+      if (canSetOffCarried) carriedButton.textContent = heldLooseObject.kind.use.button || '사용하기';
     }
     if (game.mode === 'playing' && heldLooseObject && getThrowWindUp() > 0) {
       // Winding up a throw: a bar that fills.
       const filled = Math.round(getThrowWindUp() * 8);
       prompt.hidden = false;
-      prompt.textContent = 'THROW  ' + '\u25AE'.repeat(filled) + '\u25AF'.repeat(8 - filled);
+      prompt.textContent = '던지기  ' + '\u25AE'.repeat(filled) + '\u25AF'.repeat(8 - filled);
     } else if (game.mode === 'playing' && focusedLooseObject && !heldLooseObject && !settings.hasPickedSomethingUp) {
       // A tutorial: how to pick a thing up is said until you have done it once, and never again.
       prompt.hidden = false;
-      prompt.textContent = (input.isTouchDevice ? 'USE · ' : '[E] or hold [Right mouse]  ') + 'Pick up the ' + getLooseObjectLabel(focusedLooseObject);
+      prompt.textContent = (input.isTouchDevice ? '사용 · ' : '[E] 또는 [우클릭] 홀드  ') + getLooseObjectLabel(focusedLooseObject) + ' 줍기';
     } else if (game.mode === 'playing' && focused) {
       prompt.hidden = false;
-      prompt.textContent = (input.isTouchDevice ? 'USE · ' : '[E]  ') + focused.prompt;
+      prompt.textContent = (input.isTouchDevice ? '사용 · ' : '[E]  ') + focused.prompt;
     } else if (canSetOffCarried) {
       // In the beam, and it does something: say which key, or which button.
       prompt.hidden = false;
-      prompt.textContent = (input.isTouchDevice ? (heldLooseObject.kind.use.button || 'USE IT') + ' · ' : '[Q]  ') + heldLooseObject.kind.use.prompt;
+      prompt.textContent = (input.isTouchDevice ? (heldLooseObject.kind.use.button || '사용하기') + ' · ' : '[Q]  ') + heldLooseObject.kind.use.prompt;
     } else if (game.mode === 'playing' && !input.isPointerLocked && !input.useDragLook && !input.isTouchDevice) {
       prompt.hidden = false;
-      prompt.textContent = 'Click to take control of the scanner';
+      prompt.textContent = '클릭해 스캐너를 조작한다';
     } else {
       prompt.hidden = true;
     }
@@ -918,7 +918,7 @@ function updateHud(realDt) {
     const countdown = elements['hud-countdown'];
     if (game.liftCountdown > 0) {
       countdown.hidden = false;
-      countdown.textContent = 'LIFT ' + formatClockTime(Math.ceil(game.liftCountdown));
+      countdown.textContent = '리프트 ' + formatClockTime(Math.ceil(game.liftCountdown));
     } else {
       countdown.hidden = true;
     }
@@ -948,7 +948,7 @@ function openReader(entry, heading) {
     paragraph.textContent = paragraphText.replace('{keycardRoom}', level.keycardRoomText);
     body.appendChild(paragraph);
   }
-  elements['button-close-reader'].textContent = input.isPointerLocked ? 'Put it away (E or click)' : 'Put it away';
+  elements['button-close-reader'].textContent = input.isPointerLocked ? '내려놓기 (E 또는 클릭)' : '내려놓기';
   game.mode = 'reading';
   setScannerSound(0);
   // A spool that has a recording (assets/voice/spool1.mp3 and so on) is read aloud while its text is open.
@@ -984,7 +984,7 @@ function showDeathScreen(kind) {
   // One life (a custom threat level can ask for it): there is no checkpoint to go back to.
   if (!game.difficulty.checkpointsEnabled) {
     const paragraph = document.createElement('p');
-    paragraph.textContent = 'One life. This descent is over.';
+    paragraph.textContent = '목숨 하나. 이번 하강은 여기까지다.';
     lines.appendChild(paragraph);
   }
   elements['button-retry'].hidden = !game.difficulty.checkpointsEnabled;
@@ -1067,26 +1067,26 @@ function showEndingScreen() {
     stats.appendChild(term);
     stats.appendChild(description);
   };
-  addRow('Time below', formatClockTime(game.statistics.elapsed));
-  addRow('Returns logged', formatWithThousandsSeparators(pointCloud.totalReturns));
-  addRow('Distance walked', Math.round(game.statistics.distanceWalked) + ' m');
-  addRow('Signal losses', String(game.statistics.deaths));
-  addRow('Threat level', game.difficulty.label);
-  if (game.difficulty.isCustom) addRow('Custom settings', game.difficulty.description);
-  addRow('Station', level.description);
-  addRow('Work order', (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label);
-  addRow('Build', describeBuild());
-  if (debugState.hasBeenUsedThisRun) addRow('Debug mode', 'used, so this run sets no best time');
-  if (game.statistics.bestTime !== null) addRow('Best time', formatClockTime(game.statistics.bestTime));
+  addRow('지하 체류', formatClockTime(game.statistics.elapsed));
+  addRow('기록된 반사점', formatWithThousandsSeparators(pointCloud.totalReturns));
+  addRow('걸은 거리', Math.round(game.statistics.distanceWalked) + ' m');
+  addRow('신호 끊김', String(game.statistics.deaths));
+  addRow('위협 수준', game.difficulty.label);
+  if (game.difficulty.isCustom) addRow('사용자 설정 값', game.difficulty.description);
+  addRow('스테이션', level.description);
+  addRow('작업 지시', (findWorkOrder(level.workOrder) || WORK_ORDERS[0]).label);
+  addRow('빌드', describeBuild());
+  if (debugState.hasBeenUsedThisRun) addRow('디버그 모드', '사용됨, 이번 기록은 최고 기록에 남지 않는다');
+  if (game.statistics.bestTime !== null) addRow('최고 기록', formatClockTime(game.statistics.bestTime));
   const manifest = elements['ending-manifest'];
   manifest.textContent = '';
-  manifest.appendChild(document.createTextNode('Upload manifest: ' + describeUploadManifest() + '. Automatic classification of objects in the car: 1 operator. '));
+  manifest.appendChild(document.createTextNode('업로드 목록: ' + describeUploadManifest() + '. 차 안 물체 자동 분류: 조작원 1명. '));
   if (game.difficulty.hollowEnabled) {
     const strong = document.createElement('strong');
-    strong.textContent = '1 unclassified.';
+    strong.textContent = '미분류 1개.';
     manifest.appendChild(strong);
   } else {
-    manifest.appendChild(document.createTextNode('Nothing else.'));
+    manifest.appendChild(document.createTextNode('다른 것 없음.'));
   }
   setHudVisible(false);
   closeMapOverlay();

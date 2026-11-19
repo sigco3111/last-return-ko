@@ -48,42 +48,42 @@
 // 00-config.js) beyond its own size. How much of the beam it takes follows from how big it is.
 const LOOSE_OBJECT_KINDS = {
   canister: {
-    label: 'gas canister', mass: 3, value: 25, fragile: 0.5, material: 'metal', loud: 1, lies: 'either', bulky: false, bounce: 0.3, grip: 0.5,
+    label: '가스통', mass: 3, value: 25, fragile: 0.5, material: 'metal', loud: 1, lies: 'either', bulky: false, bounce: 0.3, grip: 0.5,
     parts: [{ shape: 'capsule', from: [0, -0.13, 0], to: [0, 0.13, 0], radius: 0.07 }]
   },
   jar: {
-    label: 'sample jar', mass: 0.8, value: 60, fragile: 1, shattersAt: 3.4, material: 'glass', loud: 1, lies: 'upright', bulky: false, bounce: 0.2, grip: 0.45,
+    label: '시료 병', mass: 0.8, value: 60, fragile: 1, shattersAt: 3.4, material: 'glass', loud: 1, lies: 'upright', bulky: false, bounce: 0.2, grip: 0.45,
     parts: [{ shape: 'capsule', from: [0, -0.05, 0], to: [0, 0.05, 0], radius: 0.06 }]
   },
   toolCase: {
-    label: 'tool case', mass: 6, value: 80, fragile: 0.7, material: 'case', loud: 1, lies: 'onItsSide', bulky: false, bounce: 0.15, grip: 0.6,
+    label: '공구함', mass: 6, value: 80, fragile: 0.7, material: 'case', loud: 1, lies: 'onItsSide', bulky: false, bounce: 0.15, grip: 0.6,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.21, 0.15, 0.08] }]
   },
   // The pipe hangs across the beam, not along it: 1.2 m of it, and a doorway is a metre wide.
   pipe: {
-    label: 'length of pipe', mass: 4, value: 15, fragile: 0.3, material: 'metal', loud: 1, lies: 'upright', bulky: false, bounce: 0.35, grip: 0.4,
+    label: '파이프 토막', mass: 4, value: 15, fragile: 0.3, material: 'metal', loud: 1, lies: 'upright', bulky: false, bounce: 0.35, grip: 0.4,
     parts: [{ shape: 'capsule', from: [-0.6, 0, 0], to: [0.6, 0, 0], radius: 0.03 }]
   },
   crate: {
-    label: 'crate', mass: 12, value: 40, fragile: 0.6, material: 'case', loud: 1, lies: 'upright', bulky: true, bounce: 0.12, grip: 0.7,
+    label: '운반 상자', mass: 12, value: 40, fragile: 0.6, material: 'case', loud: 1, lies: 'upright', bulky: true, bounce: 0.12, grip: 0.7,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.25, 0.22, 0.22] }]
   },
   // A scan grenade: arm it (Q), throw it, and where it lands it scans the room for you, all round. The light
   // stuns the Hollow if enough of it lands on it, and the noise brings it to where the grenade went off.
   scanGrenade: {
-    label: 'scan grenade', mass: 0.6, value: 0, material: 'metal', loud: 1, lies: 'either', bulky: false, bounce: 0.3, grip: 0.6,
+    label: '스캔 수류탄', mass: 0.6, value: 0, material: 'metal', loud: 1, lies: 'either', bulky: false, bounce: 0.3, grip: 0.6,
     parts: [
       { shape: 'capsule', from: [0, -0.045, 0], to: [0, 0.045, 0], radius: 0.04 },
       { shape: 'box', center: [0.05, 0.02, 0], half: [0.02, 0.05, 0.02] }
     ],
-    use: { prompt: 'Arm the scan grenade', button: 'ARM', activate: armScanGrenade },
+    use: { prompt: '스캔 수류탄 기동', button: '기동', activate: armScanGrenade },
     update: updateScanGrenade
   },
   // ---- litter: what lies about a station that nobody has swept in forty years ----
   // An empty can. Six of them lie wherever the noisy floor's draw says "cans" (03-noisy-floor.js). Kicked at a
   // walk they carry as far as the patch of cans they replace did; crouched, you can pick your way through.
   can: {
-    label: 'empty can', mass: 0.06, value: 1, material: 'tin', loud: 1.7, lies: 'either', bulky: false, bounce: 0.35, grip: 0.4,
+    label: '빈 캔', mass: 0.06, value: 1, material: 'tin', loud: 1.7, lies: 'either', bulky: false, bounce: 0.35, grip: 0.4,
     stepRadius: 0.035, // its body is what must not pass through a shelf in one step; the feet are within it
     // The body, and four small feet at each end so that it can stand: a capsule alone has round ends.
     parts: [{ shape: 'capsule', from: [0, -0.03, 0], to: [0, 0.03, 0], radius: 0.035 },
@@ -93,11 +93,11 @@ const LOOSE_OBJECT_KINDS = {
       { shape: 'ball', center: [0.016, 0.053, -0.016], radius: 0.012 }, { shape: 'ball', center: [-0.016, 0.053, -0.016], radius: 0.012 }]
   },
   carton: {
-    label: 'cardboard box', mass: 0.7, value: 2, fragile: 0.5, material: 'card', loud: 0.6, lies: 'upright', bulky: false, bounce: 0.1, grip: 0.7,
+    label: '골판지 상자', mass: 0.7, value: 2, fragile: 0.5, material: 'card', loud: 0.6, lies: 'upright', bulky: false, bounce: 0.1, grip: 0.7,
     parts: [{ shape: 'box', center: [0, 0, 0], half: [0.17, 0.11, 0.13] }]
   },
   plate: {
-    label: 'steel plate', mass: 3.5, value: 6, fragile: 0.2, material: 'metal', loud: 1.3, lies: 'upright', bulky: false, bounce: 0.25, grip: 0.5,
+    label: '강판', mass: 3.5, value: 6, fragile: 0.2, material: 'metal', loud: 1.3, lies: 'upright', bulky: false, bounce: 0.25, grip: 0.5,
     // It is thin, but nothing in a station is thinner than a shelf board: steps of a centimetre or so are fine enough
     // for it not to pass through one, and steps as fine as its own thickness would slow everything that moves with it.
     stepRadius: 0.025,
@@ -107,7 +107,7 @@ const LOOSE_OBJECT_KINDS = {
   // in their vent's mouth, where they hide the vent from a scan and fall over, loudly, if anything walks into
   // them; the rest lie on the floor in front of it. Heavy, awkward, and worth carrying off.
   ventCover: {
-    label: 'vent cover', mass: 9, value: 20, fragile: 0.3, material: 'metal', loud: 1.2, lies: 'upright', bulky: true, bounce: 0.2, grip: 0.5,
+    label: '환기구 덮개', mass: 9, value: 20, fragile: 0.3, material: 'metal', loud: 1.2, lies: 'upright', bulky: true, bounce: 0.2, grip: 0.5,
     stepRadius: 0.03,
     // Lying flat it is a plate on the floor: you and the Hollow walk over it. Standing or leaning it is in the way.
     stepOverHeight: 0.15,
@@ -122,7 +122,7 @@ const LOOSE_OBJECT_KINDS = {
   },
 
   pumpMotor: {
-    label: 'pump motor', mass: 18, value: 150, fragile: 0.6, material: 'metal', loud: 1, lies: 'upright', bulky: true, bounce: 0.1, grip: 0.65,
+    label: '펌프 모터', mass: 18, value: 150, fragile: 0.6, material: 'metal', loud: 1, lies: 'upright', bulky: true, bounce: 0.1, grip: 0.65,
     parts: [
       { shape: 'capsule', from: [-0.12, 0, 0], to: [0.12, 0, 0], radius: 0.13 },
       { shape: 'capsule', from: [0.12, 0, 0], to: [0.3, 0, 0], radius: 0.035 },
@@ -473,7 +473,7 @@ function noteLooseObjectScanned(object) {
     object.isAppraised = true;
     if (!looseState.hasShownAppraisalHint && getLooseObjectValue(object) > 0 && game.mode === 'playing') {
       looseState.hasShownAppraisalHint = true;
-      showMessage('The scanner has read what that is: ' + object.kind.label + ', worth ' + getLooseObjectValue(object) + '. Scan a thing well and what it is worth shows at it for a few seconds, each time you scan it.', 7, 'info');
+      showMessage('스캐너 판독: ' + object.kind.label + ', 가치 ' + getLooseObjectValue(object) + '. 충분히 스캔하면 가치가 몇 초간 그 물건 위에 표시된다. 다시 스캔하면 다시 나타난다.', 7, 'info');
     }
   }
 }
@@ -1358,7 +1358,7 @@ function reportLooseObjectKnock(object) {
     showCaption(wasKicked ? 'ownObjectKicked' : (loudness > 0.55 ? 'ownObjectCrash' : 'ownObjectKnock'));
     if (!looseState.hasShownKnockHint && hollow.isActive) {
       looseState.hasShownKnockHint = true;
-      showMessage(wasKicked ? 'You kicked something. That carried. Crouch, and what lies on the floor stays quiet.' : 'That carried. Move slowly with something in the beam and it will not knock.', 6, 'warning');
+      showMessage(wasKicked ? '무언가를 걷어찼다. 소리가 퍼졌다. 웅크리면 바닥의 물건들은 조용히 있는다.' : '소리가 퍼졌다. 빔에 든 것을 천천히 옮기면 부딪히지 않는다.', 6, 'warning');
     }
   } else {
     showCaption(loudness > 0.55 ? 'objectCrash' : 'objectKnock', { x: object.knockX, z: object.knockZ });
@@ -1396,7 +1396,7 @@ function damageLooseObject(object, speed) {
   // Said only of what is yours just now (in the beam, or just out of it), and not for every scratch.
   if (object.knockIsOwn && (object.isHeld || game.time - object.lastHandledTime < 4) && game.time - looseState.lastDamageSaidTime > 1.5 && game.mode === 'playing') {
     looseState.lastDamageSaidTime = game.time;
-    showMessage(object.isAppraised ? 'The ' + kind.label + ' took that badly: worth ' + after + ' now.' : 'The ' + kind.label + ' took that badly: it is worth less now.', 3.5, 'warning');
+    showMessage(object.isAppraised ? kind.label + ': 큰 손상. 이제 가치 ' + after + '.' : kind.label + ': 큰 손상. 가치가 떨어졌다.', 3.5, 'warning');
   }
   return false;
 }
@@ -1424,7 +1424,7 @@ function shatterLooseObject(object) {
   if (wasOwn) {
     showCaption(isGlass ? 'ownObjectShatter' : 'ownObjectBreak');
     if (game.mode === 'playing') {
-      showMessage('The ' + kind.label + (isGlass ? ' shatters.' : ' breaks apart.') + (wasAppraised ? ' That was worth ' + wasWorth + '.' : '') + (isGlass ? ' Mind the glass.' : ''), 5, 'warning');
+      showMessage(kind.label + (isGlass ? ' 산산조각났다.' : ' 부서졌다.') + (wasAppraised ? ' 가치 ' + wasWorth + '였다.' : '') + (isGlass ? ' 유리 조심.' : ''), 5, 'warning');
     }
   } else {
     showCaption(isGlass ? 'objectShatter' : 'objectBreak', { x: x, z: z });
@@ -1488,8 +1488,8 @@ function pickUpLooseObject(object, isByButton) {
   if (!looseState.hasShownCarryHint) {
     looseState.hasShownCarryHint = true;
     showMessage(input.isTouchDevice
-      ? 'USE again lets go of it. Hold USE and let go to throw it.'
-      : (isByButton ? 'It stays in the beam while you hold the button. Swing it and let go to throw it.' : 'E again lets go of it. Hold E and let go to throw it.'), 7, 'info');
+      ? '사용을 다시 누르면 놓는다. 사용을 홀드했다가 놓으면 던진다.'
+      : (isByButton ? '버튼을 홀드하는 동안 빔에 머문다. 휘두르고 놓으면 던진다.' : 'E를 다시 누르면 놓는다. E를 홀드했다가 놓으면 던진다.'), 7, 'info');
   }
   return true;
 }
@@ -1948,7 +1948,7 @@ function clearHaulBays() {
 // A new descent: every bay is shut and empty again.
 function resetHaulBays() {
   haulState.taken = 0; haulState.announced = -1; haulState.checkTimer = 0;
-  for (const bay of haulState.bays) { bay.state = 'shut'; bay.taken = 0; bay.pulseTimer = 0; bay.interactable.prompt = 'Open salvage bay ' + (bay.index + 1); }
+  for (const bay of haulState.bays) { bay.state = 'shut'; bay.taken = 0; bay.pulseTimer = 0; bay.interactable.prompt = '인양 베이 ' + (bay.index + 1) + ' 열기'; }
 }
 
 // Makes one planned bay (a room of 03-levelgen.js's plan: its door hangs and its floor is dug by now) into a
@@ -1973,7 +1973,7 @@ function buildHaulBay(planned, objectId, index) {
       { surfaceClass: SURFACE_INTERACTIVE, blocksMovement: false, isDynamic: true, objectId: objectId });
     break;
   }
-  const interactable = registerInteractable(objectId, panelX, floorY + 1.25, panelZ, 'Open salvage bay ' + (index + 1), panel ? [panel] : [], { mapLabel: 'BAY ' + (index + 1) });
+  const interactable = registerInteractable(objectId, panelX, floorY + 1.25, panelZ, '인양 베이 ' + (index + 1) + ' 열기', panel ? [panel] : [], { mapLabel: '베이 ' + (index + 1) });
   clearPlacement();
   let minimumX = GRID_WIDTH, maximumX = 0, minimumZ = GRID_DEPTH, maximumZ = 0;
   for (const tileIndex of planned.route) {
@@ -2089,27 +2089,27 @@ function getHaulProgress() {
 function useHaulBay(index) {
   const bay = haulState.bays[index];
   if (!bay) return;
-  if (bay.state === 'sealed') { showMessage('SALVAGE BAY ' + (index + 1) + ': sealed.', 3, 'info'); return; }
+  if (bay.state === 'sealed') { showMessage('인양 베이 ' + (index + 1) + ': 밀봉됨.', 3, 'info'); return; }
   if (bay.state === 'open' || bay.state === 'sealing') {
-    showMessage('SALVAGE BAY ' + (index + 1) + ': ' + getHaulBayValue(bay) + ' of ' + bay.quota + '. It seals itself when it holds enough and you are out of it.', 5, 'info');
+    showMessage('인양 베이 ' + (index + 1) + ': ' + getHaulBayValue(bay) + ' / ' + bay.quota + '. 충분히 채우고 네가 나가면 스스로 밀봉된다.', 5, 'info');
     return;
   }
   const other = findOpenHaulBay();
   if (other !== null) {
     playDeniedSound();
-    showMessage('SALVAGE BAY ' + (index + 1) + ': bay ' + (other.index + 1) + ' is still open. One at a time: fill that one first.', 5, 'warning');
+    showMessage('인양 베이 ' + (index + 1) + ': 베이 ' + (other.index + 1) + '이 아직 열려 있다. 한 번에 하나: 그쪽을 먼저 채워라.', 5, 'warning');
     return;
   }
   const progress = getHaulProgress();
-  if (progress.done >= progress.total) { showMessage('SALVAGE BAY ' + (index + 1) + ': nothing more is wanted.', 3, 'info'); return; }
+  if (progress.done >= progress.total) { showMessage('인양 베이 ' + (index + 1) + ': 더 이상 요구하는 것이 없다.', 3, 'info'); return; }
   bay.state = 'open';
   bay.pulseTimer = 0.6; // the lamp comes on a moment after the door starts up
   bay.interactable.isDiscovered = true; // on the map from now on
-  bay.interactable.prompt = 'Salvage bay ' + (index + 1) + ': what it holds';
+  bay.interactable.prompt = '인양 베이 ' + (index + 1) + ': 내용물';
   haulState.announced = progress.done; // (what it holds is said when that changes, not now)
   playPickupSound();
   emitNoise(bay.doorwayX, bay.doorwayZ, TUNING.noiseRadiusDoor);
-  showMessage('Salvage bay ' + (index + 1) + ' open. It wants ' + Math.min(bay.quota, progress.total - progress.done) + ' worth.', 5, 'info');
+  showMessage('인양 베이 ' + (index + 1) + ' 열림. 가치 ' + Math.min(bay.quota, progress.total - progress.done) + '어치를 원한다.', 5, 'info');
   refreshObjective();
 }
 
@@ -2143,8 +2143,8 @@ function finishSealingHaulBay(bay) {
   haulState.announced = progress.done;
   const isEnough = progress.done >= progress.total;
   const isAnotherLeft = haulState.bays.some(function (other) { return other.state === 'shut'; });
-  showMessage('Salvage bay ' + (bay.index + 1) + ' sealed: ' + value + ' taken. ' + progress.done + ' of ' + progress.total + '.' +
-    (isEnough ? ' That is what they asked for.' : (isAnotherLeft ? ' Find the next bay.' : '')), 6, 'info');
+  showMessage('인양 베이 ' + (bay.index + 1) + ' 밀봉: ' + value + ' 인양. ' + progress.done + ' / ' + progress.total + '.' +
+    (isEnough ? ' 요구한 만큼 모았다.' : (isAnotherLeft ? ' 다음 베이를 찾아라.' : '')), 6, 'info');
   saveCheckpoint();
   refreshObjective();
 }
@@ -2173,7 +2173,7 @@ function updateHaulBays(dt) {
   const progress = getHaulProgress(), inside = getHaulBayValue(bay);
   if (progress.done !== haulState.announced) {
     haulState.announced = progress.done;
-    showMessage('Salvage bay ' + (bay.index + 1) + ': ' + inside + ' of ' + bay.quota + '.', 4, 'info');
+    showMessage('인양 베이 ' + (bay.index + 1) + ': ' + inside + ' / ' + bay.quota + '.', 4, 'info');
     refreshObjective();
   }
   // Enough in it (or enough in all): it seals, once you, the Hollow and anything in the doorway are out of the way.
@@ -2196,7 +2196,7 @@ function fillHaulBays() {
     if (progress.done >= progress.total) break;
     if (bay.state === 'sealed') continue;
     bay.state = 'open'; bay.interactable.isDiscovered = true; bay.pulseTimer = TUNING.haulBayPulseSeconds;
-    bay.interactable.prompt = 'Salvage bay ' + (bay.index + 1) + ': what it holds';
+    bay.interactable.prompt = '인양 베이 ' + (bay.index + 1) + ': 내용물';
     const byWorth = looseObjects.filter(function (object) { return !object.isHeld && !isLooseObjectInHaulBay(object, bay); })
       .sort(function (first, second) { return getLooseObjectValue(second) - getLooseObjectValue(first) || first.id - second.id; });
     let placed = 0;
@@ -2344,7 +2344,7 @@ function armScanGrenade(object) {
   object.goesOffTime = game.time + TUNING.scanGrenadeFuseSeconds;
   object.hasLanded = false;
   playScanGrenadeSound('arm', object.x, object.y, object.z);
-  showMessage('Armed. It goes off where it lands. Throw it.', 4, 'warning');
+  showMessage('기동했다. 떨어진 곳에서 터진다. 던져라.', 4, 'warning');
 }
 
 function updateScanGrenade(object, dt) {
@@ -2514,7 +2514,7 @@ function updateLooseObjects(dt, eyeX, eyeY, eyeZ) {
       if (looseState.holdBreakTimer >= TUNING.looseHoldBreakSeconds) {
         releaseHeldLooseObject(0);
         looseState.statistics.pulledFromHands++;
-        showMessage('The beam loses the ' + held.kind.label + '.', 3, 'warning');
+        showMessage('빔에서 놓침: ' + held.kind.label + '.', 3, 'warning');
       }
     } else {
       looseState.holdBreakTimer = 0;

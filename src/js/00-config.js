@@ -16,7 +16,7 @@
 const DIFFICULTY_PRESETS = {
   survey: {
     key: 'survey',              // internal name, also used to store the best time
-    label: 'Survey only',       // shown on the ending screen
+    label: '측량 전용',           // shown on the ending screen
     hollowEnabled: false,       // false: the Hollow never appears, not even after the generator starts
     stillsEnabled: false,       // false: the calibration dummies stay ordinary statues
     hollowSpeedFactor: 1.0,     // multiplies every Hollow speed (roam, investigate, hunt, enraged)
@@ -34,7 +34,7 @@ const DIFFICULTY_PRESETS = {
   },
   standard: {
     key: 'standard',
-    label: 'Standard',
+    label: '표준',
     hollowEnabled: true,
     stillsEnabled: true,
     hollowSpeedFactor: 1.0,
@@ -48,7 +48,7 @@ const DIFFICULTY_PRESETS = {
   },
   nightmare: {
     key: 'nightmare',
-    label: 'Nightmare',
+    label: '악몽',
     hollowEnabled: true,
     stillsEnabled: true,
     hollowSpeedFactor: 1.14,    // 14 % faster: its hunt speed goes from 3.5 to about 4.0 (you sprint at 4.6)
@@ -71,16 +71,16 @@ const DIFFICULTY_PRESETS = {
 // TUNING in 09-difficulty.js, so it stays true when TUNING changes.
 // A custom threat level starts out as a copy of Standard.
 const CUSTOM_DIFFICULTY_OPTIONS = [
-  { key: 'hollowEnabled', kind: 'switch', label: 'The Hollow', onText: 'It comes once the power is on.', offText: 'It never appears.' },
-  { key: 'stillsEnabled', kind: 'switch', label: 'The Stills', onText: 'They move while nothing is scanning them.', offText: 'They stay ordinary statues.' },
-  { key: 'hollowSpeedFactor', kind: 'percent', label: 'Hollow speed', minimum: 0.7, maximum: 1.4, step: 0.05 },
-  { key: 'hearingFactor', kind: 'percent', label: 'Hollow hearing', minimum: 0.5, maximum: 1.6, step: 0.05 },
-  { key: 'pressureFactor', kind: 'percent', label: 'How hard it presses', minimum: 0.5, maximum: 2, step: 0.1 },
-  { key: 'angerFactor', kind: 'percent', label: 'Its temper in the beam', minimum: 0.5, maximum: 2, step: 0.1 },
-  { key: 'heatFactor', kind: 'percent', label: 'Scanner heat', minimum: 0.5, maximum: 2, step: 0.1 },
-  { key: 'staminaFactor', kind: 'percent', label: 'Your stamina', minimum: 0.5, maximum: 2, step: 0.1 },
-  { key: 'phantomFactor', kind: 'choice', label: 'Apparitions', choices: [[0, 'None'], [0.5, 'Few'], [1, 'Normal'], [2, 'Many']] },
-  { key: 'checkpointsEnabled', kind: 'switch', label: 'Checkpoints', onText: 'Caught: you resume from the last checkpoint.', offText: 'One life. Caught means starting over.' }
+  { key: 'hollowEnabled', kind: 'switch', label: '할로우', onText: '전원이 들어오면 나타난다.', offText: '나타나지 않는다.' },
+  { key: 'stillsEnabled', kind: 'switch', label: '스틸즈', onText: '아무것도 스캔하지 않을 때 움직인다.', offText: '평범한 마네킹으로 남는다.' },
+  { key: 'hollowSpeedFactor', kind: 'percent', label: '할로우 속도', minimum: 0.7, maximum: 1.4, step: 0.05 },
+  { key: 'hearingFactor', kind: 'percent', label: '할로우 청각', minimum: 0.5, maximum: 1.6, step: 0.05 },
+  { key: 'pressureFactor', kind: 'percent', label: '압박 강도', minimum: 0.5, maximum: 2, step: 0.1 },
+  { key: 'angerFactor', kind: 'percent', label: '빔 아래 성질', minimum: 0.5, maximum: 2, step: 0.1 },
+  { key: 'heatFactor', kind: 'percent', label: '스캐너 발열', minimum: 0.5, maximum: 2, step: 0.1 },
+  { key: 'staminaFactor', kind: 'percent', label: '스태미너', minimum: 0.5, maximum: 2, step: 0.1 },
+  { key: 'phantomFactor', kind: 'choice', label: '환영', choices: [[0, '없음'], [0.5, '적게'], [1, '보통'], [2, '많게']] },
+  { key: 'checkpointsEnabled', kind: 'switch', label: '체크포인트', onText: '잡히면 마지막 체크포인트부터 다시.', offText: '목숨 하나. 잡히면 처음부터.' }
 ];
 
 // The "Quality" choice on the title screen. These only affect looks and performance.
@@ -455,50 +455,106 @@ const CLASSIC_ZONE_NAMES = [
 
 const ZONE_NAMES = CLASSIC_ZONE_NAMES.slice();
 
+// Korean names for the rooms, for everything the player reads. ZONE_NAMES itself stays in English: the noisy
+// floor, the crawlspace, the phantoms and the salvage bays compare it, so it is logic, not text.
+const KO_ZONE_NAMES = {
+  'UNSURVEYED': '미측정',
+  'LIFT CAR': '리프트 카',
+  'LIFT LOBBY': '리프트 로비',
+  'MAIN CORRIDOR A': '주 복도 A',
+  'SECURITY OFFICE': '보안실',
+  'LOCKER ROOM': '탈의실',
+  'MESS ROOM': '식당',
+  'STORE CLOSET': '비품실',
+  'ARCHIVE ACCESS': '기록실 입구',
+  'PUMP HALL VESTIBULE': '펌프 홀 현관',
+  'PUMP HALL B': '펌프 홀 B',
+  'GENERATOR ROOM': '발전실',
+  'CONTROL ROOM': '제어실',
+  'WEST SERVICE PASSAGE': '서쪽 정비 통로',
+  'ARCHIVE': '기록실',
+  'LABORATORY': '연구실',
+  'COLD ROOM': '냉각실',
+  'CALIBRATION STORE C4': '교정 저장고 C4',
+  'DEEP CORRIDOR': '심층 복도',
+  'SHAFT 9': '샤프트 9',
+  'STAIRS': '계단',
+  'BOILER HOUSE': '보일러실',
+  'WORKSHOP': '작업장',
+  'CREW QUARTERS': '크루 숙소',
+  'WASHROOM': '세면장',
+  'SWITCH ROOM': '개폐실',
+  'STORES': '저장고',
+  'SUMP 3': '집수조 3',
+  'SUMP': '집수조',
+  'TELEMETRY': '원격측정실',
+  'INFIRMARY': '의무실',
+  'PIPE GALLERY': '배관 갤러리',
+  'CORE STORE': '코어 저장고',
+  'BATTERY ROOM': '배터리실',
+  'DRYING ROOM': '건조실',
+  'OLD WORKINGS': '옛 굴착 구역',
+  'CORRIDOR': '복도',
+  'SERVICE DUCT': '정비 덕트',
+  'SALVAGE BAY': '인양 베이'
+};
+const KO_ZONE_PREFIXES = Object.keys(KO_ZONE_NAMES).sort(function (a, b) { return b.length - a.length; });
+
+// The Korean name of a room, for the map, the HUD and the lettering on the walls. A numbered room keeps its
+// number: WORKSHOP 2 is 작업장 2, SUMP 4 is 집수조 4. A name nobody knows stays as it is.
+function koZoneName(name) {
+  if (!name) return '';
+  if (KO_ZONE_NAMES[name]) return KO_ZONE_NAMES[name];
+  for (const english of KO_ZONE_PREFIXES) {
+    if (name.indexOf(english + ' ') === 0) return KO_ZONE_NAMES[english] + name.slice(english.length);
+  }
+  return name;
+}
+
 // The lines that appear one by one on the black screen after "Begin descent".
 const INTRO_LINES = [
-  'KESSEL-9 PUMPING ANNEX',
-  '212 m below grade. Sealed 1987.',
-  'Work order 4471-B: recover three survey spools left by Crew 2.',
-  'There is no lighting. The scanner is the only way to see.'
+  'KESSEL-9 펌프 별관',
+  '지표 아래 212m. 1987년 봉인.',
+  '작업 지시서 4471-B: 크루 2가 남긴 측량 스풀 3개를 회수하라.',
+  '조명은 없다. 스캐너만이 볼 수 있는 유일한 수단이다.'
 ];
 
 // What dispatch says over the radio. When each one plays is decided in 11-game.js.
 const RADIO_MESSAGES = {
   // These lines are also read aloud if recorded (docs/voice-lines.md), so they must be true in every station,
   // classic or generated: name rooms, never directions.
-  leftLift: 'The car goes back up on its own when it is empty. Mains is dead on your level. Find Generator 2 and get it running. It is off Pump Hall B.',
-  firstSpool: 'That is one. Crew 2 logged two more: one in the calibration store, one at the shaft.',
+  leftLift: '차는 비면 알아서 올라간다. 네 층은 주전원이 죽어 있다. 발전기 2를 찾아 돌려라. 펌프 홀 B 옆에 있다.',
+  firstSpool: '하나다. 크루 2가 남긴 게 둘 더 있어. 하나는 교정 저장고, 하나는 샤프트 쪽이야.',
   // The same moment in a station with more than three spools, where "two more" would not be true.
-  firstSpoolOfMany: 'That is one. Crew 2 logged more of them. One is in the calibration store, one is at the shaft, and the rest are wherever they left them.',
-  generatorStarted: 'We see the load up here. Powered doors should answer now.',
-  generatorFollowUp: 'Odd. The motion sensor in the shaft chamber just tripped. Probably the mains coming back.',
-  keycardTaken: 'That card opens the keycard doors. Shaft 9 is behind one of them.',
+  firstSpoolOfMany: '하나다. 크루 2가 남긴 게 더 있어. 하나는 교정 저장고, 하나는 샤프트 쪽이고, 나머지는 그들이 둔 곳 어딘가야.',
+  generatorStarted: '여기서도 부하가 보인다. 이제 전동 문이 열릴 거다.',
+  generatorFollowUp: '이상하군. 샤프트실 동작 감지기가 방금 울렸어. 주전원이 돌아오면서 그랬겠지.',
+  keycardTaken: '그 카드로 키카드 문을 열 수 있다. 샤프트 9도 그중 하나 뒤에 있어.',
   // Only in stations with more than one keycard: said for every card except the last.
-  lowerKeycardTaken: 'That card opens some of the doors. Not the way to Shaft 9. There is another card further in.',
-  secondSpool: 'That is two. Do not stay in that room.',
+  lowerKeycardTaken: '그 카드는 일부 문만 연다. 샤프트 9로 가는 길은 아니야. 더 안쪽에 카드가 하나 더 있어.',
+  secondSpool: '둘이다. 그 방에 머물지 마.',
   // Said when the Stills wake in a station with more than three spools, where the one in their room need not be your second.
-  stillsWake: 'Do not stay in that room.',
+  stillsWake: '그 방에 머물지 마.',
   // ---- Quests. A generated station may have none, one or several (09-quests.js says which line goes with
   //      which quest and when). None of these names a number: how many there are is on screen, so one recording
   //      does for every station. docs/voice-lines.md lists the ones still to be recorded. ----
   // Said the first time any generator will not start for want of fuel, Generator 2 or one of the small ones.
-  generatorNoFuel: 'Day tank reads empty from here. There will be a fuel can somewhere on your level. Bring it to the generator.',
-  generatorsWanted: 'One set will not lift the car. There are more generators on your level, and the winch wants every one of them running before you call the lift. We have marked them for you. They are not quiet.',
-  salvageWanted: 'This order is Salvage\'s. There are bays down there with their doors shut, the first not far from the lift. Open one, fill it with what is worth carrying, and it seals itself. Then find the next. The terminal keeps count.',
-  badgesWanted: 'Personnel wants the badges of Crew 2 back. They will be with whatever the crew left lying about. Bring every one you find. The terminal will count them.',
-  valvesWanted: 'One more for the list. The isolation valves on your level have to be shut before we bring you up. I have marked them. Those actuators have not turned in years. They will complain.',
-  coresWanted: 'One more thing while you are down there. The lab wants the core samples Crew 2 pulled. Grey tubes. Bring them all.',
-  winchBreakerOpen: 'Upload received. But the car is not answering. The winch breaker has tripped. I have marked the panel on your map. Close it.',
-  breakerClosed: 'Breaker is in. The car is on its way down. Forty seconds. Get back to the lobby.',
-  doorBroken: 'I just lost a door on the board. Those are rated for the whole shaft coming down. Do not count on the ones you have left.',
-  allSpools: 'That is all of them. Go back to the lift lobby and upload them.',
-  uploadStarted: 'Upload received. The car is on its way down. Forty seconds. It is not a quiet machine.',
-  liftArrived: 'The car is at your level. Get in quick.',
+  generatorNoFuel: '여기서 보기에 데이 탱크가 비었어. 네 층 어딘가에 연료통이 있을 거다. 발전기로 가져가.',
+  generatorsWanted: '발전기 하나로는 차를 올릴 수 없다. 네 층에 발전기가 더 있고, 리프트를 부르려면 윈치에 전부 돌아가고 있어야 해. 표시해 뒀다. 조용한 것들이 아니야.',
+  salvageWanted: '이번 지시는 인양팀 거다. 아래에 문 닫힌 베이들이 있어. 첫 번째는 리프트에서 멀지 않아. 하나를 열고 들고 나올 가치가 있는 걸 채우면 저절로 밀봉된다. 그다음 다음 베이를 찾아. 단말기가 세고 있어.',
+  badgesWanted: '인사팀에서 크루 2의 배지를 돌려달란다. 크루가 두고 간 물건들 사이에 있을 거야. 찾는 족족 가져와. 단말기가 세어 줄 거다.',
+  valvesWanted: '목록에 하나 더. 너를 올려 보내기 전에 네 층의 차단 밸브를 전부 잠가야 한다. 표시해 뒀어. 그 액추에이터들은 몇 년을 안 돌아간 것들이야. 소리 좀 낼 거다.',
+  coresWanted: '내려가 있는 김에 하나 더. 연구소에서 크루 2가 뽑은 코어 시료를 원해. 회색 튜브들이야. 전부 가져와.',
+  winchBreakerOpen: '업로드 받았다. 그런데 차가 응답하지 않아. 윈치 차단기가 내려갔어. 지도에 판넬을 표시했다. 올려라.',
+  breakerClosed: '차단기 들어왔다. 차가 내려가는 중이야. 40초. 로비로 돌아가.',
+  doorBroken: '보드에서 문 하나를 잃었어. 샤프트가 통째로 내려앉아도 버티는 등급인데. 남은 문들도 믿지 마.',
+  allSpools: '전부다. 리프트 로비로 돌아가서 업로드해.',
+  uploadStarted: '업로드 받았다. 차가 내려가는 중이야. 40초. 조용한 기계가 아니야.',
+  liftArrived: '차가 네 층에 도착했다. 빨리 타.',
   // Said instead of uploadStarted and breakerClosed in a station where the car never went back up (no wait for
   // the lift: `liftWait` of QUEST_COMPLICATIONS in 09-quests.js). The key is the other line's, with CarWaiting.
-  uploadStartedCarWaiting: 'Upload received. The car never left your level. The doors are opening. Get in.',
-  breakerClosedCarWaiting: 'Breaker is in. The car never left your level. The doors are opening. Get back to the lobby.'
+  uploadStartedCarWaiting: '업로드 받았다. 차는 네 층을 떠난 적이 없어. 문이 열린다. 타.',
+  breakerClosedCarWaiting: '차단기 들어왔다. 차는 네 층을 떠난 적이 없어. 문이 열린다. 로비로 돌아가.',
 };
 
 // TWEAK: when Dispatch speaks. Each entry: something that happens (`when`), the line of RADIO_MESSAGES he says,
@@ -549,68 +605,68 @@ const DISPATCH_CUES = [
 // ---------------------------------------------------------------------------
 const CAPTIONS = {
   // ---- what the Hollow has just done ----
-  hollowFound: { text: '[it has found you]', level: 'tell', withinMetres: 0, seconds: 3.2, slot: 'hollowVoice', rank: 3 },
-  hollowLost: { text: '[it has lost you]', level: 'tell', withinMetres: 0, seconds: 3.2, slot: 'hollowVoice', rank: 3 },
-  hollowEnraged: { text: '[the beam no longer holds it]', level: 'tell', withinMetres: 0, seconds: 3.2 },
-  hollowTurns: { text: '[it turns toward the light]', level: 'tell', withinMetres: 0, seconds: 3.2 },
-  hollowMovingOff: { text: '[it is moving off]', level: 'tell', withinMetres: 22, seconds: 3.2 },
+  hollowFound: { text: '[그것이 너를 찾아냈다]', level: 'tell', withinMetres: 0, seconds: 3.2, slot: 'hollowVoice', rank: 3 },
+  hollowLost: { text: '[그것이 너를 놓쳤다]', level: 'tell', withinMetres: 0, seconds: 3.2, slot: 'hollowVoice', rank: 3 },
+  hollowEnraged: { text: '[빔이 더는 그것을 붙잡지 못한다]', level: 'tell', withinMetres: 0, seconds: 3.2 },
+  hollowTurns: { text: '[그것이 빛 쪽으로 돌아선다]', level: 'tell', withinMetres: 0, seconds: 3.2 },
+  hollowMovingOff: { text: '[그것이 멀어진다]', level: 'tell', withinMetres: 22, seconds: 3.2 },
 
   // ---- its voice ----
-  hollowGrowl: { text: '[a low, rattling growl]', level: 'sound', withinMetres: 6, seconds: 1.2, slot: 'hollowVoice', rank: 0 },
-  hollowGrowlHunting: { text: '[growling, loud and fast]', level: 'sound', withinMetres: 13, seconds: 1.2, slot: 'hollowVoice', rank: 0 },
-  hollowShriek: { text: '[it shrieks in the beam]', level: 'sound', withinMetres: 50, seconds: 1.2, slot: 'hollowVoice', rank: 2 },
-  hollowRoar: { text: '[it roars]', level: 'sound', withinMetres: 50, seconds: 2.5, slot: 'hollowVoice', rank: 3 },
-  hollowSnarl: { text: '[it snarls]', level: 'sound', withinMetres: 60, seconds: 1.8, slot: 'hollowVoice', rank: 2 },
-  hollowSniff: { text: '[it sniffs the air]', level: 'sound', withinMetres: 50, seconds: 2, slot: 'hollowVoice', rank: 2 },
-  hollowTrill: { text: '[a short, rising trill]', level: 'sound', withinMetres: 23, seconds: 2.5, slot: 'hollowVoice', rank: 2 },
+  hollowGrowl: { text: '[낮고 덜컹거리는 으르렁거림]', level: 'sound', withinMetres: 6, seconds: 1.2, slot: 'hollowVoice', rank: 0 },
+  hollowGrowlHunting: { text: '[크고 빠른 으르렁거림]', level: 'sound', withinMetres: 13, seconds: 1.2, slot: 'hollowVoice', rank: 0 },
+  hollowShriek: { text: '[빔 속에서 그것이 비명을 지른다]', level: 'sound', withinMetres: 50, seconds: 1.2, slot: 'hollowVoice', rank: 2 },
+  hollowRoar: { text: '[그것이 포효한다]', level: 'sound', withinMetres: 50, seconds: 2.5, slot: 'hollowVoice', rank: 3 },
+  hollowSnarl: { text: '[그것이 이빨을 드러내며 으른다]', level: 'sound', withinMetres: 60, seconds: 1.8, slot: 'hollowVoice', rank: 2 },
+  hollowSniff: { text: '[그것이 공기 냄새를 맡는다]', level: 'sound', withinMetres: 50, seconds: 2, slot: 'hollowVoice', rank: 2 },
+  hollowTrill: { text: '[짧게 올라가는 트릴]', level: 'sound', withinMetres: 23, seconds: 2.5, slot: 'hollowVoice', rank: 2 },
 
   // ---- where it puts its feet ----
-  hollowSteps: { text: '[heavy footsteps]', level: 'sound', withinMetres: 10, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
-  hollowStepsHunting: { text: '[heavy footsteps, fast]', level: 'sound', withinMetres: 12, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
-  hollowVentSteps: { text: '[sheet metal booms: something is in a vent]', level: 'sound', withinMetres: 12, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
-  hollowOverhead: { text: '[something crawls overhead]', level: 'sound', withinMetres: 10, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
-  hollowOnGlass: { text: '[glass crunches under something]', level: 'sound', withinMetres: 13, seconds: 3, slot: 'hollowFeet', rank: 1 },
-  hollowOnPlate: { text: '[a floor plate clanks under something]', level: 'sound', withinMetres: 13, seconds: 3, slot: 'hollowFeet', rank: 1 },
+  hollowSteps: { text: '[무거운 발소리]', level: 'sound', withinMetres: 10, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
+  hollowStepsHunting: { text: '[무겁고 빠른 발소리]', level: 'sound', withinMetres: 12, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
+  hollowVentSteps: { text: '[철판이 울린다: 환기구 안에 무언가 있다]', level: 'sound', withinMetres: 12, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
+  hollowOverhead: { text: '[무언가가 머리 위를 기어간다]', level: 'sound', withinMetres: 10, seconds: 1.6, slot: 'hollowFeet', rank: 0 },
+  hollowOnGlass: { text: '[무언가 아래서 유리가 바스러진다]', level: 'sound', withinMetres: 13, seconds: 3, slot: 'hollowFeet', rank: 1 },
+  hollowOnPlate: { text: '[무언가 아래서 바닥판이 쨍그랑거린다]', level: 'sound', withinMetres: 13, seconds: 3, slot: 'hollowFeet', rank: 1 },
 
   // ---- hatches and doors ----
-  hatchRattle: { text: '[a ceiling hatch rattles]', level: 'sound', withinMetres: 10, seconds: 1.5, slot: 'hatch', rank: 0 },
-  hatchForced: { text: '[a ceiling hatch is forced open]', level: 'sound', withinMetres: 25, seconds: 3.2, slot: 'hatch', rank: 1 },
-  hatchBurst: { text: '[a ceiling hatch bursts open]', level: 'sound', withinMetres: 25, seconds: 3.2, slot: 'hatch', rank: 1 },
-  doorPounded: { text: '[it is at the door]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
-  doorPoundedAgain: { text: '[it is at the door again]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
-  doorPoundedLast: { text: '[it is at the door again. The door will not hold]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
-  doorBreaks: { text: '[the door gives way]', level: 'sound', withinMetres: 26, seconds: 3.2, slot: 'doorPounded', rank: 1 },
-  doorOpens: { text: '[a door opens]', level: 'sound', withinMetres: 26, seconds: 2.2, slot: 'door', rank: 0 },
-  doorCloses: { text: '[a door closes]', level: 'sound', withinMetres: 26, seconds: 2.2, slot: 'door', rank: 0 },
+  hatchRattle: { text: '[천장 해치가 덜거덕거린다]', level: 'sound', withinMetres: 10, seconds: 1.5, slot: 'hatch', rank: 0 },
+  hatchForced: { text: '[천장 해치가 억지로 열린다]', level: 'sound', withinMetres: 25, seconds: 3.2, slot: 'hatch', rank: 1 },
+  hatchBurst: { text: '[천장 해치가 벌컥 열린다]', level: 'sound', withinMetres: 25, seconds: 3.2, slot: 'hatch', rank: 1 },
+  doorPounded: { text: '[그것이 문에 와 있다]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
+  doorPoundedAgain: { text: '[그것이 또 문에 와 있다]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
+  doorPoundedLast: { text: '[그것이 또 문에 와 있다. 문이 버티지 못한다]', level: 'sound', withinMetres: 17, seconds: 1.5, slot: 'doorPounded', rank: 0 },
+  doorBreaks: { text: '[문이 무너진다]', level: 'sound', withinMetres: 26, seconds: 3.2, slot: 'doorPounded', rank: 1 },
+  doorOpens: { text: '[문이 열린다]', level: 'sound', withinMetres: 26, seconds: 2.2, slot: 'door', rank: 0 },
+  doorCloses: { text: '[문이 닫힌다]', level: 'sound', withinMetres: 26, seconds: 2.2, slot: 'door', rank: 0 },
 
   // ---- the Stills and the apparitions ----
-  stillShifts: { text: '[something shifts]', level: 'sound', withinMetres: 6, seconds: 2.5 },
-  phantomBreath: { text: '[a breath behind you]', level: 'sound', withinMetres: 12, seconds: 3 },
+  stillShifts: { text: '[무언가가 움직인다]', level: 'sound', withinMetres: 6, seconds: 2.5 },
+  phantomBreath: { text: '[등 뒤의 숨소리]', level: 'sound', withinMetres: 12, seconds: 3 },
 
   // ---- the station ----
-  ambientDrips: { text: '[water drips]', level: 'sound', withinMetres: 8, seconds: 2.5, slot: 'station', rank: 0 },
-  ambientPipe: { text: '[a pipe groans]', level: 'sound', withinMetres: 19, seconds: 3, slot: 'station', rank: 0 },
-  ambientMetal: { text: '[metal ticks as it settles]', level: 'sound', withinMetres: 37, seconds: 2.5, slot: 'station', rank: 0 },
-  ambientKnocks: { text: '[knocking, far below]', level: 'sound', withinMetres: 13, seconds: 3.5, slot: 'station', rank: 0 },
-  salvageBayPing: { text: '[a salvage bay pings]', level: 'sound', withinMetres: 45, seconds: 2.5, slot: 'salvageBay', rank: 0 },
-  liftBell: { text: '[the lift bell rings]', level: 'sound', withinMetres: 50, seconds: 2.2 },
+  ambientDrips: { text: '[물이 떨어진다]', level: 'sound', withinMetres: 8, seconds: 2.5, slot: 'station', rank: 0 },
+  ambientPipe: { text: '[배관이 신음한다]', level: 'sound', withinMetres: 19, seconds: 3, slot: 'station', rank: 0 },
+  ambientMetal: { text: '[금속이 가라앉으며 딱딱거린다]', level: 'sound', withinMetres: 37, seconds: 2.5, slot: 'station', rank: 0 },
+  ambientKnocks: { text: '[노크 소리, 아주 아래에서]', level: 'sound', withinMetres: 13, seconds: 3.5, slot: 'station', rank: 0 },
+  salvageBayPing: { text: '[인양 베이가 핑을 울린다]', level: 'sound', withinMetres: 45, seconds: 2.5, slot: 'salvageBay', rank: 0 },
+  liftBell: { text: '[리프트 벨이 울린다]', level: 'sound', withinMetres: 50, seconds: 2.2 },
 
   // ---- you ----
-  ownGlass: { text: '[glass crunches under your boots]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
-  ownPlate: { text: '[a floor plate clanks under you]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
-  hollowFling: { text: '[something is thrown, hard, out of the dark]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'hollowFeet', rank: 2 },
-  ownObjectShatter: { text: '[glass shatters at your feet]', level: 'sound', withinMetres: 0, seconds: 3, slot: 'ownHands', rank: 2 },
-  objectShatter: { text: '[glass shatters]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
-  ownObjectBreak: { text: '[something breaks apart at your feet]', level: 'sound', withinMetres: 0, seconds: 3, slot: 'ownHands', rank: 2 },
-  objectBreak: { text: '[something breaks apart]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
-  ownObjectKicked: { text: '[something skitters away from your feet]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
-  scanGrenade: { text: '[a rising whine, and a crack of light]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
-  hollowStunned: { text: '[it stands frozen in the light]', level: 'tell', withinMetres: 0, seconds: 3.2 },
-  ownObjectKnock: { text: '[it knocks against something]', level: 'sound', withinMetres: 0, seconds: 2, slot: 'ownHands', rank: 0 },
-  ownObjectCrash: { text: '[it hits hard. That carried]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownHands', rank: 1 },
-  objectKnock: { text: '[something is knocked over]', level: 'sound', withinMetres: 20, seconds: 2.5, slot: 'objects', rank: 0 },
-  objectCrash: { text: '[something is sent clattering]', level: 'sound', withinMetres: 28, seconds: 3, slot: 'objects', rank: 1 },
-  heartbeat: { text: '[your heart is pounding]', level: 'sound', withinMetres: 0, seconds: 1.5 }
+  ownGlass: { text: '[장화 아래서 유리가 바스러진다]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
+  ownPlate: { text: '[네 발밑에서 바닥판이 쨍그랑거린다]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
+  hollowFling: { text: '[어둠 속에서 무언가가 세게 던져졌다]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'hollowFeet', rank: 2 },
+  ownObjectShatter: { text: '[네 발밑에서 유리가 깨진다]', level: 'sound', withinMetres: 0, seconds: 3, slot: 'ownHands', rank: 2 },
+  objectShatter: { text: '[유리가 깨진다]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
+  ownObjectBreak: { text: '[네 발밑에서 무언가가 부서진다]', level: 'sound', withinMetres: 0, seconds: 3, slot: 'ownHands', rank: 2 },
+  objectBreak: { text: '[무언가가 부서진다]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
+  ownObjectKicked: { text: '[무언가가 발밑에서 달아난다]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownFeet', rank: 0 },
+  scanGrenade: { text: '[올라가는 굉음, 그리고 한줄기 빛]', level: 'sound', withinMetres: 30, seconds: 3, slot: 'objects', rank: 2 },
+  hollowStunned: { text: '[그것이 빛 속에 얼어붙어 서 있다]', level: 'tell', withinMetres: 0, seconds: 3.2 },
+  ownObjectKnock: { text: '[그것이 무언가에 부딪힌다]', level: 'sound', withinMetres: 0, seconds: 2, slot: 'ownHands', rank: 0 },
+  ownObjectCrash: { text: '[세게 부딪혔다. 소리가 퍼졌다]', level: 'sound', withinMetres: 0, seconds: 2.5, slot: 'ownHands', rank: 1 },
+  objectKnock: { text: '[무언가가 넘어진다]', level: 'sound', withinMetres: 20, seconds: 2.5, slot: 'objects', rank: 0 },
+  objectCrash: { text: '[무언가가 덜컹거리며 날아간다]', level: 'sound', withinMetres: 28, seconds: 3, slot: 'objects', rank: 1 },
+  heartbeat: { text: '[심장이 요동친다]', level: 'sound', withinMetres: 0, seconds: 1.5 }
 };
 
 // Everything you can read: the three spools, the four notes, and what a spool with nothing on it says.
@@ -619,112 +675,112 @@ const LOG_ENTRIES = {
   // A spool that is not one of Ripley's three. Bigger stations may have one or more. TWEAK: this is a stand-in:
   // write what you like here, or give each extra spool an entry of its own (see getSpoolLog in 11-game.js).
   spoolBlank: {
-    heading: 'Survey spool, unlabelled',
-    source: 'Crew 2 · no entry',
+    heading: '표지 없는 측량 스풀',
+    source: '크루 2 · 기록 없음',
     paragraphs: [
-      'The reel turns and the counter runs. Nothing comes off it but the hiss of tape that was never recorded on.',
-      'It is on the manifest all the same.'
+      '릴이 돌고 카운터가 오른다. 녹음된 적 없는 테이프의 잡음만 나온다.',
+      '그래도 목록에는 실려 있다.'
     ]
   },
   spool1: {
-    heading: 'Survey spool 1 of 3',
-    source: 'Crew 2 · A. Ripley, survey lead · day 1',
+    heading: '측량 스풀 1/3',
+    source: '크루 2 · 측량 리더 A. 리플리 · 1일차',
     paragraphs: [
-      'Fixtures are dead on every level, so we scan dark, as usual.',
-      'Tomas ran the main corridor twice. The first pass has a cluster by the east door: upright, about 1.9 m tall, a few hundred returns. The second pass does not have it.',
-      'We logged it as a moving-object artefact. That label is meant for people who walk through a scan. There are three of us, and all three were standing behind the tripod.'
+      '설비는 모든 층에서 죽어 있다. 그러니 늘 그랬듯 어둠 속에서 스캔한다.',
+      '토마스가 주 복도를 두 번 스캔했다. 첫 패스에는 동쪽 문 옆에 덩어리가 있었다. 직립, 약 1.9m, 반사점 수백 개. 두 번째 패스에는 없다.',
+      '이동 물체 아티팩트로 기록했다. 그 딱지는 스캔 안을 걸어 지나가는 사람에게나 붙이는 거다. 우리는 셋뿐이고, 셋 모두 삼각대 뒤에 서 있었다.'
     ]
   },
   spool2: {
-    heading: 'Survey spool 2 of 3',
-    source: 'Crew 2 · A. Ripley · day 3',
+    heading: '측량 스풀 2/3',
+    source: '크루 2 · A. 리플리 · 3일차',
     paragraphs: [
-      'They only move when nothing is scanning them.',
-      'I walked backwards to the door with the beam on wide, sweeping across every one of them, and they stayed where they were.',
-      'Tomas turned his scanner off to save the battery. I found his scanner.'
+      '그것들은 아무것도 스캔하지 않을 때만 움직인다.',
+      '빔을 넓혀 전부를 쓸면서 문까지 뒷걸음질 쳤고, 그것들은 제자리에 있었다.',
+      '토마스는 배터리를 아끼겠다며 스캐너를 껐다. 나는 토마스의 스캐너를 찾았다.'
     ]
   },
   spool3: {
-    heading: 'Survey spool 3 of 3',
-    source: 'Crew 2 · A. Ripley · day 4',
+    heading: '측량 스풀 3/3',
+    source: '크루 2 · A. 리플리 · 4일차',
     paragraphs: [
-      'We aimed the tripod down Shaft 9 to close out the job. Returns stop at forty metres. It is not a floor. Past that depth the pulses go out and do not come back.',
-      'On the last pass something at the bottom of the range was standing on the shaft wall, looking up the beam.',
-      'I am leaving the spools where the next crew will find them. If that is you: it came up because we showed it the way. Do not call the lift until you are ready to leave. The lift is very loud.'
+      '작업을 끝내려고 삼각대를 샤프트 9 아래로 향했다. 반사가 40m에서 끊긴다. 바닥이 아니다. 그 아래로는 펄스가 나가기만 하고 돌아오지 않는다.',
+      '마지막 패스에서, 사정거리 끝의 무언가가 샤프트 벽에 서서 빔을 올려다보고 있었다.',
+      '스풀은 다음 크루가 찾을 곳에 두고 간다. 이걸 읽는 게 너라면: 그것은 우리가 길을 보여줬기 때문에 올라왔다. 떠날 준비가 되기 전에는 리프트를 부르지 마라. 리프트는 아주 시끄럽다.'
     ]
   },
   noteSecurity: {
-    heading: 'Shift note',
-    source: 'H. Marlow, site security · 14 November 1987',
+    heading: '교대조 쪽지',
+    source: '현장 보안 H. 말로 · 1987년 11월 14일',
     paragraphs: [
-      'Night pump crew reports knocking from Shaft 9 again. I told them it is the water table.',
-      // {keycardRoom} becomes the room the card is really in ("the laboratory" in the classic station).
-      'They have asked for the deep doors to be kept on the keycard. Fine. The card stays in {keycardRoom}, where Dr. Vance can keep an eye on it.',
-      'They have also asked for the calibration dummies in C4 to be covered with sheets. I did not ask why.'
+      '야간 펌프조가 샤프트 9의 노크 소리를 또 보고했다. 수위 때문이라고 일러뒀다.',
+      // {keycardRoom} becomes the room the card is really in ("연구실" in the classic station).
+      '심층 구역 문을 키카드로 유지해 달란다. 알았다. 카드는 {keycardRoom}에 둔다. 밴스 박사가 지켜볼 수 있는 곳이다.',
+      'C4의 교정 마네킹들을 천으로 덮어 달라는 요청도 있었다. 이유는 묻지 않았다.'
     ]
   },
   noteLocker: {
-    heading: 'Note taped inside a locker',
-    source: 'Crew 2 · N. Taylor',
+    heading: '록커 안쪽에 붙은 쪽지',
+    source: '크루 2 · N. 테일러',
     paragraphs: [
-      'Dag, if you read this before I see you.',
-      'I heard walking in the pump hall. Bare feet, slow, wet. I switched the scanner off and stood still, and it went past me close enough to touch.',
-      'It does not see us. I am sure of that now. It listens. Walk, do not run. Crouch if it is close, and stop moving.'
+      '다그, 네가 나를 보기 전에 이걸 읽는다면.',
+      '펌프 홀에서 걷는 소리를 들었다. 맨발이었고, 느렸고, 축축했다. 스캐너를 끄고 가만히 서 있었더니 닿을 만큼 가까이 지나갔다.',
+      '그것은 우리를 보지 못한다. 이제는 확신한다. 그것은 듣는다. 뛰지 말고 걸어라. 가까우면 웅크리고, 움직임을 멈춰라.'
     ]
   },
   noteLab: {
-    heading: 'Bench notes',
-    source: 'Crew 2 · A. Ripley',
+    heading: '작업대 노트',
+    source: '크루 2 · A. 리플리',
     paragraphs: [
-      'The beam does something to it. When I painted it from the lab door it almost stopped, like a man wading through tar.',
-      'Then it turned its whole body toward the emitter. I counted four seconds before it stopped being slow.',
-      'Light holds it. Light also tells it exactly where you are. Do not hold it longer than you have to.'
+      '빔은 그것에게 무언가를 한다. 연구실 문에서 빔을 쐈을 때 그것은 거의 멈췄다. 타르를 헤치는 사람처럼.',
+      '그다음 몸 전체를 방출기 쪽으로 돌렸다. 느려진 게 풀리기까지 4초를 셌다.',
+      '빛은 그것을 붙잡는다. 빛은 또한 네가 어디 있는지 정확히 알려 준다. 필요 이상으로 오래 비추지 마라.'
     ]
   },
   noteArchive: {
-    heading: 'Inventory query',
-    source: 'Crew 2 · C. Foster',
+    heading: '재고 조회',
+    source: '크루 2 · C. 포스터',
     paragraphs: [
-      'The inventory for store C4 says nine calibration dummies.',
-      'Monday’s cloud has nine. Wednesday’s has nine, but they are not standing where Monday’s stood. Nobody has been in there.',
-      'I checked today’s pass twice. Eleven.'
+      '저장고 C4의 재고 목록에는 교정 마네킹이 아홉이다.',
+      '월요일 클라우드에는 아홉. 수요일에도 아홉인데, 서 있는 자리가 월요일과 다르다. 아무도 들어간 적이 없다.',
+      '오늘 패스를 두 번 확인했다. 열하나.'
     ]
   }
 };
 
 // The one-line goal shown top left.
 const OBJECTIVE_TEXT = {
-  leaveLift: 'Step out of the lift car.',
-  findGenerator: 'Restore mains power. Generator 2 is off Pump Hall B.',
-  collectSpools: 'Recover the three survey spools left by Crew 2.',
-  collectSpoolsOfMany: 'Recover the {total} survey spools left by Crew 2.', // in a station that has more than three
-  returnToLift: 'Return to the lift lobby and upload the spools at the terminal.',
-  returnToLiftWithManifest: 'That is the work order done. Return to the lift lobby and call the lift at the terminal.', // on an order that is not about spools
-  findFuel: 'Generator 2 has no fuel. Find the fuel can on this level.',
-  bringFuel: 'Carry the fuel can to Generator 2, off Pump Hall B.',
-  collectCores: 'Dispatch also wants the core samples.',   // added after the spool objective while samples are missing
+  leaveLift: '리프트 카에서 내린다.',
+  findGenerator: '주전원을 복구한다. 발전기 2는 펌프 홀 B 옆에 있다.',
+  collectSpools: '크루 2가 남긴 측량 스풀 3개를 회수한다.',
+  collectSpoolsOfMany: '크루 2가 남긴 측량 스풀 {total}개를 회수한다.', // in a station that has more than three
+  returnToLift: '리프트 로비로 돌아가 단말기에서 스풀을 업로드한다.',
+  returnToLiftWithManifest: '작업 지시는 끝났다. 리프트 로비로 돌아가 단말기에서 리프트를 부른다.', // on an order that is not about spools
+  findFuel: '발전기 2에 연료가 없다. 이 층에서 연료통을 찾는다.',
+  bringFuel: '연료통을 펌프 홀 B 옆 발전기 2로 가져간다.',
+  collectCores: '디스패치가 코어 시료도 원한다.',   // added after the spool objective while samples are missing
   // Added while some of the station's generators are not running. {running} and {total} count Generator 2 as well.
-  startGenerators: 'The lift winch needs every generator running: {running} of {total} so far. They are marked on the map.',
-  fuelForGenerator: 'You are carrying a fuel can. One of the generators has an empty tank.',
-  closeBreaker: 'The lift will not come. Close the winch breaker: it is marked on the map.',
-  surviveLift: 'The lift is coming. Stay alive until it arrives.',
-  boardLift: 'Board the lift.'
+  startGenerators: '리프트 윈치에는 모든 발전기가 필요하다: 현재 {running}/{total}. 지도에 표시돼 있다.',
+  fuelForGenerator: '연료통을 들고 있다. 발전기 하나의 탱크가 비어 있다.',
+  closeBreaker: '리프트가 오지 않는다. 윈치 차단기를 올린다: 지도에 표시돼 있다.',
+  surviveLift: '리프트가 오고 있다. 도착할 때까지 살아남는다.',
+  boardLift: '리프트에 탄다.'
 };
 
 // The "SIGNAL LOST" screen, one version per thing that can catch you.
 const DEATH_TEXT = {
   hollow: {
-    title: 'SIGNAL LOST',
+    title: '신호 끊김',
     lines: [
-      'Scanner 4471-B stopped reporting.',
-      'Last frame: one return. Range 0.4 m.'
+      '스캐너 4471-B의 보고가 끊겼다.',
+      '마지막 프레임: 반사점 하나. 거리 0.4m.'
     ]
   },
   still: {
-    title: 'SIGNAL LOST',
+    title: '신호 끊김',
     lines: [
-      'Scanner 4471-B stopped reporting.',
-      'Store C4 inventory, revised: twelve.'
+      '스캐너 4471-B의 보고가 끊겼다.',
+      '저장고 C4 재고, 수정: 열둘.'
     ]
   }
 };

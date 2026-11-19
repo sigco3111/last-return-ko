@@ -176,9 +176,9 @@ function updateDoors(dt) {
           door.deniedMessageCooldown = 5;
           playDeniedSound();
           if (door.kind === DOOR_KIND_KEYCARD && game.flags.powerOn) {
-            showMessage(level.keycardCount > 1 ? 'Door locked. Keycard ' + door.cardLevel + ' required.' : 'Door locked. Keycard required.', 3.5, 'warning');
+            showMessage(level.keycardCount > 1 ? '문이 잠겼다. 키카드 ' + door.cardLevel + ' 필요.' : '문이 잠겼다. 키카드 필요.', 3.5, 'warning');
           }
-          else showMessage('Door has no power.', 3.5, 'warning');
+          else showMessage('문에 전원이 없다.', 3.5, 'warning');
         }
       }
       // The Hollow: a door opens for it only if it is one it can open (not a keycard door: see 08-crawlspace.js).

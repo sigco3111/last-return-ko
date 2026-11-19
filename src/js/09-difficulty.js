@@ -56,7 +56,7 @@ function findMatchingDifficultyPresetLabel(values) {
 
 // A value as the panel shows it: "On", "115 %", "Few".
 function formatCustomDifficultyValue(option, value) {
-  if (option.kind === 'switch') return value ? 'On' : 'Off';
+  if (option.kind === 'switch') return value ? '켬' : '끔';
   if (option.kind === 'choice') {
     for (const choice of option.choices) if (choice[0] === value) return choice[1];
     return String(value);
@@ -71,24 +71,24 @@ function explainCustomDifficultyValue(key, value) {
   switch (key) {
     case 'hollowSpeedFactor': {
       const huntSpeed = TUNING.hollowHuntSpeed * value;
-      return 'It hunts at ' + huntSpeed.toFixed(1) + ' m/s. You sprint at ' + TUNING.sprintSpeed.toFixed(1) + '.' +
-        (huntSpeed >= TUNING.sprintSpeed ? ' You cannot outrun it.' : '');
+      return '그것은 ' + huntSpeed.toFixed(1) + ' m/s로 추격한다. 네 전력질주는 ' + TUNING.sprintSpeed.toFixed(1) + '.' +
+        (huntSpeed >= TUNING.sprintSpeed ? ' 달리기로는 따돌릴 수 없다.' : '');
     }
     case 'hearingFactor':
-      return 'It hears a sprinting step from ' + Math.round(TUNING.noiseRadiusSprintStep * value) + ' m.';
+      return '전력질주 발소리를 ' + Math.round(TUNING.noiseRadiusSprintStep * value) + ' m 밖에서도 듣는다.';
     case 'pressureFactor':
-      return 'After a chase it leaves you alone for at least ' +
+      return '추격 뒤에는 적어도 ' +
         Math.round(Math.max(TUNING.directorReliefShortestSeconds, TUNING.directorReliefMinimumSeconds / value)) +
-        ' s (less with every spool you carry), and comes back ' + (value === 1 ? 'at its usual pace.' : (value > 1 ? 'sooner than usual.' : 'later than usual.'));
+        '초는 너를 내버려 두고(스풀을 들수록 짧아진다), ' + (value === 1 ? '평소 속도로 돌아온다.' : (value > 1 ? '평소보다 빨리 돌아온다.' : '평소보다 늦게 돌아온다.'));
     case 'angerFactor':
-      return 'About ' + (TUNING.hollowAngerNoticeLevel / (TUNING.hollowAngerPerBeamSecond * value)).toFixed(1) + ' s in the beam before it knows where you are.';
+      return '빔을 쏘기 시작하고 약 ' + (TUNING.hollowAngerNoticeLevel / (TUNING.hollowAngerPerBeamSecond * value)).toFixed(1) + '초 뒤면 네 위치를 안다.';
     case 'heatFactor':
-      return 'About ' + Math.round(1 / (TUNING.heatPerSecondWhilePainting * value)) + ' s of painting before the scanner overheats.';
+      return '스캐너가 과열되기까지 약 ' + Math.round(1 / (TUNING.heatPerSecondWhilePainting * value)) + '초 분량의 스캔.';
     case 'staminaFactor':
-      return 'A full bar is ' + (TUNING.staminaSeconds * value).toFixed(1) + ' s of sprinting.';
+      return '가득 찬 게이지는 ' + (TUNING.staminaSeconds * value).toFixed(1) + '초 분량의 전력질주.';
     case 'phantomFactor':
-      if (value <= 0) return 'None, not even the ones that stand at fixed places.';
-      return 'About ' + getPhantomBudgetForRooms(19, value) + ' in a descent of Kessel-9, more in a bigger station.';
+      if (value <= 0) return '없음, 정해진 자리에 서 있는 것들까지도.';
+      return '케셀-9 하강에서 약 ' + getPhantomBudgetForRooms(19, value) + '번, 더 큰 스테이션에서는 더 많이.';
   }
   return '';
 }
@@ -102,20 +102,20 @@ function getPhantomBudgetForRooms(roomCount, phantomFactor) {
 // "Hollow speed 115 %, Hollow hearing 70 %, Checkpoints off". If it differs in nothing, it says which preset it equals.
 function describeCustomDifficulty(values) {
   const sameAs = findMatchingDifficultyPresetLabel(values);
-  if (sameAs !== '') return 'The same as ' + sameAs + '.';
+  if (sameAs !== '') return sameAs + '와 같음.';
   const standard = DIFFICULTY_PRESETS.standard, parts = [];
   for (const option of CUSTOM_DIFFICULTY_OPTIONS) {
     if (values[option.key] === standard[option.key]) continue;
-    if (option.kind === 'switch') parts.push(option.label + ' ' + (values[option.key] ? 'on' : 'off'));
+    if (option.kind === 'switch') parts.push(option.label + ' ' + (values[option.key] ? '켬' : '끔'));
     else parts.push(option.label + ' ' + formatCustomDifficultyValue(option, values[option.key]).toLowerCase());
   }
-  return 'Standard, but: ' + parts.join(', ') + '.';
+  return '표준에서 변경: ' + parts.join(', ') + '.';
 }
 
 // The custom values as a threat level record, like one of DIFFICULTY_PRESETS.
 // Its key names every value, so a best time is only ever compared with times set on the very same settings.
 function buildCustomDifficulty(values) {
-  const difficulty = { label: 'Custom', isCustom: true, description: describeCustomDifficulty(values) };
+  const difficulty = { label: '사용자 설정', isCustom: true, description: describeCustomDifficulty(values) };
   const keyParts = [];
   for (const option of CUSTOM_DIFFICULTY_OPTIONS) {
     const value = values[option.key];

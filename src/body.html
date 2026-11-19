@@ -1,36 +1,36 @@
 <div id="game-root">
-  <canvas id="view-canvas" tabindex="0" aria-label="Scanner view of the station"></canvas>
+  <canvas id="view-canvas" tabindex="0" aria-label="스테이션의 스캐너 화면"></canvas>
 
   <div id="hud" hidden>
     <div class="hud-block hud-top-left hud-fade" id="hud-block-objective">
-      <div class="hud-label">WORK ORDER 4471-B</div>
+      <div class="hud-label">작업 지시서 4471-B</div>
       <div id="hud-objective" class="hud-objective"></div>
       <div class="hud-chips">
-        <span id="chip-spools" class="chip">SPOOLS 0/3</span>
-        <span id="chip-power" class="chip">MAINS OFF</span>
-        <span id="chip-keycard" class="chip">NO KEYCARD</span>
+        <span id="chip-spools" class="chip">스풀 0/3</span>
+        <span id="chip-power" class="chip">주전원 차단</span>
+        <span id="chip-keycard" class="chip">키카드 없음</span>
         <span id="chip-extra" class="chip" hidden></span>
         <span id="chip-carrying" class="chip is-on" hidden></span>
       </div>
     </div>
 
     <div class="hud-block hud-top-right hud-fade" id="hud-block-map">
-      <canvas id="minimap-canvas" width="168" height="168" aria-label="Map of scanned points"></canvas>
+      <canvas id="minimap-canvas" width="168" height="168" aria-label="스캔한 지점의 지도"></canvas>
       <div id="hud-location" class="hud-label hud-location"></div>
     </div>
 
     <div class="hud-block hud-bottom-left hud-fade" id="hud-block-instruments">
       <dl class="readouts hud-fade" id="hud-readouts">
-        <div><dt>RANGE</dt><dd id="readout-range">--.-- m</dd></div>
-        <div><dt>TIME OF FLIGHT</dt><dd id="readout-flight">--- ns</dd></div>
-        <div><dt>RETURNS</dt><dd id="readout-returns">0</dd></div>
-        <div><dt>HEADING</dt><dd id="readout-heading">000&deg;</dd></div>
+        <div><dt>거리</dt><dd id="readout-range">--.-- m</dd></div>
+        <div><dt>비행 시간</dt><dd id="readout-flight">--- ns</dd></div>
+        <div><dt>반사점</dt><dd id="readout-returns">0</dd></div>
+        <div><dt>방위</dt><dd id="readout-heading">000&deg;</dd></div>
       </dl>
       <div class="meters">
-        <div class="meter hud-fade" id="meter-heat"><span class="meter-name">EMITTER HEAT</span><span class="meter-track"><span id="bar-heat" class="meter-fill"></span></span></div>
-        <div class="meter hud-fade" id="meter-stamina"><span class="meter-name">STAMINA</span><span class="meter-track"><span id="bar-stamina" class="meter-fill meter-fill-calm"></span></span></div>
-        <div class="meter hud-fade" id="meter-interference"><span class="meter-name">INTERFERENCE</span><span class="meter-track"><span id="bar-interference" class="meter-fill meter-fill-alarm"></span></span></div>
-        <div class="meter" id="meter-agitation" hidden><span class="meter-name">AGITATION</span><span class="meter-track"><span id="bar-agitation" class="meter-fill"></span></span></div>
+        <div class="meter hud-fade" id="meter-heat"><span class="meter-name">에미터 열</span><span class="meter-track"><span id="bar-heat" class="meter-fill"></span></span></div>
+        <div class="meter hud-fade" id="meter-stamina"><span class="meter-name">스태미너</span><span class="meter-track"><span id="bar-stamina" class="meter-fill meter-fill-calm"></span></span></div>
+        <div class="meter hud-fade" id="meter-interference"><span class="meter-name">간섭</span><span class="meter-track"><span id="bar-interference" class="meter-fill meter-fill-alarm"></span></span></div>
+        <div class="meter" id="meter-agitation" hidden><span class="meter-name">흥분</span><span class="meter-track"><span id="bar-agitation" class="meter-fill"></span></span></div>
       </div>
       <div id="hud-stance" class="hud-label hud-fade"></div>
     </div>
@@ -48,36 +48,36 @@
     <div id="touch-look-zone"></div>
     <div id="touch-stick-base" hidden><div id="touch-stick-knob"></div></div>
     <div class="touch-top-buttons">
-      <button type="button" id="touch-map" class="touch-button touch-small">MAP</button>
-      <button type="button" id="touch-pause" class="touch-button touch-small">PAUSE</button>
+      <button type="button" id="touch-map" class="touch-button touch-small">지도</button>
+      <button type="button" id="touch-pause" class="touch-button touch-small">일시정지</button>
     </div>
     <!-- Only there while the scanner's beam carries something that does something (a scan grenade): what Q is on a keyboard. -->
-    <button type="button" id="touch-use-carried" class="touch-button touch-carried" hidden>ARM</button>
+    <button type="button" id="touch-use-carried" class="touch-button touch-carried" hidden>기동</button>
     <div class="touch-right-buttons">
-      <button type="button" id="touch-crouch" class="touch-button">CROUCH</button>
-      <button type="button" id="touch-run" class="touch-button">RUN</button>
-      <button type="button" id="touch-spread" class="touch-button">BEAM</button>
-      <button type="button" id="touch-use" class="touch-button">USE</button>
-      <button type="button" id="touch-sweep" class="touch-button">SWEEP</button>
-      <button type="button" id="touch-scan" class="touch-button touch-scan">SCAN</button>
+      <button type="button" id="touch-crouch" class="touch-button">웅크리기</button>
+      <button type="button" id="touch-run" class="touch-button">달리기</button>
+      <button type="button" id="touch-spread" class="touch-button">빔</button>
+      <button type="button" id="touch-use" class="touch-button">사용</button>
+      <button type="button" id="touch-sweep" class="touch-button">스윕</button>
+      <button type="button" id="touch-scan" class="touch-button touch-scan">스캔</button>
     </div>
   </div>
 
   <div id="map-overlay" hidden>
     <div class="map-frame">
       <div class="map-header">
-        <span class="hud-label">POINT CLOUD · PLAN VIEW · NORTH UP</span>
+        <span class="hud-label">포인트 클라우드 · 평면도 · 북쪽 위</span>
         <span id="map-status" class="hud-label map-status"></span>
-        <button type="button" id="map-close" class="button-quiet">Close map</button>
+        <button type="button" id="map-close" class="button-quiet">지도 닫기</button>
       </div>
       <div id="map-objective" class="map-objective"></div>
-      <canvas id="map-canvas" width="760" height="640" aria-label="Plan view of everything scanned so far"></canvas>
+      <canvas id="map-canvas" width="760" height="640" aria-label="지금까지 스캔한 모든 것의 평면도"></canvas>
       <div class="map-legend">
-        <span><i class="legend-swatch legend-you"></i>You</span>
-        <span><i class="legend-swatch legend-item"></i>Found, and of use to you now</span>
-        <span><i class="legend-swatch legend-item-later"></i>Found, not of use yet</span>
-        <span><i class="legend-swatch legend-door"></i>Doors</span>
-        <span>Only what the scanner has touched is drawn.</span>
+        <span><i class="legend-swatch legend-you"></i>나</span>
+        <span><i class="legend-swatch legend-item"></i>찾았고 지금 쓸 수 있음</span>
+        <span><i class="legend-swatch legend-item-later"></i>찾았지만 아직 쓸 수 없음</span>
+        <span><i class="legend-swatch legend-door"></i>문</span>
+        <span>스캐너가 닿은 것만 그려진다.</span>
       </div>
     </div>
   </div>
@@ -85,123 +85,123 @@
   <section id="screen-title" class="screen screen-title">
     <div class="title-layout">
       <header class="title-block">
-        <p class="eyebrow">MARROW RIDGE GEODETIC · WORK ORDER 4471-B</p>
+        <p class="eyebrow">매로 리지 측지 · 작업 지시서 4471-B</p>
         <h1 class="game-title">LAST RETURN</h1>
-        <p class="title-readout"><span>RANGE</span><b id="title-range">--.-- m</b><span>RETURNS</span><b id="title-returns">0</b></p>
-        <p class="lede">Kessel-9 pumping annex, 212 metres below grade, sealed in 1987. There is no lighting. A handheld LiDAR scanner is the only way to see, and the last survey crew did not come back up.</p>
+        <p class="title-readout"><span>거리</span><b id="title-range">--.-- m</b><span>반사점</span><b id="title-returns">0</b></p>
+        <p class="lede">케셀-9 펌프 별관, 지표 아래 212m, 1987년 봉인. 조명은 없다. 휴대용 LiDAR 스캐너가 볼 수 있는 유일한 수단이고, 마지막 측량 크루는 올라오지 못했다.</p>
         <fieldset class="difficulty-group">
-          <legend>Threat level</legend>
-          <label class="pill"><input type="radio" name="difficulty" id="difficulty-survey" value="survey"><span>Survey only</span></label>
-          <label class="pill"><input type="radio" name="difficulty" id="difficulty-standard" value="standard" checked><span>Standard</span></label>
-          <label class="pill"><input type="radio" name="difficulty" id="difficulty-nightmare" value="nightmare"><span>Nightmare</span></label>
-          <label class="pill"><input type="radio" name="difficulty" id="difficulty-custom" value="custom"><span>Custom</span></label>
-          <button type="button" id="button-custom-difficulty" class="button-quiet" hidden>Adjust</button>
+          <legend>위협 수준</legend>
+          <label class="pill"><input type="radio" name="difficulty" id="difficulty-survey" value="survey"><span>측량 전용</span></label>
+          <label class="pill"><input type="radio" name="difficulty" id="difficulty-standard" value="standard" checked><span>표준</span></label>
+          <label class="pill"><input type="radio" name="difficulty" id="difficulty-nightmare" value="nightmare"><span>악몽</span></label>
+          <label class="pill"><input type="radio" name="difficulty" id="difficulty-custom" value="custom"><span>사용자 설정</span></label>
+          <button type="button" id="button-custom-difficulty" class="button-quiet" hidden>조정</button>
         </fieldset>
         <p id="difficulty-description" class="difficulty-description"></p>
         <div class="station-row">
           <fieldset class="difficulty-group">
-            <legend>Station</legend>
+            <legend>스테이션</legend>
             <label class="pill"><input type="radio" name="station" id="station-classic" value="classic" checked><span>Kessel-9</span></label>
-            <label class="pill"><input type="radio" name="station" id="station-generated" value="generated"><span>Uncharted annex</span></label>
+            <label class="pill"><input type="radio" name="station" id="station-generated" value="generated"><span>미지의 별관</span></label>
           </fieldset>
           <div id="station-options" class="station-options" hidden>
-            <label>Size
+            <label>규모
               <select id="title-station-size" data-setting="stationSize">
-                <option value="small">Small</option>
-                <option value="medium">Medium</option>
-                <option value="large">Large</option>
-                <option value="massive">Massive</option>
+                <option value="small">소형</option>
+                <option value="medium">중형</option>
+                <option value="large">대형</option>
+                <option value="massive">초대형</option>
               </select>
             </label>
-            <label>Layout
+            <label>배치
               <select id="title-station-layout" data-setting="stationLayout">
-                <option value="tight">Tight</option>
-                <option value="mixed">Mixed</option>
-                <option value="sprawling">Sprawling</option>
-                <option value="sparse">Sparse</option>
+                <option value="tight">좁게</option>
+                <option value="mixed">섞임</option>
+                <option value="sprawling">넓게</option>
+                <option value="sparse">드문드문</option>
               </select>
             </label>
-            <label>Levels
+            <label>층 수
               <select id="title-station-levels" data-setting="stationLevels">
-                <option value="one">One</option>
-                <option value="two">Two</option>
+                <option value="one">1개</option>
+                <option value="two">2개</option>
               </select>
             </label>
-            <label>Seed
-              <input type="text" id="title-seed" data-setting="seedText" maxlength="24" size="9" autocomplete="off" spellcheck="false" placeholder="random">
+            <label>시드
+              <input type="text" id="title-seed" data-setting="seedText" maxlength="24" size="9" autocomplete="off" spellcheck="false" placeholder="무작위">
             </label>
           </div>
         </div>
         <fieldset id="work-order-options" class="difficulty-group work-order-group" hidden>
-          <legend>Work orders</legend>
+          <legend>작업 지시</legend>
         </fieldset>
         <p id="station-description" class="difficulty-description station-description"></p>
         <div class="begin-row">
-          <button type="button" id="button-begin" class="button-primary">Begin descent</button>
-          <span class="headphones-note">Headphones strongly recommended. Sound tells you where it is.</span>
+          <button type="button" id="button-begin" class="button-primary">하강 시작</button>
+          <span class="headphones-note">헤드폰 강력 권장. 소리가 그것의 위치를 알려 준다.</span>
         </div>
       </header>
 
       <aside class="field-card">
-        <h2>Field card</h2>
+        <h2>필드 카드</h2>
         <dl class="controls-list">
-          <div><dt>Move</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd></div>
-          <div><dt>Look</dt><dd>Mouse, or arrow keys</dd></div>
-          <div><dt>Scan</dt><dd>Hold <kbd>Left mouse</kbd> or <kbd>Space</kbd></dd></div>
-          <div><dt>Full sweep</dt><dd><kbd>Wheel button</kbd> or <kbd>F</kbd> (loud)</dd></div>
-          <div><dt>Beam width</dt><dd><kbd>Wheel</kbd> or <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></dd></div>
-          <div><dt>Sprint</dt><dd><kbd>Shift</kbd> (loud)</dd></div>
-          <div><dt>Crouch</dt><dd>Hold <kbd>C</kbd> (quiet)</dd></div>
-          <div><dt>Use</dt><dd><kbd>E</kbd></dd></div>
-          <div><dt>Map</dt><dd><kbd>Tab</kbd> or <kbd>M</kbd></dd></div>
-          <div><dt>Colours</dt><dd><kbd>V</kbd></dd></div>
-          <div><dt>Pause</dt><dd><kbd>Esc</kbd></dd></div>
+          <div><dt>이동</dt><dd><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dd></div>
+          <div><dt>시선</dt><dd>마우스 또는 방향키</dd></div>
+          <div><dt>스캔</dt><dd><kbd>좌클릭</kbd> 또는 <kbd>Space</kbd> 홀드</dd></div>
+          <div><dt>전체 스윕</dt><dd><kbd>휠 버튼</kbd> 또는 <kbd>F</kbd> (큰 소리)</dd></div>
+          <div><dt>빔 폭</dt><dd><kbd>휠</kbd> 또는 <kbd>1</kbd><kbd>2</kbd><kbd>3</kbd></dd></div>
+          <div><dt>달리기</dt><dd><kbd>Shift</kbd> (큰 소리)</dd></div>
+          <div><dt>웅크리기</dt><dd><kbd>C</kbd> 홀드 (조용)</dd></div>
+          <div><dt>사용</dt><dd><kbd>E</kbd></dd></div>
+          <div><dt>지도</dt><dd><kbd>Tab</kbd> 또는 <kbd>M</kbd></dd></div>
+          <div><dt>색상</dt><dd><kbd>V</kbd></dd></div>
+          <div><dt>일시정지</dt><dd><kbd>Esc</kbd></dd></div>
         </dl>
-        <p class="card-note">On a touch screen the controls appear on screen: left thumb moves, right thumb looks, hold SCAN to paint.</p>
+        <p class="card-note">터치 화면에서는 조작이 화면에 나타난다: 왼쪽 엄지로 이동, 오른쪽 엄지로 시선, 스캔을 홀드해 어둠을 칠한다.</p>
         <div class="settings-grid">
-          <label for="title-quality">Quality</label>
+          <label for="title-quality">품질</label>
           <select id="title-quality" data-setting="quality">
-            <option value="low">Low</option>
-            <option value="medium">Medium</option>
-            <option value="high">High</option>
-            <option value="ultra">Ultra</option>
+            <option value="low">낮음</option>
+            <option value="medium">보통</option>
+            <option value="high">높음</option>
+            <option value="ultra">최고</option>
           </select>
-          <label for="title-sensitivity">Look speed</label>
+          <label for="title-sensitivity">시선 속도</label>
           <input type="range" id="title-sensitivity" data-setting="sensitivity" min="0.2" max="3" step="0.1" value="1">
-          <label for="title-volume">Volume</label>
+          <label for="title-volume">음량</label>
           <input type="range" id="title-volume" data-setting="volume" min="0" max="1" step="0.05" value="0.8">
-          <label for="title-hud">Screen</label>
+          <label for="title-hud">화면</label>
           <select id="title-hud" data-setting="hud">
-            <option value="quiet">Quiet: only what matters right now</option>
-            <option value="full">Full instruments</option>
+            <option value="quiet">조용히: 지금 중요한 것만</option>
+            <option value="full">전체 계기</option>
           </select>
-          <label for="title-captions">Captions</label>
+          <label for="title-captions">자막</label>
           <select id="title-captions" data-setting="captions">
-            <option value="off">Off: go by your ears</option>
-            <option value="tells">Tells: when it finds you, loses you, moves off</option>
-            <option value="all">Every sound, and where it comes from</option>
+            <option value="off">끔: 귀로 듣기</option>
+            <option value="tells">신호만: 그것이 너를 찾아내고, 놓치고, 멀어질 때</option>
+            <option value="all">모든 소리와 오는 방향</option>
           </select>
         </div>
-        <p class="title-build"><span id="title-build"></span><a id="link-report-problem-title" href="https://github.com/StefanKnol/Last-Return/issues/new/choose" target="_blank" rel="noopener">Report a problem</a></p>
+        <p class="title-build"><span id="title-build"></span><a id="link-report-problem-title" href="https://github.com/StefanKnol/Last-Return/issues/new/choose" target="_blank" rel="noopener">문제 신고</a></p>
       </aside>
     </div>
   </section>
 
   <section id="screen-custom" class="screen screen-dim" hidden>
     <div class="panel panel-wide">
-      <p class="eyebrow">THREAT LEVEL</p>
-      <h2 class="panel-title">Custom</h2>
-      <p class="panel-text panel-text-small">Set each thing yourself. None of this changes what a station looks like: a seed builds the same station on every threat level. Best times are kept apart for every different set of values.</p>
+      <p class="eyebrow">위협 수준</p>
+      <h2 class="panel-title">사용자 설정</h2>
+      <p class="panel-text panel-text-small">각 항목을 직접 정한다. 어느 것도 스테이션의 모습을 바꾸지 않는다: 시드는 어떤 위협 수준에서도 같은 스테이션을 만든다. 최고 기록은 서로 다른 값 조합마다 따로 보관된다.</p>
       <div class="button-row custom-start-row">
-        <span class="custom-start-label">Start from</span>
-        <button type="button" id="custom-from-survey" class="button-quiet">Survey only</button>
-        <button type="button" id="custom-from-standard" class="button-quiet">Standard</button>
-        <button type="button" id="custom-from-nightmare" class="button-quiet">Nightmare</button>
+        <span class="custom-start-label">시작 값</span>
+        <button type="button" id="custom-from-survey" class="button-quiet">측량 전용</button>
+        <button type="button" id="custom-from-standard" class="button-quiet">표준</button>
+        <button type="button" id="custom-from-nightmare" class="button-quiet">악몽</button>
       </div>
       <div id="custom-options" class="custom-options"></div>
       <p id="custom-summary" class="panel-text panel-text-small"></p>
       <div class="button-row">
-        <button type="button" id="button-custom-done" class="button-primary">Done</button>
+        <button type="button" id="button-custom-done" class="button-primary">완료</button>
       </div>
     </div>
   </section>
@@ -209,45 +209,45 @@
   <section id="screen-intro" class="screen screen-dark" hidden>
     <div class="intro-block">
       <div id="intro-lines" class="intro-lines"></div>
-      <button type="button" id="button-skip-intro" class="button-quiet">Skip (Space or click)</button>
+      <button type="button" id="button-skip-intro" class="button-quiet">건너뛰기 (Space 또는 클릭)</button>
     </div>
   </section>
 
   <section id="screen-pause" class="screen screen-dim" hidden>
     <div class="panel">
-      <p class="eyebrow">SCANNER STANDBY</p>
-      <h2 class="panel-title">Paused</h2>
+      <p class="eyebrow">스캐너 대기</p>
+      <h2 class="panel-title">일시정지</h2>
       <p id="pause-objective" class="panel-text"></p>
       <p id="pause-station" class="panel-text panel-text-quiet"></p>
       <p id="pause-build" class="panel-text panel-text-quiet"></p>
       <div class="settings-grid">
-        <label for="pause-sensitivity">Look speed</label>
+        <label for="pause-sensitivity">시선 속도</label>
         <input type="range" id="pause-sensitivity" data-setting="sensitivity" min="0.2" max="3" step="0.1" value="1">
-        <label for="pause-volume">Volume</label>
+        <label for="pause-volume">음량</label>
         <input type="range" id="pause-volume" data-setting="volume" min="0" max="1" step="0.05" value="0.8">
-        <label for="pause-hud">Screen</label>
+        <label for="pause-hud">화면</label>
         <select id="pause-hud" data-setting="hud">
-          <option value="quiet">Quiet</option>
-          <option value="full">Full instruments</option>
+          <option value="quiet">조용히</option>
+          <option value="full">전체 계기</option>
         </select>
-        <label for="pause-captions">Captions</label>
+        <label for="pause-captions">자막</label>
         <select id="pause-captions" data-setting="captions">
-          <option value="off">Off</option>
-          <option value="tells">Tells</option>
-          <option value="all">Every sound</option>
+          <option value="off">끔</option>
+          <option value="tells">신호만</option>
+          <option value="all">모든 소리</option>
         </select>
-        <label for="pause-palette">Point colours</label>
+        <label for="pause-palette">포인트 색상</label>
         <select id="pause-palette" data-setting="palette">
-          <option value="0">Range Ice</option>
-          <option value="1">Range Amber</option>
-          <option value="2">Range Vivid</option>
-          <option value="3">Height</option>
+          <option value="0">거리 아이스</option>
+          <option value="1">거리 앰버</option>
+          <option value="2">거리 비비드</option>
+          <option value="3">높이</option>
         </select>
       </div>
       <div class="button-row">
-        <button type="button" id="button-resume" class="button-primary">Resume</button>
-        <button type="button" id="button-pause-restart" class="button-quiet">Abandon survey</button>
-        <a id="link-report-problem" class="button-quiet button-link" href="https://github.com/StefanKnol/Last-Return/issues/new/choose" target="_blank" rel="noopener">Report a problem</a>
+        <button type="button" id="button-resume" class="button-primary">계속하기</button>
+        <button type="button" id="button-pause-restart" class="button-quiet">측량 포기</button>
+        <a id="link-report-problem" class="button-quiet button-link" href="https://github.com/StefanKnol/Last-Return/issues/new/choose" target="_blank" rel="noopener">문제 신고</a>
       </div>
     </div>
   </section>
@@ -258,7 +258,7 @@
       <h2 id="reader-heading" class="panel-title"></h2>
       <div id="reader-body" class="reader-body"></div>
       <div class="button-row">
-        <button type="button" id="button-close-reader" class="button-primary">Put it away</button>
+        <button type="button" id="button-close-reader" class="button-primary">내려놓기</button>
       </div>
     </article>
   </section>
@@ -266,42 +266,42 @@
   <section id="screen-rotate" class="screen screen-dark" hidden>
     <div class="panel panel-bare rotate-panel">
       <div class="rotate-figure" aria-hidden="true"><span class="rotate-phone"></span></div>
-      <h2 class="panel-title">Turn your phone sideways</h2>
-      <p class="panel-text">The scanner view is wide. The game holds still until you do.</p>
+      <h2 class="panel-title">휴대폰을 가로로 돌리세요</h2>
+      <p class="panel-text">스캐너 화면은 가로로 넓습니다. 돌릴 때까지 게임은 멈춰 있습니다.</p>
       <div class="button-row">
-        <button type="button" id="button-play-upright" class="button-quiet">Play upright anyway</button>
+        <button type="button" id="button-play-upright" class="button-quiet">세로로 계속하기</button>
       </div>
     </div>
   </section>
 
   <section id="screen-death" class="screen screen-dark" hidden>
     <div class="panel panel-bare">
-      <h2 id="death-title" class="death-title">SIGNAL LOST</h2>
+      <h2 id="death-title" class="death-title">신호 끊김</h2>
       <div id="death-lines" class="panel-text"></div>
       <div class="button-row">
-        <button type="button" id="button-retry" class="button-primary">Resume from last checkpoint</button>
-        <button type="button" id="button-death-restart" class="button-quiet">Start over</button>
+        <button type="button" id="button-retry" class="button-primary">마지막 체크포인트부터 다시</button>
+        <button type="button" id="button-death-restart" class="button-quiet">처음부터</button>
       </div>
     </div>
   </section>
 
   <section id="screen-ending" class="screen screen-dark" hidden>
     <div class="panel panel-bare">
-      <p class="eyebrow">LIFT CAR 2 · 212 m TO SURFACE</p>
-      <h2 class="death-title ending-title">ASCENT</h2>
+      <p class="eyebrow">리프트 카 2 · 지표까지 212m</p>
+      <h2 class="death-title ending-title">상승</h2>
       <dl id="ending-stats" class="ending-stats"></dl>
       <p id="ending-manifest" class="panel-text ending-manifest"></p>
       <div class="button-row">
-        <button type="button" id="button-ending-restart" class="button-primary">Go back down</button>
-        <button type="button" id="button-ending-uncharted" class="button-quiet">Go down somewhere uncharted</button>
+        <button type="button" id="button-ending-restart" class="button-primary">다시 내려가기</button>
+        <button type="button" id="button-ending-uncharted" class="button-quiet">미지의 곳으로 내려가기</button>
       </div>
     </div>
   </section>
 
   <div id="fatal-error" class="screen screen-dark" hidden>
     <div class="panel panel-bare">
-      <h2 class="panel-title">The scanner cannot start</h2>
-      <p id="fatal-error-text" class="panel-text">This game needs WebGL 2. Open it in a current desktop or mobile browser with hardware acceleration switched on.</p>
+      <h2 class="panel-title">스캐너를 시작할 수 없습니다</h2>
+      <p id="fatal-error-text" class="panel-text">이 게임에는 WebGL 2가 필요합니다. 하드웨어 가속이 켜진 최신 데스크톱 또는 모바일 브라우저에서 여세요.</p>
     </div>
   </div>
 </div>

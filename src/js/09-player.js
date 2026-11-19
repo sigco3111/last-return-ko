@@ -177,7 +177,7 @@ function enableDragLookFallback() {
   // A refused re-lock right after pressing Escape is normal; only fall back if capture never worked.
   if (input.useDragLook || input.hasPointerLockEverWorked) return;
   input.useDragLook = true;
-  showMessage('Mouse capture is not available here. Hold the mouse button and drag to look, or use the arrow keys.', 7, 'info');
+  showMessage('여기서는 마우스 캡처를 쓸 수 없다. 마우스 버튼을 홀드하고 드래그해 보거나 방향키를 써라.', 7, 'info');
 }
 
 function initializeInput() {
@@ -281,7 +281,7 @@ function setScannerSpread(degrees) {
 function cyclePalette() {
   settings.palette = (settings.palette + 1) % 4;
   saveSettings();
-  showMessage('Colour mode: ' + ['range ice', 'range amber', 'range vivid', 'height'][settings.palette], 2, 'info');
+  showMessage('색상 모드: ' + ['거리 아이스', '거리 앰버', '거리 비비드', '높이'][settings.palette], 2, 'info');
 }
 
 function initializeTouchControls() {
@@ -507,7 +507,7 @@ function updatePlayerMovement(dt) {
   if (!game.hasShownVentHint && !player.isCrouching && hasMoveInput &&
       (getTileFlagsAtPosition(player.x + forwardX * 0.9, player.z + forwardZ * 0.9) & TILE_FLAG_VENT) !== 0) {
     game.hasShownVentHint = true;
-    showMessage(input.isTouchDevice ? 'A vent. Hold CROUCH to crawl in. It is not quiet in there.' : 'A vent. Hold C to crawl in. It is not quiet in there.', 6, 'info');
+    showMessage(input.isTouchDevice ? '환기구다. 웅크리기를 홀드해 기어 들어가라. 안은 조용하지 않다.' : '환기구다. C를 홀드해 기어 들어가라. 안은 조용하지 않다.', 6, 'info');
   }
 }
 
@@ -747,7 +747,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
       emitNoise(player.x, player.z, TUNING.noiseRadiusSweep);
     } else if (!isSweeping) {
       playDeniedSound();
-      showMessage('Scanner too hot for a full sweep.', 2, 'warning');
+      showMessage('스캐너가 너무 뜨거워 전체 스윕을 할 수 없다.', 2, 'warning');
     }
   }
 
@@ -793,7 +793,7 @@ function updateScanner(dt, eyeX, eyeY, eyeZ) {
     player.heat = 1;
     player.isOverheated = true;
     playOverheatSound();
-    showMessage('Scanner overheated. Cooling.', 2.5, 'warning');
+    showMessage('스캐너 과열. 냉각 중.', 2.5, 'warning');
   }
   if (player.isOverheated && player.heat <= TUNING.overheatRecoveryLevel) player.isOverheated = false;
   if (debugState.options.unlimitedScanner) { player.heat = 0; player.isOverheated = false; }
@@ -832,7 +832,7 @@ function updateInteractionFocus(eyeX, eyeY, eyeZ) {
   if (input.wantsInteract) {
     input.wantsInteract = false;
     if (looseObject) {
-      if (getHeldLooseObject()) showMessage('The beam is already holding something.', 2, 'info');
+      if (getHeldLooseObject()) showMessage('빔이 이미 무언가를 잡고 있다.', 2, 'info');
       else pickUpLooseObject(looseObject);
     } else if (best) {
       useInteractable(best);
